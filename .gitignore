@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+
+# Database
+*.db
+
+# Generated HTML dashboards
+dashboard_*.html
+member_rate_chart.html
+
+# Debug/test files
+check_*.py
+*_result.txt
+excel_structure.txt
+
+# Misc
+nul
