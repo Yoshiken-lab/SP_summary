@@ -968,9 +968,14 @@ def generate_html_dashboard(db_path=None, output_path=None):
     <script>
         // データ
         const schoolsData = {json.dumps(filter_options['schools'], ensure_ascii=False)};
+        const allAttributes = {json.dumps(filter_options['attributes'], ensure_ascii=False)};
+        const allStudios = {json.dumps(filter_options['studios'], ensure_ascii=False)};
         const allSchoolData = {json.dumps(all_school_data, ensure_ascii=False)};
         const allAttributeData = {json.dumps(all_attribute_data, ensure_ascii=False)};
         const salesSchoolsData = {json.dumps(sales_filter_options['schools'], ensure_ascii=False)};
+        const allBranches = {json.dumps(sales_filter_options['branches'], ensure_ascii=False)};
+        const allSalesStudios = {json.dumps(sales_filter_options['studios'], ensure_ascii=False)};
+        const allPersons = {json.dumps(sales_filter_options['persons'], ensure_ascii=False)};
         const allSalesSchoolData = {json.dumps(all_sales_school_data, ensure_ascii=False)};
         const allSalesStudioData = {json.dumps(all_sales_studio_data, ensure_ascii=False)};
         const allEventSalesData = {json.dumps(all_event_sales_data, ensure_ascii=False)};
@@ -1427,19 +1432,67 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }}
         }}
 
-        // 会員率フィルター
-        document.getElementById('filterAttribute').addEventListener('change', filterMemberRateSchools);
-        document.getElementById('filterStudio').addEventListener('change', filterMemberRateSchools);
+        // 会員率フィルター（連動フィルタリング）
+        document.getElementById('filterAttribute').addEventListener('change', () => updateMemberRateFilters('attribute'));
+        document.getElementById('filterStudio').addEventListener('change', () => updateMemberRateFilters('studio'));
 
-        function filterMemberRateSchools() {{
-            const attr = document.getElementById('filterAttribute').value;
-            const studio = document.getElementById('filterStudio').value;
+        function updateMemberRateFilters(changedFilter) {{
+            const attrSelect = document.getElementById('filterAttribute');
+            const studioSelect = document.getElementById('filterStudio');
             const schoolSelect = document.getElementById('filterSchool');
 
-            let filtered = schoolsData;
-            if (attr) filtered = filtered.filter(s => s.attribute === attr);
-            if (studio) filtered = filtered.filter(s => s.studio === studio);
+            const currentAttr = attrSelect.value;
+            const currentStudio = studioSelect.value;
 
+            // 現在の条件でデータをフィルタリング
+            let filtered = schoolsData;
+            if (currentAttr) filtered = filtered.filter(s => s.attribute === currentAttr);
+            if (currentStudio) filtered = filtered.filter(s => s.studio === currentStudio);
+
+            // 属性が変更された場合、写真館の選択肢を更新
+            if (changedFilter === 'attribute') {{
+                const availableStudios = [...new Set(filtered.map(s => s.studio).filter(Boolean))].sort();
+                const prevStudio = currentStudio;
+                studioSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availableStudios.forEach(studio => {{
+                    const opt = document.createElement('option');
+                    opt.value = studio;
+                    opt.textContent = studio;
+                    if (studio === prevStudio) opt.selected = true;
+                    studioSelect.appendChild(opt);
+                }});
+                // 選択していた写真館がなくなった場合はリセット
+                if (prevStudio && !availableStudios.includes(prevStudio)) {{
+                    filtered = schoolsData.filter(s => !currentAttr || s.attribute === currentAttr);
+                }}
+            }}
+
+            // 写真館が変更された場合、属性の選択肢を更新
+            if (changedFilter === 'studio') {{
+                const availableAttrs = [...new Set(filtered.map(s => s.attribute).filter(Boolean))].sort();
+                const prevAttr = currentAttr;
+                attrSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availableAttrs.forEach(attr => {{
+                    const opt = document.createElement('option');
+                    opt.value = attr;
+                    opt.textContent = attr;
+                    if (attr === prevAttr) opt.selected = true;
+                    attrSelect.appendChild(opt);
+                }});
+                // 選択していた属性がなくなった場合はリセット
+                if (prevAttr && !availableAttrs.includes(prevAttr)) {{
+                    filtered = schoolsData.filter(s => !currentStudio || s.studio === currentStudio);
+                }}
+            }}
+
+            // 再度最終的なフィルタリング
+            const finalAttr = attrSelect.value;
+            const finalStudio = studioSelect.value;
+            filtered = schoolsData;
+            if (finalAttr) filtered = filtered.filter(s => s.attribute === finalAttr);
+            if (finalStudio) filtered = filtered.filter(s => s.studio === finalStudio);
+
+            // 学校プルダウンを更新
             schoolSelect.innerHTML = '<option value="">-- 属性/写真館で絞り込み --</option>';
             filtered.forEach(s => {{
                 const opt = document.createElement('option');
@@ -1450,8 +1503,26 @@ def generate_html_dashboard(db_path=None, output_path=None):
         }}
 
         function resetMemberRateFilters() {{
-            document.getElementById('filterAttribute').value = '';
-            document.getElementById('filterStudio').value = '';
+            // 属性プルダウンを初期状態に復元
+            const attrSelect = document.getElementById('filterAttribute');
+            attrSelect.innerHTML = '<option value="">-- 全て --</option>';
+            allAttributes.forEach(attr => {{
+                const opt = document.createElement('option');
+                opt.value = attr;
+                opt.textContent = attr;
+                attrSelect.appendChild(opt);
+            }});
+
+            // 写真館プルダウンを初期状態に復元
+            const studioSelect = document.getElementById('filterStudio');
+            studioSelect.innerHTML = '<option value="">-- 全て --</option>';
+            allStudios.forEach(studio => {{
+                const opt = document.createElement('option');
+                opt.value = studio;
+                opt.textContent = studio;
+                studioSelect.appendChild(opt);
+            }});
+
             document.getElementById('filterSchool').innerHTML = '<option value="">-- 属性/写真館で絞り込み --</option>';
             document.getElementById('gradeAll').checked = true;
             document.getElementById('showPrevYear').checked = true;
@@ -1582,22 +1653,118 @@ def generate_html_dashboard(db_path=None, output_path=None):
         document.getElementById('showPrevYear').addEventListener('change', renderMemberRateChart);
         document.querySelectorAll('input[name="gradeMode"]').forEach(el => el.addEventListener('change', searchMemberRate));
 
-        // 売上推移フィルター
-        document.getElementById('salesFilterBranch').addEventListener('change', filterSalesSchools);
-        document.getElementById('salesFilterStudio').addEventListener('change', filterSalesSchools);
-        document.getElementById('salesFilterPerson').addEventListener('change', filterSalesSchools);
+        // 売上推移フィルター（連動フィルタリング）
+        document.getElementById('salesFilterBranch').addEventListener('change', () => updateSalesFilters('branch'));
+        document.getElementById('salesFilterStudio').addEventListener('change', () => updateSalesFilters('studio'));
+        document.getElementById('salesFilterPerson').addEventListener('change', () => updateSalesFilters('person'));
 
-        function filterSalesSchools() {{
-            const branch = document.getElementById('salesFilterBranch').value;
-            const studio = document.getElementById('salesFilterStudio').value;
-            const person = document.getElementById('salesFilterPerson').value;
+        function updateSalesFilters(changedFilter) {{
+            const branchSelect = document.getElementById('salesFilterBranch');
+            const studioSelect = document.getElementById('salesFilterStudio');
+            const personSelect = document.getElementById('salesFilterPerson');
             const schoolSelect = document.getElementById('salesFilterSchool');
 
-            let filtered = salesSchoolsData;
-            if (branch) filtered = filtered.filter(s => s.branch === branch);
-            if (studio) filtered = filtered.filter(s => s.studio === studio);
-            if (person) filtered = filtered.filter(s => s.person === person);
+            const currentBranch = branchSelect.value;
+            const currentStudio = studioSelect.value;
+            const currentPerson = personSelect.value;
 
+            // 現在の条件でデータをフィルタリング
+            let filtered = salesSchoolsData;
+            if (currentBranch) filtered = filtered.filter(s => s.branch === currentBranch);
+            if (currentStudio) filtered = filtered.filter(s => s.studio === currentStudio);
+            if (currentPerson) filtered = filtered.filter(s => s.person === currentPerson);
+
+            // 事業所が変更された場合
+            if (changedFilter === 'branch') {{
+                // 写真館の選択肢を更新
+                const availableStudios = [...new Set(filtered.map(s => s.studio).filter(Boolean))].sort();
+                const prevStudio = currentStudio;
+                studioSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availableStudios.forEach(studio => {{
+                    const opt = document.createElement('option');
+                    opt.value = studio;
+                    opt.textContent = studio;
+                    if (studio === prevStudio) opt.selected = true;
+                    studioSelect.appendChild(opt);
+                }});
+
+                // 担当者の選択肢を更新
+                const availablePersons = [...new Set(filtered.map(s => s.person).filter(Boolean))].sort();
+                const prevPerson = currentPerson;
+                personSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availablePersons.forEach(person => {{
+                    const opt = document.createElement('option');
+                    opt.value = person;
+                    opt.textContent = person;
+                    if (person === prevPerson) opt.selected = true;
+                    personSelect.appendChild(opt);
+                }});
+            }}
+
+            // 写真館が変更された場合
+            if (changedFilter === 'studio') {{
+                // 事業所の選択肢を更新
+                const availableBranches = [...new Set(filtered.map(s => s.branch).filter(Boolean))].sort();
+                const prevBranch = currentBranch;
+                branchSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availableBranches.forEach(branch => {{
+                    const opt = document.createElement('option');
+                    opt.value = branch;
+                    opt.textContent = branch;
+                    if (branch === prevBranch) opt.selected = true;
+                    branchSelect.appendChild(opt);
+                }});
+
+                // 担当者の選択肢を更新
+                const availablePersons = [...new Set(filtered.map(s => s.person).filter(Boolean))].sort();
+                const prevPerson = currentPerson;
+                personSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availablePersons.forEach(person => {{
+                    const opt = document.createElement('option');
+                    opt.value = person;
+                    opt.textContent = person;
+                    if (person === prevPerson) opt.selected = true;
+                    personSelect.appendChild(opt);
+                }});
+            }}
+
+            // 担当者が変更された場合
+            if (changedFilter === 'person') {{
+                // 事業所の選択肢を更新
+                const availableBranches = [...new Set(filtered.map(s => s.branch).filter(Boolean))].sort();
+                const prevBranch = currentBranch;
+                branchSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availableBranches.forEach(branch => {{
+                    const opt = document.createElement('option');
+                    opt.value = branch;
+                    opt.textContent = branch;
+                    if (branch === prevBranch) opt.selected = true;
+                    branchSelect.appendChild(opt);
+                }});
+
+                // 写真館の選択肢を更新
+                const availableStudios = [...new Set(filtered.map(s => s.studio).filter(Boolean))].sort();
+                const prevStudio = currentStudio;
+                studioSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availableStudios.forEach(studio => {{
+                    const opt = document.createElement('option');
+                    opt.value = studio;
+                    opt.textContent = studio;
+                    if (studio === prevStudio) opt.selected = true;
+                    studioSelect.appendChild(opt);
+                }});
+            }}
+
+            // 再度最終的なフィルタリング
+            const finalBranch = branchSelect.value;
+            const finalStudio = studioSelect.value;
+            const finalPerson = personSelect.value;
+            filtered = salesSchoolsData;
+            if (finalBranch) filtered = filtered.filter(s => s.branch === finalBranch);
+            if (finalStudio) filtered = filtered.filter(s => s.studio === finalStudio);
+            if (finalPerson) filtered = filtered.filter(s => s.person === finalPerson);
+
+            // 学校プルダウンを更新
             schoolSelect.innerHTML = '<option value="">-- 絞り込みで選択 --</option>';
             filtered.forEach(s => {{
                 const opt = document.createElement('option');
@@ -1608,9 +1775,36 @@ def generate_html_dashboard(db_path=None, output_path=None):
         }}
 
         function resetSalesFilters() {{
-            document.getElementById('salesFilterBranch').value = '';
-            document.getElementById('salesFilterStudio').value = '';
-            document.getElementById('salesFilterPerson').value = '';
+            // 事業所プルダウンを初期状態に復元
+            const branchSelect = document.getElementById('salesFilterBranch');
+            branchSelect.innerHTML = '<option value="">-- 全て --</option>';
+            allBranches.forEach(branch => {{
+                const opt = document.createElement('option');
+                opt.value = branch;
+                opt.textContent = branch;
+                branchSelect.appendChild(opt);
+            }});
+
+            // 写真館プルダウンを初期状態に復元
+            const studioSelect = document.getElementById('salesFilterStudio');
+            studioSelect.innerHTML = '<option value="">-- 全て --</option>';
+            allSalesStudios.forEach(studio => {{
+                const opt = document.createElement('option');
+                opt.value = studio;
+                opt.textContent = studio;
+                studioSelect.appendChild(opt);
+            }});
+
+            // 担当者プルダウンを初期状態に復元
+            const personSelect = document.getElementById('salesFilterPerson');
+            personSelect.innerHTML = '<option value="">-- 全て --</option>';
+            allPersons.forEach(person => {{
+                const opt = document.createElement('option');
+                opt.value = person;
+                opt.textContent = person;
+                personSelect.appendChild(opt);
+            }});
+
             document.getElementById('salesFilterSchool').innerHTML = '<option value="">-- 絞り込みで選択 --</option>';
             document.getElementById('showSalesPrevYear').checked = true;
             document.getElementById('salesChartTitle').textContent = '写真館または学校を選択してください';
