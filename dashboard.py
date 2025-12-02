@@ -14,12 +14,29 @@ from alerts import get_all_alerts, get_current_fiscal_year
 from analytics import get_all_analytics
 
 
-def get_summary_stats(db_path=None):
+def get_available_fiscal_years(db_path=None):
+    """DBに存在する年度一覧を取得（降順）"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT DISTINCT fiscal_year FROM school_sales
+        UNION
+        SELECT DISTINCT fiscal_year FROM monthly_summary
+        ORDER BY fiscal_year DESC
+    ''')
+    years = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    return years if years else [get_current_fiscal_year()]
+
+
+def get_summary_stats(db_path=None, target_fy=None):
     """サマリー統計を取得"""
     conn = get_connection(db_path)
     cursor = conn.cursor()
 
-    current_fy = get_current_fiscal_year()
+    current_fy = target_fy if target_fy else get_current_fiscal_year()
     prev_fy = current_fy - 1
 
     # 最新の報告書情報
@@ -106,8 +123,16 @@ def get_summary_stats(db_path=None):
 def generate_html_dashboard(db_path=None, output_path=None):
     """HTMLダッシュボードを生成"""
 
-    # データ取得
-    stats = get_summary_stats(db_path)
+    # 利用可能な年度一覧を取得
+    available_years = get_available_fiscal_years(db_path)
+
+    # 各年度のサマリーデータを取得
+    all_years_stats = {}
+    for year in available_years:
+        all_years_stats[year] = get_summary_stats(db_path, target_fy=year)
+
+    # デフォルトは最新年度
+    stats = all_years_stats[available_years[0]] if available_years else get_summary_stats(db_path)
     alerts = get_all_alerts(db_path)
     analytics = get_all_analytics(db_path)
 
@@ -352,28 +377,36 @@ def generate_html_dashboard(db_path=None, output_path=None):
         <div class="header">
             <div>
                 <h1>スクールフォト売上分析ダッシュボード</h1>
-                <p class="date">レポート日: {stats['report_date']} | {stats['fiscal_year']}年度</p>
+                <p class="date">レポート日: {stats['report_date']}</p>
             </div>
-            <div style="text-align: right;">
-                <div style="font-size: 12px; color: #666;">蓄積データ</div>
-                <div style="font-size: 20px; font-weight: bold;">{stats['school_count']}校 / {stats['event_count']}イベント</div>
+            <div style="display: flex; align-items: center; gap: 24px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-size: 14px; color: #666; font-weight: 600;">年度:</label>
+                    <select id="fiscalYearSelect" onchange="changeFiscalYear()" style="padding: 10px 16px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 16px; font-weight: 600; color: #1a1a2e; cursor: pointer; background: white;">
+                        {chr(10).join([f'<option value="{y}" {"selected" if y == stats["fiscal_year"] else ""}>{y}年度</option>' for y in available_years])}
+                    </select>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 12px; color: #666;">蓄積データ</div>
+                    <div style="font-size: 20px; font-weight: bold;">{stats['school_count']}校 / {stats['event_count']}イベント</div>
+                </div>
             </div>
         </div>
 
         <div class="summary-cards">
             <div class="card">
-                <div class="card-title">{stats['fiscal_year']}年度 累計売上</div>
-                <div class="card-value">¥{stats['current_total']:,.0f}</div>
-                <div class="card-sub">前年同期 ¥{stats['prev_total']:,.0f}</div>
+                <div class="card-title" id="salesCardTitle">{stats['fiscal_year']}年度 累計売上</div>
+                <div class="card-value" id="salesCardValue">¥{stats['current_total']:,.0f}</div>
+                <div class="card-sub" id="salesCardSub">前年同期 ¥{stats['prev_total']:,.0f}</div>
             </div>
             <div class="card">
                 <div class="card-title">前年比</div>
-                <div class="card-value {'success' if stats['yoy_rate'] >= 1 else 'warning' if stats['yoy_rate'] >= 0.8 else 'danger'}">{stats['yoy_rate']*100:.1f}%</div>
-                <div class="card-sub">{'成長' if stats['yoy_rate'] >= 1 else '減少'}</div>
+                <div class="card-value {'success' if stats['yoy_rate'] >= 1 else 'warning' if stats['yoy_rate'] >= 0.8 else 'danger'}" id="yoyCardValue">{stats['yoy_rate']*100:.1f}%</div>
+                <div class="card-sub" id="yoyCardSub">{'成長' if stats['yoy_rate'] >= 1 else '減少'}</div>
             </div>
             <div class="card">
                 <div class="card-title">平均予算達成率</div>
-                <div class="card-value {'success' if stats['avg_budget_rate'] >= 1 else 'warning' if stats['avg_budget_rate'] >= 0.8 else 'danger'}">{stats['avg_budget_rate']*100:.1f}%</div>
+                <div class="card-value {'success' if stats['avg_budget_rate'] >= 1 else 'warning' if stats['avg_budget_rate'] >= 0.8 else 'danger'}" id="budgetCardValue">{stats['avg_budget_rate']*100:.1f}%</div>
                 <div class="card-sub">目標: 100%</div>
             </div>
             <div class="card">
@@ -713,6 +746,54 @@ def generate_html_dashboard(db_path=None, output_path=None):
         const allEventSalesData = {json.dumps(all_event_sales_data, ensure_ascii=False)};
         const branchSalesData = {json.dumps(branch_sales_data, ensure_ascii=False)};
         const personSalesData = {json.dumps(person_sales_data, ensure_ascii=False)};
+
+        // 年度別サマリーデータ
+        const allYearsStats = {json.dumps({str(k): v for k, v in all_years_stats.items()}, ensure_ascii=False)};
+        let currentFiscalYear = {stats['fiscal_year']};
+
+        // 年度切り替え関数
+        function changeFiscalYear() {{
+            const selectedYear = document.getElementById('fiscalYearSelect').value;
+            currentFiscalYear = parseInt(selectedYear);
+            const stats = allYearsStats[selectedYear];
+
+            if (!stats) return;
+
+            // サマリーカードを更新
+            document.getElementById('salesCardTitle').textContent = `${{selectedYear}}年度 累計売上`;
+            document.getElementById('salesCardValue').textContent = `¥${{stats.current_total.toLocaleString()}}`;
+            document.getElementById('salesCardSub').textContent = `前年同期 ¥${{stats.prev_total.toLocaleString()}}`;
+
+            const yoyRate = stats.yoy_rate * 100;
+            const yoyEl = document.getElementById('yoyCardValue');
+            yoyEl.textContent = `${{yoyRate.toFixed(1)}}%`;
+            yoyEl.className = 'card-value ' + (yoyRate >= 100 ? 'success' : yoyRate >= 80 ? 'warning' : 'danger');
+            document.getElementById('yoyCardSub').textContent = yoyRate >= 100 ? '成長' : '減少';
+
+            const budgetRate = stats.avg_budget_rate * 100;
+            const budgetEl = document.getElementById('budgetCardValue');
+            budgetEl.textContent = `${{budgetRate.toFixed(1)}}%`;
+            budgetEl.className = 'card-value ' + (budgetRate >= 100 ? 'success' : budgetRate >= 80 ? 'warning' : 'danger');
+
+            // 月別グラフを更新
+            updateMonthlyChart(stats);
+        }}
+
+        // 月別グラフ更新
+        function updateMonthlyChart(stats) {{
+            if (!mainSalesChart || !stats.monthly_data) return;
+
+            const months = stats.monthly_data.map(d => d.month + '月');
+            const salesData = stats.monthly_data.map(d => d.sales);
+            const prevSalesData = stats.monthly_data.map(d => d.prev_sales);
+            const budgetData = stats.monthly_data.map(d => d.budget);
+
+            mainSalesChart.data.labels = months;
+            mainSalesChart.data.datasets[0].data = salesData;
+            mainSalesChart.data.datasets[1].data = prevSalesData;
+            mainSalesChart.data.datasets[2].data = budgetData;
+            mainSalesChart.update();
+        }}
 
         let memberRateChart = null;
         let currentMemberRateData = null;

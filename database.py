@@ -91,7 +91,7 @@ def init_database(db_path=None):
             sales REAL NOT NULL,
             FOREIGN KEY (report_id) REFERENCES reports(id),
             FOREIGN KEY (school_id) REFERENCES schools(id),
-            UNIQUE(report_id, school_id, fiscal_year, month)
+            UNIQUE(school_id, fiscal_year, month)
         )
     ''')
 
@@ -123,7 +123,7 @@ def init_database(db_path=None):
             sales REAL NOT NULL,
             FOREIGN KEY (report_id) REFERENCES reports(id),
             FOREIGN KEY (event_id) REFERENCES events(id),
-            UNIQUE(report_id, event_id, fiscal_year, month)
+            UNIQUE(event_id, fiscal_year, month)
         )
     ''')
 

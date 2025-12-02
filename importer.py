@@ -37,14 +37,24 @@ def extract_report_date(file_name):
 
 
 def parse_month_column(col_name):
-    """カラム名から年度と月を抽出（例: "2025年4月分" → (2025, 4)）"""
-    match = re.search(r'(\d{4})年(\d{1,2})月', str(col_name))
+    """カラム名から年度と月を抽出（例: "2025年4月分" → (2025, 4) or "4月分" → (None, 4)）"""
+    col_str = str(col_name)
+
+    # パターン1: 「2025年4月分」のように年と月が含まれる場合
+    match = re.search(r'(\d{4})年(\d{1,2})月', col_str)
     if match:
         year = int(match.group(1))
         month = int(match.group(2))
         # 年度計算（4月始まり）
         fiscal_year = year if month >= 4 else year - 1
         return fiscal_year, month
+
+    # パターン2: 「4月分」のように月だけの場合
+    match = re.search(r'(\d{1,2})月', col_str)
+    if match:
+        month = int(match.group(1))
+        return None, month  # 年度はNone（呼び出し元でデフォルト年度を使用）
+
     return None, None
 
 
@@ -119,12 +129,14 @@ def import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):
     """学校別売上シートを取り込み"""
     df = pd.read_excel(xlsx, sheet_name=sheet_name, header=None)
 
-    # ヘッダー行を探す
+    # ヘッダー行を探す（「担当者」または「担当」を探す）
     header_row_idx = None
     for i, row in df.iterrows():
-        if pd.notna(row[1]) and '担当者' in str(row[1]):
-            header_row_idx = i
-            break
+        if pd.notna(row[1]):
+            val = str(row[1])
+            if '担当者' in val or val == '担当':
+                header_row_idx = i
+                break
 
     if header_row_idx is None:
         print(f"  警告: {sheet_name} でヘッダー行が見つかりません")
@@ -140,7 +152,7 @@ def import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):
             continue
         val_str = str(val)
 
-        if '担当者' in val_str:
+        if '担当' in val_str:
             col_mapping['manager'] = col_idx
         elif '写真館' in val_str:
             col_mapping['studio'] = col_idx
@@ -359,12 +371,14 @@ def import_school_comparison(xlsx, cursor, report_id):
     """学校別売り上げ比較シートを取り込み"""
     df = pd.read_excel(xlsx, sheet_name='学校別売り上げ比較', header=None)
 
-    # ヘッダー行を探す
+    # ヘッダー行を探す（「担当者」または「担当」を探す）
     header_row_idx = None
     for i, row in df.iterrows():
-        if pd.notna(row[1]) and '担当者' in str(row[1]):
-            header_row_idx = i
-            break
+        if pd.notna(row[1]):
+            val = str(row[1])
+            if '担当者' in val or val == '担当':
+                header_row_idx = i
+                break
 
     if header_row_idx is None:
         print("  警告: 学校別売り上げ比較シートでヘッダー行が見つかりません")
@@ -380,7 +394,7 @@ def import_school_comparison(xlsx, cursor, report_id):
             continue
         val_str = str(val)
 
-        if '担当者' in val_str:
+        if '担当' in val_str:
             col_mapping['manager'] = col_idx
         elif '写真館' in val_str:
             col_mapping['studio'] = col_idx
@@ -417,6 +431,23 @@ def import_school_comparison(xlsx, cursor, report_id):
                 ''', (report_id, school_id, fiscal_year, float(sales)))
 
 
+def detect_fiscal_year_from_path(file_path):
+    """ファイルパスから年度を推測（2024年フォルダなら2024年度）"""
+    path_str = str(file_path)
+    # パスに「2024年」「2025年」などが含まれているか確認
+    match = re.search(r'(\d{4})年', path_str)
+    if match:
+        return int(match.group(1))
+    # ファイル名から日付を抽出して年度を推測
+    date_match = re.search(r'(\d{4})(\d{2})(\d{2})', file_path.name)
+    if date_match:
+        year = int(date_match.group(1))
+        month = int(date_match.group(2))
+        # 4月始まりの年度計算
+        return year if month >= 4 else year - 1
+    return 2024  # デフォルト
+
+
 def import_excel(file_path, db_path=None):
     """Excelファイル全体を取り込み"""
     file_path = Path(file_path)
@@ -427,59 +458,65 @@ def import_excel(file_path, db_path=None):
     conn = get_connection(db_path)
     cursor = conn.cursor()
 
-    # 報告書情報を登録
-    report_date = extract_report_date(file_path.name)
+    try:
+        # 報告書情報を登録
+        report_date = extract_report_date(file_path.name)
 
-    # 既に取り込み済みかチェック
-    cursor.execute('SELECT id FROM reports WHERE file_name = ?', (file_path.name,))
-    existing = cursor.fetchone()
-    if existing:
-        print(f"  既に取り込み済みです。スキップします。")
+        # 既に取り込み済みかチェック
+        cursor.execute('SELECT id FROM reports WHERE file_name = ?', (file_path.name,))
+        existing = cursor.fetchone()
+        if existing:
+            print(f"  既に取り込み済みです。スキップします。")
+            return existing[0]
+
+        cursor.execute('''
+            INSERT INTO reports (file_name, file_path, report_date)
+            VALUES (?, ?, ?)
+        ''', (file_path.name, str(file_path), report_date))
+        report_id = cursor.lastrowid
+        print(f"  報告書ID: {report_id}, 日付: {report_date}")
+
+        # Excelファイルを開く
+        xlsx = pd.ExcelFile(file_path, engine='openpyxl')
+        sheet_names = xlsx.sheet_names
+
+        # パスから年度を推測（2024年フォルダなら2024年度）
+        default_fiscal_year = detect_fiscal_year_from_path(file_path)
+        print(f"  デフォルト年度: {default_fiscal_year}")
+
+        # 各シートを取り込み
+        if '売上' in sheet_names:
+            print("  売上サマリーを取り込み中...")
+            import_sales_summary(xlsx, cursor, report_id)
+
+        for sheet_name in sheet_names:
+            if '学校別' in sheet_name and '比較' not in sheet_name:
+                # シート名から年度を抽出、なければパスから推測した年度を使用
+                match = re.search(r'(\d{4})', sheet_name)
+                fiscal_year = int(match.group(1)) if match else default_fiscal_year
+                print(f"  {sheet_name}を取り込み中（{fiscal_year}年度）...")
+                import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year)
+
+            elif 'イベント別' in sheet_name:
+                match = re.search(r'(\d{4})', sheet_name)
+                fiscal_year = int(match.group(1)) if match else default_fiscal_year
+                print(f"  {sheet_name}を取り込み中（{fiscal_year}年度）...")
+                import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year)
+
+        if '会員率' in sheet_names:
+            print("  会員率を取り込み中...")
+            import_member_rates(xlsx, cursor, report_id, report_date)
+
+        if '学校別売り上げ比較' in sheet_names:
+            print("  学校別売り上げ比較を取り込み中...")
+            import_school_comparison(xlsx, cursor, report_id)
+
+        conn.commit()
+        print(f"取り込み完了: {file_path.name}")
+        return report_id
+
+    finally:
         conn.close()
-        return existing[0]
-
-    cursor.execute('''
-        INSERT INTO reports (file_name, file_path, report_date)
-        VALUES (?, ?, ?)
-    ''', (file_path.name, str(file_path), report_date))
-    report_id = cursor.lastrowid
-    print(f"  報告書ID: {report_id}, 日付: {report_date}")
-
-    # Excelファイルを開く
-    xlsx = pd.ExcelFile(file_path)
-    sheet_names = xlsx.sheet_names
-
-    # 各シートを取り込み
-    print("  売上サマリーを取り込み中...")
-    import_sales_summary(xlsx, cursor, report_id)
-
-    for sheet_name in sheet_names:
-        if '学校別' in sheet_name and '比較' not in sheet_name:
-            # 年度を抽出
-            match = re.search(r'(\d{4})', sheet_name)
-            fiscal_year = int(match.group(1)) if match else 2025
-            print(f"  {sheet_name}を取り込み中...")
-            import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year)
-
-        elif 'イベント別' in sheet_name:
-            match = re.search(r'(\d{4})', sheet_name)
-            fiscal_year = int(match.group(1)) if match else 2025
-            print(f"  {sheet_name}を取り込み中...")
-            import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year)
-
-    if '会員率' in sheet_names:
-        print("  会員率を取り込み中...")
-        import_member_rates(xlsx, cursor, report_id, report_date)
-
-    if '学校別売り上げ比較' in sheet_names:
-        print("  学校別売り上げ比較を取り込み中...")
-        import_school_comparison(xlsx, cursor, report_id)
-
-    conn.commit()
-    conn.close()
-
-    print(f"取り込み完了: {file_path.name}")
-    return report_id
 
 
 def import_all_from_directory(directory_path, db_path=None):
