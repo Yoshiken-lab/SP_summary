@@ -13,12 +13,16 @@
     # ダッシュボードを生成
     python main.py dashboard [出力ファイル名]
 
+    # ダッシュボードを生成してファイルサーバーに公開
+    python main.py publish
+
     # DB初期化（既存データ削除）
     python main.py init --force
 """
 
 import sys
 import os
+import shutil
 from pathlib import Path
 
 # 現在のディレクトリをパスに追加
@@ -29,12 +33,17 @@ from importer import import_excel, import_all_from_directory
 from dashboard import generate_html_dashboard
 from member_rate_page import generate_member_rate_page
 
+# ファイルサーバーの公開先パス
+PUBLISH_PATH = Path(r"\\192.168.11.54\生産データ保管\経営企画\吉田\01_SP\dashboard")
+PUBLISH_FILENAME = "dashboard.html"
+
 
 def show_help():
     print(__doc__)
     print("コマンド一覧:")
     print("  import <ファイル/ディレクトリ> [--all]  - Excelデータを取り込み")
     print("  dashboard [出力ファイル]                - ダッシュボード生成")
+    print("  publish                                 - ダッシュボード生成＆ファイルサーバーに公開")
     print("  chart [出力ファイル]                    - 会員率推移グラフページ生成")
     print("  all                                     - 全ページ生成")
     print("  init [--force]                          - DB初期化")
@@ -94,6 +103,28 @@ def main():
         output = sys.argv[2] if len(sys.argv) > 2 else None
         path = generate_html_dashboard(output_path=output)
         print(f"ダッシュボードを生成しました: {path}")
+
+    elif command == 'publish':
+        # ダッシュボード生成＆ファイルサーバーに公開
+        print("ダッシュボードを生成中...")
+        local_path = generate_html_dashboard()
+        print(f"  ローカル: {local_path}")
+
+        # ファイルサーバーにコピー
+        try:
+            if not PUBLISH_PATH.exists():
+                PUBLISH_PATH.mkdir(parents=True, exist_ok=True)
+                print(f"  フォルダを作成しました: {PUBLISH_PATH}")
+
+            dest_path = PUBLISH_PATH / PUBLISH_FILENAME
+            shutil.copy2(local_path, dest_path)
+            print(f"  公開先: {dest_path}")
+            print(f"\n公開完了！")
+            print(f"アクセスURL: {dest_path}")
+        except Exception as e:
+            print(f"\nエラー: ファイルサーバーへのコピーに失敗しました")
+            print(f"  {e}")
+            print(f"\nローカルファイルは生成されています: {local_path}")
 
     elif command == 'chart':
         output = sys.argv[2] if len(sys.argv) > 2 else None

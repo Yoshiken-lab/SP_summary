@@ -50,10 +50,26 @@ python main.py import "C:\報告書フォルダ" --all
 - 同じファイルを2回取り込んでも、重複データは作成されません（ファイル名で管理）
 - 新しい学校やイベントは自動的にマスタに追加されます
 
-### 2. ダッシュボードを生成する
+### 2. ダッシュボードを生成してファイルサーバーに公開する
 
 ```bash
-# ダッシュボードを生成（ファイル名は自動生成）
+# ダッシュボードを生成してファイルサーバーに公開（推奨）
+python main.py publish
+```
+
+これにより：
+1. ダッシュボードHTMLを生成
+2. ファイルサーバー（`\\192.168.11.54\生産データ保管\経営企画\吉田\01_SP\dashboard\dashboard.html`）に自動コピー
+
+社内の人は以下のパスでアクセスできます：
+```
+\\192.168.11.54\生産データ保管\経営企画\吉田\01_SP\dashboard\dashboard.html
+```
+
+### ローカルのみで生成する場合
+
+```bash
+# ローカルにのみ生成（ファイル名は自動生成）
 python main.py dashboard
 
 # ファイル名を指定して生成
@@ -80,8 +96,8 @@ python main.py status
 # 1. 新しい報告書を取り込む
 python main.py import "新しい報告書.xlsx"
 
-# 2. ダッシュボードを再生成
-python main.py dashboard
+# 2. ダッシュボードを再生成してファイルサーバーに公開
+python main.py publish
 ```
 
 ### 初回セットアップ（過去データの一括取り込み）
@@ -156,7 +172,8 @@ python main.py import "報告書フォルダ" --all
 |---------|------|
 | `python main.py import <ファイル>` | 単一Excelファイルを取り込み |
 | `python main.py import <フォルダ> --all` | フォルダ内の全Excelを取り込み |
-| `python main.py dashboard [ファイル名]` | ダッシュボードHTML生成 |
+| `python main.py publish` | ダッシュボード生成＆ファイルサーバーに公開 |
+| `python main.py dashboard [ファイル名]` | ダッシュボードHTML生成（ローカルのみ） |
 | `python main.py status` | DB状態確認 |
 | `python main.py init --force` | DB初期化（全データ削除） |
 
