@@ -59,11 +59,11 @@ python main.py publish
 
 これにより：
 1. ダッシュボードHTMLを生成
-2. ファイルサーバー（`\\192.168.11.54\生産データ保管\経営企画\吉田\01_SP\dashboard\dashboard.html`）に自動コピー
+2. ファイルサーバー（`\\192.168.11.51\homes\dashboard\dashboard.html`）に自動コピー
 
 社内の人は以下のパスでアクセスできます：
 ```
-\\192.168.11.54\生産データ保管\経営企画\吉田\01_SP\dashboard\dashboard.html
+\\192.168.11.51\homes\dashboard\dashboard.html
 ```
 
 ### ローカルのみで生成する場合
