@@ -59,6 +59,7 @@ def alert_no_events_this_year(cursor, config=AlertConfig):
             s.school_name,
             s.attribute,
             s.studio_name,
+            s.region,
             s.manager,
             COUNT(DISTINCT e_prev.id) as prev_year_events,
             COALESCE(SUM(es_prev.sales), 0) as prev_year_sales
@@ -71,7 +72,7 @@ def alert_no_events_this_year(cursor, config=AlertConfig):
             SELECT 1 FROM events e_curr
             WHERE e_curr.school_id = s.id AND e_curr.fiscal_year = ?
         )
-        GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.manager
+        GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.region, s.manager
         HAVING prev_year_sales > 0
         ORDER BY prev_year_sales DESC
     '''
@@ -85,11 +86,12 @@ def alert_no_events_this_year(cursor, config=AlertConfig):
             'school_name': row[1],
             'attribute': row[2] or '',
             'studio_name': row[3] or '',
-            'manager': row[4] or '',
-            'prev_year_events': row[5],
-            'prev_year_sales': row[6],
+            'region': row[4] or '',
+            'manager': row[5] or '',
+            'prev_year_events': row[6],
+            'prev_year_sales': row[7],
             'level': 'danger',
-            'message': f'前年度{row[5]}件のイベント実施、売上¥{row[6]:,.0f}'
+            'message': f'前年度{row[6]}件のイベント実施、売上¥{row[7]:,.0f}'
         })
 
     return results
@@ -147,7 +149,7 @@ def alert_new_event_low_registration(cursor, config=AlertConfig):
     results = []
 
     for row in cursor.fetchall():
-        member_rate = row[8]
+        member_rate = row[9]
         if member_rate < config.NEW_EVENT_MIN_RATE:
             days_since_start = (report_date - datetime.strptime(str(row[5]), '%Y-%m-%d').date()).days if row[5] else 0
 
@@ -193,6 +195,7 @@ def alert_member_rate_decline(cursor, config=AlertConfig, member_rate_threshold=
     if sales_decline_threshold is None:
         sales_decline_threshold = 0.0  # 0%（実質フィルタなし）
 
+    # event_salesから売上を集計（school_yearly_salesにデータがない場合に対応）
     query = '''
         WITH current_member AS (
             SELECT
@@ -207,20 +210,31 @@ def alert_member_rate_decline(cursor, config=AlertConfig, member_rate_threshold=
             GROUP BY school_id
         ),
         current_sales AS (
-            SELECT school_id, total_sales
-            FROM school_yearly_sales
-            WHERE report_id = ? AND fiscal_year = ?
+            -- event_salesから今年度の売上を集計
+            SELECT
+                e.school_id,
+                COALESCE(SUM(es.sales), 0) as total_sales
+            FROM events e
+            LEFT JOIN event_sales es ON es.event_id = e.id
+            WHERE e.fiscal_year = ?
+            GROUP BY e.school_id
         ),
         prev_sales AS (
-            SELECT school_id, total_sales
-            FROM school_yearly_sales
-            WHERE report_id = ? AND fiscal_year = ?
+            -- event_salesから前年度の売上を集計
+            SELECT
+                e.school_id,
+                COALESCE(SUM(es.sales), 0) as total_sales
+            FROM events e
+            LEFT JOIN event_sales es ON es.event_id = e.id
+            WHERE e.fiscal_year = ?
+            GROUP BY e.school_id
         )
         SELECT
             s.id,
             s.school_name,
             s.attribute,
             s.studio_name,
+            s.region,
             s.manager,
             cm.rate as current_rate,
             COALESCE(cs.total_sales, 0) as current_sales,
@@ -240,27 +254,28 @@ def alert_member_rate_decline(cursor, config=AlertConfig, member_rate_threshold=
 
     cursor.execute(query, (
         latest_report_id, current_fy,
-        latest_report_id, current_fy,
-        latest_report_id, prev_fy,
+        current_fy,
+        prev_fy,
         member_rate_threshold,
         sales_decline_threshold
     ))
 
     results = []
     for row in cursor.fetchall():
-        level = 'danger' if row[5] < config.MEMBER_RATE_DANGER or row[8] < config.YOY_DECLINE_DANGER else 'warning'
+        level = 'danger' if row[6] < config.MEMBER_RATE_DANGER or row[9] < config.YOY_DECLINE_DANGER else 'warning'
         results.append({
             'school_id': row[0],
             'school_name': row[1],
             'attribute': row[2] or '',
             'studio_name': row[3] or '',
-            'manager': row[4] or '',
-            'member_rate': row[5],
-            'current_sales': row[6],
-            'prev_sales': row[7],
-            'sales_change': row[8],
+            'region': row[4] or '',
+            'manager': row[5] or '',
+            'member_rate': row[6],
+            'current_sales': row[7],
+            'prev_sales': row[8],
+            'sales_change': row[9],
             'level': level,
-            'message': f'会員率{row[5]*100:.1f}%、売上{row[8]*100:+.1f}%'
+            'message': f'会員率{row[6]*100:.1f}%、売上{row[9]*100:+.1f}%'
         })
 
     return results
@@ -291,6 +306,7 @@ def alert_new_schools(cursor, config=AlertConfig, target_fy=None, target_month=N
                 s.school_name,
                 s.attribute,
                 s.studio_name,
+                s.region,
                 s.manager,
                 COUNT(DISTINCT e.id) as event_count,
                 MIN(e.start_date) as first_event_date,
@@ -303,7 +319,7 @@ def alert_new_schools(cursor, config=AlertConfig, target_fy=None, target_month=N
                 WHERE e_prev.school_id = s.id AND e_prev.fiscal_year = ?
             )
             AND strftime('%m', e.start_date) = ?
-            GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.manager
+            GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.region, s.manager
             ORDER BY first_event_date DESC, total_sales DESC
         '''
         cursor.execute(query, (current_fy, prev_fy, f'{target_month:02d}'))
@@ -314,6 +330,7 @@ def alert_new_schools(cursor, config=AlertConfig, target_fy=None, target_month=N
                 s.school_name,
                 s.attribute,
                 s.studio_name,
+                s.region,
                 s.manager,
                 COUNT(DISTINCT e.id) as event_count,
                 MIN(e.start_date) as first_event_date,
@@ -325,7 +342,7 @@ def alert_new_schools(cursor, config=AlertConfig, target_fy=None, target_month=N
                 SELECT 1 FROM events e_prev
                 WHERE e_prev.school_id = s.id AND e_prev.fiscal_year = ?
             )
-            GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.manager
+            GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.region, s.manager
             ORDER BY first_event_date DESC, total_sales DESC
         '''
         cursor.execute(query, (current_fy, prev_fy))
@@ -337,12 +354,13 @@ def alert_new_schools(cursor, config=AlertConfig, target_fy=None, target_month=N
             'school_name': row[1],
             'attribute': row[2] or '',
             'studio_name': row[3] or '',
-            'manager': row[4] or '',
-            'event_count': row[5],
-            'first_event_date': row[6],
-            'total_sales': row[7],
+            'region': row[4] or '',
+            'manager': row[5] or '',
+            'event_count': row[6],
+            'first_event_date': row[7],
+            'total_sales': row[8],
             'level': 'info',
-            'message': f'{current_fy}年度{row[5]}件のイベント、売上¥{row[7]:,.0f}'
+            'message': f'{current_fy}年度{row[6]}件のイベント、売上¥{row[8]:,.0f}'
         })
 
     return results
@@ -423,30 +441,45 @@ def alert_rapid_growth_schools(cursor, config=AlertConfig):
     current_fy = get_current_fiscal_year()
     prev_fy = current_fy - 1
 
+    # event_salesから売上を集計（school_yearly_salesにデータがない場合に対応）
     query = '''
+        WITH current_sales AS (
+            SELECT
+                e.school_id,
+                COALESCE(SUM(es.sales), 0) as total_sales
+            FROM events e
+            LEFT JOIN event_sales es ON es.event_id = e.id
+            WHERE e.fiscal_year = ?
+            GROUP BY e.school_id
+        ),
+        prev_sales AS (
+            SELECT
+                e.school_id,
+                COALESCE(SUM(es.sales), 0) as total_sales
+            FROM events e
+            LEFT JOIN event_sales es ON es.event_id = e.id
+            WHERE e.fiscal_year = ?
+            GROUP BY e.school_id
+        )
         SELECT
             s.id,
             s.school_name,
             s.attribute,
             s.studio_name,
+            s.region,
             s.manager,
-            curr.total_sales as current_sales,
-            prev.total_sales as prev_sales,
-            (curr.total_sales - prev.total_sales) / prev.total_sales as growth_rate
+            COALESCE(curr.total_sales, 0) as current_sales,
+            COALESCE(prev.total_sales, 0) as prev_sales,
+            (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales as growth_rate
         FROM schools s
-        JOIN school_yearly_sales curr ON curr.school_id = s.id
-            AND curr.report_id = ? AND curr.fiscal_year = ?
-        JOIN school_yearly_sales prev ON prev.school_id = s.id
-            AND prev.report_id = ? AND prev.fiscal_year = ?
+        JOIN current_sales curr ON curr.school_id = s.id
+        JOIN prev_sales prev ON prev.school_id = s.id
         WHERE prev.total_sales > 10000  -- 最低売上を設定
-          AND (curr.total_sales - prev.total_sales) / prev.total_sales >= 0.5
+          AND (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales >= 0.5
         ORDER BY growth_rate DESC
     '''
 
-    cursor.execute(query, (
-        latest_report_id, current_fy,
-        latest_report_id, prev_fy
-    ))
+    cursor.execute(query, (current_fy, prev_fy))
 
     results = []
     for row in cursor.fetchall():
@@ -455,12 +488,13 @@ def alert_rapid_growth_schools(cursor, config=AlertConfig):
             'school_name': row[1],
             'attribute': row[2] or '',
             'studio_name': row[3] or '',
-            'manager': row[4] or '',
-            'current_sales': row[5],
-            'prev_sales': row[6],
-            'growth_rate': row[7],
+            'region': row[4] or '',
+            'manager': row[5] or '',
+            'current_sales': row[6],
+            'prev_sales': row[7],
+            'growth_rate': row[8],
             'level': 'success',
-            'message': f'売上{row[7]*100:+.1f}%成長！'
+            'message': f'売上{row[8]*100:+.1f}%成長！'
         })
 
     return results

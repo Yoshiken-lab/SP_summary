@@ -7,7 +7,6 @@
 """
 
 import json
-import re
 from datetime import datetime
 from pathlib import Path
 from database import get_connection
@@ -376,6 +375,27 @@ def generate_html_dashboard(db_path=None, output_path=None):
             font-size: 13px;
             background: white;
         }}
+        .alert-header {{
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 12px;
+        }}
+        .csv-download-btn {{
+            padding: 6px 14px;
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            background: #3b82f6;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+        .csv-download-btn:hover {{
+            background: #2563eb;
+        }}
+        .alert-controls .csv-download-btn {{
+            margin-left: auto;
+        }}
         .pagination {{
             display: flex;
             justify-content: center;
@@ -698,12 +718,18 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
             <!-- 今年度未実施 -->
             <div id="alert-no_events" class="alert-content active">
+                <div class="alert-header">
+                    <button class="csv-download-btn" onclick="downloadAlertCSV('no_events')">📥 CSV出力</button>
+                </div>
                 <div id="no_events-table-container"></div>
                 <div id="no_events-pagination" class="pagination"></div>
             </div>
 
             <!-- 販売開始後で会員率低 -->
             <div id="alert-new_event_low" class="alert-content">
+                <div class="alert-header">
+                    <button class="csv-download-btn" onclick="downloadAlertCSV('new_event_low')">📥 CSV出力</button>
+                </div>
                 <div id="new_event_low-table-container"></div>
                 <div id="new_event_low-pagination" class="pagination"></div>
             </div>
@@ -713,7 +739,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 <div class="alert-controls">
                     <label>会員率:</label>
                     <select id="decline-member-rate-filter" onchange="filterDeclineAlert()">
-                        <option value="1.0">すべて</option>
+                        <option value="1.0">指定なし</option>
                         <option value="0.5" selected>50%未満</option>
                         <option value="0.4">40%未満</option>
                         <option value="0.3">30%未満</option>
@@ -721,12 +747,13 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     </select>
                     <label>売上変化:</label>
                     <select id="decline-sales-filter" onchange="filterDeclineAlert()">
-                        <option value="0">すべて</option>
+                        <option value="0">指定なし</option>
                         <option value="-0.1">10%以上減少</option>
                         <option value="-0.2" selected>20%以上減少</option>
                         <option value="-0.3">30%以上減少</option>
                         <option value="-0.5">50%以上減少</option>
                     </select>
+                    <button class="csv-download-btn" onclick="downloadAlertCSV('decline')">📥 CSV出力</button>
                 </div>
                 <div id="decline-table-container"></div>
                 <div id="decline-pagination" class="pagination"></div>
@@ -741,7 +768,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     </select>
                     <label>月:</label>
                     <select id="new_schools-month-filter" onchange="filterNewSchoolsAlert()">
-                        <option value="">すべて</option>
+                        <option value="">指定なし</option>
                         <option value="4">4月</option>
                         <option value="5">5月</option>
                         <option value="6">6月</option>
@@ -755,6 +782,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         <option value="2">2月</option>
                         <option value="3">3月</option>
                     </select>
+                    <button class="csv-download-btn" onclick="downloadAlertCSV('new_schools')">📥 CSV出力</button>
                 </div>
                 <div id="new_schools-table-container"></div>
                 <div id="new_schools-pagination" class="pagination"></div>
@@ -762,12 +790,18 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
             <!-- 写真館別低下 -->
             <div id="alert-studio_decline" class="alert-content">
+                <div class="alert-header">
+                    <button class="csv-download-btn" onclick="downloadAlertCSV('studio_decline')">📥 CSV出力</button>
+                </div>
                 <div id="studio_decline-table-container"></div>
                 <div id="studio_decline-pagination" class="pagination"></div>
             </div>
 
             <!-- 急成長校 -->
             <div id="alert-rapid_growth" class="alert-content">
+                <div class="alert-header">
+                    <button class="csv-download-btn" onclick="downloadAlertCSV('rapid_growth')">📥 CSV出力</button>
+                </div>
                 <div id="rapid_growth-table-container"></div>
                 <div id="rapid_growth-pagination" class="pagination"></div>
             </div>
@@ -809,25 +843,8 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
     # AIコンサルタントセクションを追加
     if ai_advice.get('available', False):
-        if ai_advice.get('success', False):
-            # マークダウンをHTMLに簡易変換
-            ai_content = ai_advice.get('content', '')
-            # 改行をbrタグに変換（段落間）
-            ai_content_html = ai_content.replace('\n\n', '</p><p>').replace('\n', '<br>')
-            ai_content_html = f'<p>{ai_content_html}</p>'
-            # 見出しを変換
-            ai_content_html = re.sub(r'<p>\*\*(.+?)\*\*', r'<p><strong>\1</strong>', ai_content_html)
-            ai_content_html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', ai_content_html)
-            # リストを変換
-            ai_content_html = re.sub(r'<br>- ', r'</p><ul><li>', ai_content_html)
-            ai_content_html = re.sub(r'<br>(\d+)\. ', r'</p><ol><li>', ai_content_html)
-
-            ai_status_badge = '<span class="status-badge success">分析完了</span>'
-            ai_model_info = f'モデル: {ai_advice.get("model", "不明")} | 生成: {ai_advice.get("generated_at", "")[:19]}'
-        else:
-            ai_content_html = f'<p style="color: #ef4444;">{ai_advice.get("error", "エラーが発生しました")}</p>'
-            ai_status_badge = '<span class="status-badge danger">エラー</span>'
-            ai_model_info = ''
+        ai_status_badge = '<span class="status-badge success">利用可能</span>'
+        ai_model_info = f'モデル: {ai_advice.get("model", "不明")}'
 
         html += f'''
         <!-- AIコンサルタントセクション -->
@@ -840,8 +857,39 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 </h3>
                 <span style="font-size: 12px; color: #666;">{ai_model_info}</span>
             </div>
-            <div style="background: white; border-radius: 12px; padding: 20px; line-height: 1.8; font-size: 14px; color: #333; max-height: 600px; overflow-y: auto;">
-                {ai_content_html}
+            <div style="background: white; border-radius: 12px; padding: 24px;">
+                <p style="margin-bottom: 20px; color: #475569; font-size: 14px; text-align: center;">
+                    AIがスクールフォト事業の売上データを分析し、経営アドバイスを生成します。<br>
+                    コマンドラインから以下のコマンドを実行してレポートを生成してください。
+                </p>
+                <div style="background: #1e293b; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                    <p style="color: #94a3b8; font-size: 12px; margin-bottom: 8px;">📁 出力形式を選んで実行</p>
+                    <div style="display: flex; flex-direction: column; gap: 8px; font-family: 'Consolas', 'Monaco', monospace;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="color: #22c55e; min-width: 100px;">Markdown:</span>
+                            <code style="color: #f8fafc; background: #334155; padding: 6px 12px; border-radius: 4px; flex: 1;">python ai_consultant.py markdown</code>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="color: #3b82f6; min-width: 100px;">Word:</span>
+                            <code style="color: #f8fafc; background: #334155; padding: 6px 12px; border-radius: 4px; flex: 1;">python ai_consultant.py word</code>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="color: #f59e0b; min-width: 100px;">PDF:</span>
+                            <code style="color: #f8fafc; background: #334155; padding: 6px 12px; border-radius: 4px; flex: 1;">python ai_consultant.py pdf</code>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 16px; margin-top: 16px; font-size: 13px; color: #64748b;">
+                    <div style="flex: 1; padding: 12px; background: #f8fafc; border-radius: 8px;">
+                        <strong style="color: #475569;">📄 出力先</strong><br>
+                        <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">output/</code> フォルダ
+                    </div>
+                    <div style="flex: 1; padding: 12px; background: #f8fafc; border-radius: 8px;">
+                        <strong style="color: #475569;">⚙️ 必要環境</strong><br>
+                        Word: python-docx<br>
+                        PDF: pandoc + xelatex
+                    </div>
+                </div>
             </div>
         </div>
         '''
@@ -1818,11 +1866,11 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     renderAlertTable('no_events', [
                         {{key: 'school_name', label: '学校名'}},
                         {{key: 'attribute', label: '属性'}},
+                        {{key: 'region', label: '事業所'}},
                         {{key: 'studio_name', label: '写真館'}},
-                        {{key: 'manager', label: '担当者'}},
                         {{key: 'prev_year_events', label: '前年度イベント数'}},
                         {{key: 'prev_year_sales', label: '前年度売上'}}
-                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.studio_name}}</td><td>${{item.manager || '-'}}</td><td>${{item.prev_year_events}}件</td><td>¥${{item.prev_year_sales.toLocaleString()}}</td></tr>`);
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.region || '-'}}</td><td>${{item.studio_name}}</td><td>${{item.prev_year_events}}件</td><td>¥${{item.prev_year_sales.toLocaleString()}}</td></tr>`);
                     break;
                 case 'new_event_low':
                     renderAlertTable('new_event_low', [
@@ -1838,44 +1886,44 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     renderAlertTable('decline', [
                         {{key: 'school_name', label: '学校名'}},
                         {{key: 'attribute', label: '属性'}},
-                        {{key: 'manager', label: '担当者'}},
+                        {{key: 'region', label: '事業所'}},
                         {{key: 'member_rate', label: '会員率'}},
                         {{key: 'current_sales', label: '今年度売上'}},
                         {{key: 'prev_sales', label: '前年度売上'}},
                         {{key: 'sales_change', label: '売上変化'}}
-                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.manager || '-'}}</td><td>${{(item.member_rate*100).toFixed(1)}}%</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-down">${{(item.sales_change*100).toFixed(1)}}%</td></tr>`);
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.region || '-'}}</td><td>${{(item.member_rate*100).toFixed(1)}}%</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-down">${{(item.sales_change*100).toFixed(1)}}%</td></tr>`);
                     break;
                 case 'new_schools':
                     renderAlertTable('new_schools', [
                         {{key: 'school_name', label: '学校名'}},
                         {{key: 'attribute', label: '属性'}},
+                        {{key: 'region', label: '事業所'}},
                         {{key: 'studio_name', label: '写真館'}},
-                        {{key: 'manager', label: '担当者'}},
                         {{key: 'event_count', label: 'イベント数'}},
                         {{key: 'first_event_date', label: '初回開始日'}},
                         {{key: 'total_sales', label: '売上'}}
-                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.studio_name}}</td><td>${{item.manager || '-'}}</td><td>${{item.event_count}}件</td><td>${{item.first_event_date || '-'}}</td><td>¥${{item.total_sales.toLocaleString()}}</td></tr>`);
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.region || '-'}}</td><td>${{item.studio_name}}</td><td>${{item.event_count}}件</td><td>${{item.first_event_date || '-'}}</td><td>¥${{item.total_sales.toLocaleString()}}</td></tr>`);
                     break;
                 case 'studio_decline':
                     renderAlertTable('studio_decline', [
                         {{key: 'studio_name', label: '写真館名'}},
+                        {{key: 'region', label: '事業所'}},
                         {{key: 'current_sales', label: '今年度売上'}},
                         {{key: 'prev_sales', label: '前年度売上'}},
                         {{key: 'change_rate', label: '変化率'}},
-                        {{key: 'current_schools', label: '担当校数'}},
-                        {{key: 'level', label: '状態'}}
-                    ], item => `<tr><td>${{item.studio_name}}</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-down">${{(item.change_rate*100).toFixed(1)}}%</td><td>${{item.current_schools}}校</td><td><span class="status-badge ${{item.level}}">要確認</span></td></tr>`);
+                        {{key: 'current_schools', label: '担当校数'}}
+                    ], item => `<tr><td>${{item.studio_name}}</td><td>${{item.region || '-'}}</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-down">${{(item.change_rate*100).toFixed(1)}}%</td><td>${{item.current_schools}}校</td></tr>`);
                     break;
                 case 'rapid_growth':
                     renderAlertTable('rapid_growth', [
                         {{key: 'school_name', label: '学校名'}},
                         {{key: 'attribute', label: '属性'}},
+                        {{key: 'region', label: '事業所'}},
                         {{key: 'studio_name', label: '写真館'}},
-                        {{key: 'manager', label: '担当者'}},
                         {{key: 'current_sales', label: '今年度売上'}},
                         {{key: 'prev_sales', label: '前年度売上'}},
                         {{key: 'growth_rate', label: '成長率'}}
-                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.studio_name}}</td><td>${{item.manager || '-'}}</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-up">+${{(item.growth_rate*100).toFixed(1)}}%</td></tr>`);
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.region || '-'}}</td><td>${{item.studio_name}}</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-up">+${{(item.growth_rate*100).toFixed(1)}}%</td></tr>`);
                     break;
             }}
         }}
@@ -1916,6 +1964,124 @@ def generate_html_dashboard(db_path=None, output_path=None):
             alertState.new_schools.page = 1;
             document.getElementById('badge-new_schools').textContent = alertState.new_schools.data.length;
             renderAlertByType('new_schools');
+        }}
+
+        // CSVダウンロード
+        function downloadAlertCSV(type) {{
+            const data = alertState[type].data;
+            if (!data || data.length === 0) {{
+                alert('ダウンロードするデータがありません。');
+                return;
+            }}
+
+            // アラートタイプに応じたカラム定義
+            const columnDefs = {{
+                'no_events': [
+                    {{key: 'school_name', label: '学校名'}},
+                    {{key: 'attribute', label: '属性'}},
+                    {{key: 'region', label: '事業所'}},
+                    {{key: 'studio_name', label: '写真館'}},
+                    {{key: 'prev_year_events', label: '前年度イベント数'}},
+                    {{key: 'prev_year_sales', label: '前年度売上'}}
+                ],
+                'new_event_low': [
+                    {{key: 'school_name', label: '学校名'}},
+                    {{key: 'event_name', label: 'イベント名'}},
+                    {{key: 'start_date', label: '販売開始日'}},
+                    {{key: 'days_since_start', label: '経過日数'}},
+                    {{key: 'member_rate', label: '会員率'}}
+                ],
+                'decline': [
+                    {{key: 'school_name', label: '学校名'}},
+                    {{key: 'attribute', label: '属性'}},
+                    {{key: 'region', label: '事業所'}},
+                    {{key: 'member_rate', label: '会員率'}},
+                    {{key: 'current_sales', label: '今年度売上'}},
+                    {{key: 'prev_sales', label: '前年度売上'}},
+                    {{key: 'sales_change', label: '売上変化'}}
+                ],
+                'new_schools': [
+                    {{key: 'school_name', label: '学校名'}},
+                    {{key: 'attribute', label: '属性'}},
+                    {{key: 'region', label: '事業所'}},
+                    {{key: 'studio_name', label: '写真館'}},
+                    {{key: 'event_count', label: 'イベント数'}},
+                    {{key: 'first_event_date', label: '開始日'}},
+                    {{key: 'total_sales', label: '累計売上'}}
+                ],
+                'studio_decline': [
+                    {{key: 'studio_name', label: '写真館名'}},
+                    {{key: 'region', label: '事業所'}},
+                    {{key: 'current_schools', label: '担当校数'}},
+                    {{key: 'current_sales', label: '今年度売上'}},
+                    {{key: 'prev_sales', label: '前年度売上'}},
+                    {{key: 'change_rate', label: '変化率'}}
+                ],
+                'rapid_growth': [
+                    {{key: 'school_name', label: '学校名'}},
+                    {{key: 'attribute', label: '属性'}},
+                    {{key: 'region', label: '事業所'}},
+                    {{key: 'studio_name', label: '写真館'}},
+                    {{key: 'current_sales', label: '今年度売上'}},
+                    {{key: 'prev_sales', label: '前年度売上'}},
+                    {{key: 'growth_rate', label: '成長率'}}
+                ]
+            }};
+
+            const columns = columnDefs[type] || [];
+            if (columns.length === 0) return;
+
+            // ヘッダー行を作成
+            const headers = columns.map(c => c.label);
+            let csv = headers.join(',') + '\\n';
+
+            // データ行を作成
+            data.forEach(item => {{
+                const row = columns.map(c => {{
+                    let val = item[c.key];
+                    if (val === null || val === undefined) val = '';
+                    // 数値フォーマット
+                    if (c.key === 'total_sales' || c.key === 'current_sales' || c.key === 'prev_sales') {{
+                        val = typeof val === 'number' ? val : '';
+                    }} else if (c.key === 'member_rate') {{
+                        val = typeof val === 'number' ? (val * 100).toFixed(1) + '%' : val;
+                    }} else if (c.key === 'sales_change' || c.key === 'change_rate' || c.key === 'growth_rate') {{
+                        val = typeof val === 'number' ? (val >= 0 ? '+' : '') + (val * 100).toFixed(1) + '%' : val;
+                    }}
+                    // カンマや改行をエスケープ
+                    val = String(val).replace(/"/g, '""');
+                    if (val.includes(',') || val.includes('\\n') || val.includes('"')) {{
+                        val = '"' + val + '"';
+                    }}
+                    return val;
+                }});
+                csv += row.join(',') + '\\n';
+            }});
+
+            // BOMを追加（Excel対応）
+            const bom = '\\uFEFF';
+            const blob = new Blob([bom + csv], {{type: 'text/csv;charset=utf-8;'}});
+            const url = URL.createObjectURL(blob);
+
+            // ダウンロードリンクを作成
+            const alertNames = {{
+                'no_events': '今年度未実施',
+                'new_event_low': '販売開始後で会員率低',
+                'decline': '会員率売上低下',
+                'new_schools': '新規開始校',
+                'studio_decline': '写真館別低下',
+                'rapid_growth': '急成長校'
+            }};
+            const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const filename = `${{alertNames[type] || type}}_${{today}}.csv`;
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }}
 
         // 初期描画

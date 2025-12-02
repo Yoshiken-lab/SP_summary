@@ -5,14 +5,25 @@
 
 ローカルLLM（Ollama）を使用して売上データを分析し、
 経営アドバイスを生成する
+出力形式: Word, PDF, Markdown
 """
 
 import json
 import requests
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from database import get_connection
 from analytics import get_all_analytics, get_current_fiscal_year
+
+# オプション: Word出力用ライブラリ
+try:
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    DOCX_AVAILABLE = True
+except ImportError:
+    DOCX_AVAILABLE = False
 
 
 # 設定ファイルのパス
@@ -342,17 +353,209 @@ def generate_ai_advice(db_path=None):
     return result
 
 
+def get_output_directory():
+    """出力ディレクトリを取得（なければ作成）"""
+    output_dir = Path(__file__).parent / "output"
+    output_dir.mkdir(exist_ok=True)
+    return output_dir
+
+
+def save_as_markdown(content, fiscal_year=None):
+    """Markdown形式で保存"""
+    output_dir = get_output_directory()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    fy_str = f"_{fiscal_year}年度" if fiscal_year else ""
+    filename = f"AIコンサルタント分析{fy_str}_{timestamp}.md"
+    filepath = output_dir / filename
+
+    markdown_content = f"""# AIコンサルタント分析レポート
+
+**生成日時**: {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}
+
+---
+
+{content}
+
+---
+
+*このレポートはAI（Ollama）により自動生成されました。*
+"""
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(markdown_content)
+
+    return str(filepath)
+
+
+def save_as_word(content, fiscal_year=None):
+    """Word形式で保存"""
+    if not DOCX_AVAILABLE:
+        return None
+
+    output_dir = get_output_directory()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    fy_str = f"_{fiscal_year}年度" if fiscal_year else ""
+    filename = f"AIコンサルタント分析{fy_str}_{timestamp}.docx"
+    filepath = output_dir / filename
+
+    doc = Document()
+
+    # タイトル
+    title = doc.add_heading('AIコンサルタント分析レポート', 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # 生成日時
+    date_para = doc.add_paragraph()
+    date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    date_run = date_para.add_run(f"生成日時: {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}")
+    date_run.font.size = Pt(10)
+
+    doc.add_paragraph()  # 空行
+
+    # 本文（Markdownを簡易パース）
+    lines = content.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            doc.add_paragraph()
+        elif line.startswith('## '):
+            doc.add_heading(line[3:], level=2)
+        elif line.startswith('### '):
+            doc.add_heading(line[4:], level=3)
+        elif line.startswith('**') and line.endswith('**'):
+            para = doc.add_paragraph()
+            run = para.add_run(line[2:-2])
+            run.bold = True
+        elif line.startswith('- '):
+            doc.add_paragraph(line[2:], style='List Bullet')
+        elif line.startswith('1. ') or line.startswith('2. ') or line.startswith('3. '):
+            doc.add_paragraph(line[3:], style='List Number')
+        else:
+            doc.add_paragraph(line)
+
+    # フッター
+    doc.add_paragraph()
+    footer = doc.add_paragraph()
+    footer_run = footer.add_run('このレポートはAI（Ollama）により自動生成されました。')
+    footer_run.font.size = Pt(9)
+    footer_run.italic = True
+
+    doc.save(filepath)
+    return str(filepath)
+
+
+def save_as_pdf(content, fiscal_year=None):
+    """PDF形式で保存（Markdownからpandocで変換）"""
+    # まずMarkdownを保存
+    md_path = save_as_markdown(content, fiscal_year)
+    if not md_path:
+        return None
+
+    output_dir = get_output_directory()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    fy_str = f"_{fiscal_year}年度" if fiscal_year else ""
+    pdf_filename = f"AIコンサルタント分析{fy_str}_{timestamp}.pdf"
+    pdf_path = output_dir / pdf_filename
+
+    # pandocでPDF変換を試みる
+    try:
+        result = subprocess.run(
+            ['pandoc', md_path, '-o', str(pdf_path),
+             '--pdf-engine=xelatex',
+             '-V', 'mainfont=Noto Sans CJK JP',
+             '-V', 'geometry:margin=2cm'],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode == 0 and pdf_path.exists():
+            return str(pdf_path)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # pandocが失敗した場合はMarkdownパスを返す
+    return None
+
+
+def export_ai_advice(format='markdown', db_path=None):
+    """AIアドバイスを生成して指定形式でエクスポート
+
+    Args:
+        format: 'markdown', 'word', 'pdf' のいずれか
+        db_path: データベースパス
+
+    Returns:
+        dict: {
+            'success': bool,
+            'filepath': str or None,
+            'format': str,
+            'error': str or None
+        }
+    """
+    # AIアドバイス生成
+    result = generate_ai_advice(db_path)
+
+    if not result['success']:
+        return {
+            'success': False,
+            'filepath': None,
+            'format': format,
+            'error': result.get('error', '不明なエラー')
+        }
+
+    content = result['content']
+    config = load_config()
+    fiscal_year = get_current_fiscal_year()
+
+    # 形式に応じて保存
+    filepath = None
+    actual_format = format
+
+    if format == 'word':
+        if DOCX_AVAILABLE:
+            filepath = save_as_word(content, fiscal_year)
+        else:
+            # python-docxがない場合はMarkdownにフォールバック
+            filepath = save_as_markdown(content, fiscal_year)
+            actual_format = 'markdown'
+    elif format == 'pdf':
+        filepath = save_as_pdf(content, fiscal_year)
+        if not filepath:
+            # PDF変換失敗時はMarkdownにフォールバック
+            filepath = save_as_markdown(content, fiscal_year)
+            actual_format = 'markdown'
+    else:  # markdown
+        filepath = save_as_markdown(content, fiscal_year)
+
+    return {
+        'success': True,
+        'filepath': filepath,
+        'format': actual_format,
+        'error': None,
+        'model': result.get('model'),
+        'generated_at': result.get('generated_at')
+    }
+
+
 if __name__ == '__main__':
+    import sys
+
     print("AIコンサルタント分析を実行中...")
-    result = generate_ai_advice()
+
+    # コマンドライン引数で形式を指定可能
+    format_arg = 'markdown'
+    if len(sys.argv) > 1:
+        if sys.argv[1] in ['word', 'pdf', 'markdown', 'md']:
+            format_arg = 'word' if sys.argv[1] == 'word' else \
+                        'pdf' if sys.argv[1] == 'pdf' else 'markdown'
+
+    result = export_ai_advice(format=format_arg)
 
     if result['success']:
-        print("\n" + "=" * 60)
-        print("AIコンサルタントからのアドバイス")
-        print("=" * 60)
-        print(result['content'])
-        print("\n" + "=" * 60)
-        print(f"モデル: {result['model']}")
-        print(f"生成日時: {result['generated_at']}")
+        print(f"\n✅ 分析レポートを出力しました")
+        print(f"   形式: {result['format']}")
+        print(f"   ファイル: {result['filepath']}")
+        print(f"   モデル: {result['model']}")
+        print(f"   生成日時: {result['generated_at']}")
     else:
-        print(f"エラー: {result['error']}")
+        print(f"❌ エラー: {result['error']}")
