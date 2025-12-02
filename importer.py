@@ -18,6 +18,15 @@ from database import (
 )
 
 
+def normalize_brackets(text):
+    """半角括弧を全角括弧に統一"""
+    if text is None:
+        return None
+    text = str(text)
+    text = text.replace('(', '（').replace(')', '）')
+    return text
+
+
 def extract_report_date(file_name):
     """ファイル名から報告書日付を抽出"""
     match = re.search(r'(\d{8})', file_name)
@@ -151,7 +160,7 @@ def import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):
             continue
 
         school_name = str(school_name).strip()
-        manager = str(row[col_mapping.get('manager', 1)]).strip() if pd.notna(row[col_mapping.get('manager', 1)]) else None
+        manager = normalize_brackets(str(row[col_mapping.get('manager', 1)]).strip()) if pd.notna(row[col_mapping.get('manager', 1)]) else None
         studio = str(row[col_mapping.get('studio', 2)]).strip() if pd.notna(row[col_mapping.get('studio', 2)]) else None
 
         # 学校マスタに登録/更新
@@ -391,7 +400,7 @@ def import_school_comparison(xlsx, cursor, report_id):
             continue
 
         school_name = str(school_name).strip()
-        manager = str(row[col_mapping.get('manager', 1)]).strip() if pd.notna(row[col_mapping.get('manager', 1)]) else None
+        manager = normalize_brackets(str(row[col_mapping.get('manager', 1)]).strip()) if pd.notna(row[col_mapping.get('manager', 1)]) else None
         studio = str(row[col_mapping.get('studio', 2)]).strip() if pd.notna(row[col_mapping.get('studio', 2)]) else None
 
         # 学校マスタに登録/更新
