@@ -20,12 +20,12 @@ class AlertConfig:
     YOY_DECLINE_WARNING = -0.2      # 前年比20%減で警告
     YOY_DECLINE_DANGER = -0.3       # 前年比30%減で危険
 
-    # 新規イベント会員率（開始後日数）
-    NEW_EVENT_DAYS = 7              # イベント開始から7日
+    # 販売開始後イベント会員率（開始後日数）
+    NEW_EVENT_DAYS = 14             # イベント開始から2週間
     NEW_EVENT_MIN_RATE = 0.3        # 期待される最低会員率30%
 
-    # 表示件数
-    TOP_N = 30
+    # 表示件数（ページネーション用）
+    PAGE_SIZE = 30
 
 
 def get_latest_report_id(cursor):
@@ -48,6 +48,7 @@ def alert_no_events_this_year(cursor, config=AlertConfig):
     アラート1: 今年度未実施（前年実施あり）
 
     前年度にイベントを実施していたが、今年度はまだ実施していない学校
+    全件取得（件数制限なし）
     """
     current_fy = get_current_fiscal_year()
     prev_fy = current_fy - 1
@@ -73,10 +74,9 @@ def alert_no_events_this_year(cursor, config=AlertConfig):
         GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.manager
         HAVING prev_year_sales > 0
         ORDER BY prev_year_sales DESC
-        LIMIT ?
     '''
 
-    cursor.execute(query, (prev_fy, current_fy, config.TOP_N))
+    cursor.execute(query, (prev_fy, current_fy))
     results = []
 
     for row in cursor.fetchall():
@@ -97,19 +97,20 @@ def alert_no_events_this_year(cursor, config=AlertConfig):
 
 def alert_new_event_low_registration(cursor, config=AlertConfig):
     """
-    アラート2: 直近開始イベントで会員率が低い
+    アラート2: 販売開始後で会員率が低い
 
-    イベント開始から1週間程度経過しているのに、会員登録率が伸びていない学校
+    イベント開始から2週間以内で、会員登録率が30%未満の学校
+    全件取得（件数制限なし）
     """
     latest_report_id, report_date = get_latest_report_id(cursor)
     if not latest_report_id:
         return []
 
-    # 報告書の日付を基準に1週間前〜当日に開始したイベントを抽出
+    # 報告書の日付を基準に2週間前〜当日に開始したイベントを抽出
     if isinstance(report_date, str):
         report_date = datetime.strptime(report_date, '%Y-%m-%d').date()
 
-    week_ago = report_date - timedelta(days=config.NEW_EVENT_DAYS)
+    days_ago = report_date - timedelta(days=config.NEW_EVENT_DAYS)
 
     query = '''
         SELECT
@@ -140,10 +141,9 @@ def alert_new_event_low_registration(cursor, config=AlertConfig):
         WHERE e.start_date BETWEEN ? AND ?
           AND e.start_date IS NOT NULL
         ORDER BY member_rate ASC
-        LIMIT ?
     '''
 
-    cursor.execute(query, (latest_report_id, week_ago, report_date, config.TOP_N * 2))
+    cursor.execute(query, (latest_report_id, days_ago, report_date))
     results = []
 
     for row in cursor.fetchall():
@@ -167,18 +167,31 @@ def alert_new_event_low_registration(cursor, config=AlertConfig):
                 'message': f'開始から{days_since_start}日経過、会員率{member_rate*100:.1f}%'
             })
 
-    return results[:config.TOP_N]
+    return results
 
 
-def alert_member_rate_decline(cursor, config=AlertConfig):
+def alert_member_rate_decline(cursor, config=AlertConfig, member_rate_threshold=None, sales_decline_threshold=None):
     """
-    アラート3: 前年比で会員率50%未満 かつ 売上20%以上減少
+    アラート3: 会員率・売上低下
 
-    前年度と比較して、会員率が大幅に低下し、売上も減少している学校
+    会員率と売上低下の両方の基準で絞り込み可能
+    全件取得（件数制限なし）
+
+    Args:
+        cursor: DBカーソル
+        config: アラート設定
+        member_rate_threshold: 会員率の閾値（例: 0.5 = 50%未満）。Noneの場合はフィルタなし
+        sales_decline_threshold: 売上低下の閾値（例: -0.2 = 20%以上減少）。Noneの場合はフィルタなし
     """
     latest_report_id, _ = get_latest_report_id(cursor)
     current_fy = get_current_fiscal_year()
     prev_fy = current_fy - 1
+
+    # デフォルト値の設定
+    if member_rate_threshold is None:
+        member_rate_threshold = 1.0  # 100%（実質フィルタなし）
+    if sales_decline_threshold is None:
+        sales_decline_threshold = 0.0  # 0%（実質フィルタなし）
 
     query = '''
         WITH current_member AS (
@@ -223,16 +236,14 @@ def alert_member_rate_decline(cursor, config=AlertConfig):
           AND COALESCE(ps.total_sales, 0) > 0
           AND (COALESCE(cs.total_sales, 0) - ps.total_sales) / ps.total_sales < ?
         ORDER BY cm.rate ASC, sales_change ASC
-        LIMIT ?
     '''
 
     cursor.execute(query, (
         latest_report_id, current_fy,
         latest_report_id, current_fy,
         latest_report_id, prev_fy,
-        config.MEMBER_RATE_WARNING,
-        config.YOY_DECLINE_WARNING,
-        config.TOP_N
+        member_rate_threshold,
+        sales_decline_threshold
     ))
 
     results = []
@@ -255,38 +266,69 @@ def alert_member_rate_decline(cursor, config=AlertConfig):
     return results
 
 
-def alert_new_schools(cursor, config=AlertConfig):
+def alert_new_schools(cursor, config=AlertConfig, target_fy=None, target_month=None):
     """
     アラート4: 新規開始校
 
-    前年度に実績がなく、今年度から新規でイベントを開始した学校
+    指定した年度・月に初めてイベントを開始した学校
+    全件取得（件数制限なし）
+
+    Args:
+        cursor: DBカーソル
+        config: アラート設定
+        target_fy: 対象年度。Noneの場合は現在年度
+        target_month: 対象月（1-12）。Noneの場合は全月
     """
-    current_fy = get_current_fiscal_year()
+    current_fy = target_fy if target_fy else get_current_fiscal_year()
     prev_fy = current_fy - 1
 
-    query = '''
-        SELECT
-            s.id,
-            s.school_name,
-            s.attribute,
-            s.studio_name,
-            s.manager,
-            COUNT(DISTINCT e.id) as event_count,
-            MIN(e.start_date) as first_event_date,
-            COALESCE(SUM(es.sales), 0) as total_sales
-        FROM schools s
-        JOIN events e ON e.school_id = s.id AND e.fiscal_year = ?
-        LEFT JOIN event_sales es ON es.event_id = e.id
-        WHERE NOT EXISTS (
-            SELECT 1 FROM events e_prev
-            WHERE e_prev.school_id = s.id AND e_prev.fiscal_year = ?
-        )
-        GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.manager
-        ORDER BY first_event_date DESC, total_sales DESC
-        LIMIT ?
-    '''
-
-    cursor.execute(query, (current_fy, prev_fy, config.TOP_N))
+    # 月指定がある場合
+    if target_month:
+        # 指定月に開始したイベントを持つ新規校を取得
+        query = '''
+            SELECT
+                s.id,
+                s.school_name,
+                s.attribute,
+                s.studio_name,
+                s.manager,
+                COUNT(DISTINCT e.id) as event_count,
+                MIN(e.start_date) as first_event_date,
+                COALESCE(SUM(es.sales), 0) as total_sales
+            FROM schools s
+            JOIN events e ON e.school_id = s.id AND e.fiscal_year = ?
+            LEFT JOIN event_sales es ON es.event_id = e.id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM events e_prev
+                WHERE e_prev.school_id = s.id AND e_prev.fiscal_year = ?
+            )
+            AND strftime('%m', e.start_date) = ?
+            GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.manager
+            ORDER BY first_event_date DESC, total_sales DESC
+        '''
+        cursor.execute(query, (current_fy, prev_fy, f'{target_month:02d}'))
+    else:
+        query = '''
+            SELECT
+                s.id,
+                s.school_name,
+                s.attribute,
+                s.studio_name,
+                s.manager,
+                COUNT(DISTINCT e.id) as event_count,
+                MIN(e.start_date) as first_event_date,
+                COALESCE(SUM(es.sales), 0) as total_sales
+            FROM schools s
+            JOIN events e ON e.school_id = s.id AND e.fiscal_year = ?
+            LEFT JOIN event_sales es ON es.event_id = e.id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM events e_prev
+                WHERE e_prev.school_id = s.id AND e_prev.fiscal_year = ?
+            )
+            GROUP BY s.id, s.school_name, s.attribute, s.studio_name, s.manager
+            ORDER BY first_event_date DESC, total_sales DESC
+        '''
+        cursor.execute(query, (current_fy, prev_fy))
 
     results = []
     for row in cursor.fetchall():
@@ -300,7 +342,7 @@ def alert_new_schools(cursor, config=AlertConfig):
             'first_event_date': row[6],
             'total_sales': row[7],
             'level': 'info',
-            'message': f'今年度{row[5]}件のイベント、売上¥{row[7]:,.0f}'
+            'message': f'{current_fy}年度{row[5]}件のイベント、売上¥{row[7]:,.0f}'
         })
 
     return results
@@ -310,7 +352,8 @@ def alert_studio_performance_decline(cursor, config=AlertConfig):
     """
     アラート5: 写真館別パフォーマンス低下
 
-    担当校全体で見たときに、前年比で売上が大幅に落ちている写真館
+    担当校全体で見たときに、前年比で売上が20%以上落ちている写真館
+    全件取得（件数制限なし）
     """
     latest_report_id, _ = get_latest_report_id(cursor)
     current_fy = get_current_fiscal_year()
@@ -343,15 +386,13 @@ def alert_studio_performance_decline(cursor, config=AlertConfig):
           AND prev.total_sales > 0
           AND (curr.total_sales - prev.total_sales) / prev.total_sales < ?
         ORDER BY change_rate ASC
-        LIMIT ?
     '''
 
     cursor.execute(query, (
         latest_report_id,
         prev_fy,
         current_fy,
-        config.YOY_DECLINE_WARNING,
-        config.TOP_N
+        config.YOY_DECLINE_WARNING
     ))
 
     results = []
@@ -376,6 +417,7 @@ def alert_rapid_growth_schools(cursor, config=AlertConfig):
     アラート6: 急成長校
 
     前年比で150%以上の売上成長を見せている学校（成功事例）
+    全件取得（件数制限なし）
     """
     latest_report_id, _ = get_latest_report_id(cursor)
     current_fy = get_current_fiscal_year()
@@ -399,13 +441,11 @@ def alert_rapid_growth_schools(cursor, config=AlertConfig):
         WHERE prev.total_sales > 10000  -- 最低売上を設定
           AND (curr.total_sales - prev.total_sales) / prev.total_sales >= 0.5
         ORDER BY growth_rate DESC
-        LIMIT ?
     '''
 
     cursor.execute(query, (
         latest_report_id, current_fy,
-        latest_report_id, prev_fy,
-        config.TOP_N
+        latest_report_id, prev_fy
     ))
 
     results = []

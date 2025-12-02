@@ -353,6 +353,50 @@ def generate_html_dashboard(db_path=None, output_path=None):
             border-bottom: 1px solid #e2e8f0;
         }}
         .alert-table tr:hover {{ background: #f8fafc; }}
+        .alert-table th.sortable {{ cursor: pointer; user-select: none; }}
+        .alert-table th.sortable:hover {{ background: #e2e8f0; }}
+        .alert-table th.sortable::after {{ content: ' ↕'; opacity: 0.3; font-size: 10px; }}
+        .alert-table th.sortable.asc::after {{ content: ' ↑'; opacity: 1; }}
+        .alert-table th.sortable.desc::after {{ content: ' ↓'; opacity: 1; }}
+        .alert-controls {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }}
+        .alert-controls label {{ font-size: 13px; color: #475569; font-weight: 500; }}
+        .alert-controls select {{
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+        }}
+        .pagination {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e2e8f0;
+        }}
+        .pagination button {{
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 13px;
+        }}
+        .pagination button:hover:not(:disabled) {{ background: #f0f0f0; }}
+        .pagination button:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+        .pagination button.active {{ background: #3b82f6; color: white; border-color: #3b82f6; }}
+        .pagination .page-info {{ font-size: 13px; color: #666; margin: 0 8px; }}
         .status-badge {{
             padding: 4px 10px;
             border-radius: 20px;
@@ -632,104 +676,102 @@ def generate_html_dashboard(db_path=None, output_path=None):
         <div class="alert-section">
             <h3>アラート一覧</h3>
             <div class="alert-tabs">
-                <button class="alert-tab active" onclick="showAlert('no_events')">
-                    今年度未実施 <span class="badge">{alert_counts.get('no_events_this_year', 0)}</span>
+                <button class="alert-tab active" onclick="showAlert('no_events')" id="tab-no_events">
+                    今年度未実施 <span class="badge" id="badge-no_events">{alert_counts.get('no_events_this_year', 0)}</span>
                 </button>
-                <button class="alert-tab" onclick="showAlert('new_event_low')">
-                    直近開始で会員率低 <span class="badge">{alert_counts.get('new_event_low_registration', 0)}</span>
+                <button class="alert-tab" onclick="showAlert('new_event_low')" id="tab-new_event_low">
+                    販売開始後で会員率低 <span class="badge" id="badge-new_event_low">{alert_counts.get('new_event_low_registration', 0)}</span>
                 </button>
-                <button class="alert-tab" onclick="showAlert('decline')">
-                    会員率・売上低下 <span class="badge">{alert_counts.get('member_rate_decline', 0)}</span>
+                <button class="alert-tab" onclick="showAlert('decline')" id="tab-decline">
+                    会員率・売上低下 <span class="badge" id="badge-decline">{alert_counts.get('member_rate_decline', 0)}</span>
                 </button>
-                <button class="alert-tab success" onclick="showAlert('new_schools')">
-                    新規開始校 <span class="badge">{alert_counts.get('new_schools', 0)}</span>
+                <button class="alert-tab success" onclick="showAlert('new_schools')" id="tab-new_schools">
+                    新規開始校 <span class="badge" id="badge-new_schools">{alert_counts.get('new_schools', 0)}</span>
                 </button>
-                <button class="alert-tab" onclick="showAlert('studio_decline')">
-                    写真館別低下 <span class="badge">{alert_counts.get('studio_performance_decline', 0)}</span>
+                <button class="alert-tab" onclick="showAlert('studio_decline')" id="tab-studio_decline">
+                    写真館別低下 <span class="badge" id="badge-studio_decline">{alert_counts.get('studio_performance_decline', 0)}</span>
                 </button>
-                <button class="alert-tab success" onclick="showAlert('rapid_growth')">
-                    急成長校 <span class="badge">{alert_counts.get('rapid_growth', 0)}</span>
+                <button class="alert-tab success" onclick="showAlert('rapid_growth')" id="tab-rapid_growth">
+                    急成長校 <span class="badge" id="badge-rapid_growth">{alert_counts.get('rapid_growth', 0)}</span>
                 </button>
             </div>
-'''
 
-    # アラートテーブル生成（今年度未実施）
-    html += '''
+            <!-- 今年度未実施 -->
             <div id="alert-no_events" class="alert-content active">
-                <table class="alert-table">
-                    <thead><tr><th>学校名</th><th>属性</th><th>写真館</th><th>前年度イベント数</th><th>前年度売上</th><th>状態</th></tr></thead>
-                    <tbody>
-'''
-    for item in alerts.get('no_events_this_year', []):
-        html += f'<tr><td>{item["school_name"]}</td><td>{item["attribute"]}</td><td>{item["studio_name"]}</td><td>{item["prev_year_events"]}件</td><td>¥{item["prev_year_sales"]:,.0f}</td><td><span class="status-badge {item["level"]}">要確認</span></td></tr>'
-    if not alerts.get('no_events_this_year'):
-        html += '<tr><td colspan="6" style="text-align:center;color:#888;padding:40px;">アラートはありません</td></tr>'
-    html += '</tbody></table></div>'
+                <div id="no_events-table-container"></div>
+                <div id="no_events-pagination" class="pagination"></div>
+            </div>
 
-    # 直近開始で会員率低
-    html += '''
+            <!-- 販売開始後で会員率低 -->
             <div id="alert-new_event_low" class="alert-content">
-                <table class="alert-table">
-                    <thead><tr><th>学校名</th><th>イベント名</th><th>開始日</th><th>経過日数</th><th>会員率</th><th>状態</th></tr></thead>
-                    <tbody>
-'''
-    for item in alerts.get('new_event_low_registration', []):
-        html += f'<tr><td>{item["school_name"]}</td><td>{item["event_name"][:30]}...</td><td>{item["start_date"]}</td><td>{item["days_since_start"]}日</td><td>{item["member_rate"]*100:.1f}%</td><td><span class="status-badge {item["level"]}">要フォロー</span></td></tr>'
-    if not alerts.get('new_event_low_registration'):
-        html += '<tr><td colspan="6" style="text-align:center;color:#888;padding:40px;">アラートはありません</td></tr>'
-    html += '</tbody></table></div>'
+                <div id="new_event_low-table-container"></div>
+                <div id="new_event_low-pagination" class="pagination"></div>
+            </div>
 
-    # 会員率・売上低下
-    html += '''
+            <!-- 会員率・売上低下 -->
             <div id="alert-decline" class="alert-content">
-                <table class="alert-table">
-                    <thead><tr><th>学校名</th><th>属性</th><th>会員率</th><th>今年度売上</th><th>前年度売上</th><th>売上変化</th><th>状態</th></tr></thead>
-                    <tbody>
-'''
-    for item in alerts.get('member_rate_decline', []):
-        html += f'<tr><td>{item["school_name"]}</td><td>{item["attribute"]}</td><td>{item["member_rate"]*100:.1f}%</td><td>¥{item["current_sales"]:,.0f}</td><td>¥{item["prev_sales"]:,.0f}</td><td class="trend-down">{item["sales_change"]*100:+.1f}%</td><td><span class="status-badge {item["level"]}">要対応</span></td></tr>'
-    if not alerts.get('member_rate_decline'):
-        html += '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">アラートはありません</td></tr>'
-    html += '</tbody></table></div>'
+                <div class="alert-controls">
+                    <label>会員率:</label>
+                    <select id="decline-member-rate-filter" onchange="filterDeclineAlert()">
+                        <option value="1.0">すべて</option>
+                        <option value="0.5" selected>50%未満</option>
+                        <option value="0.4">40%未満</option>
+                        <option value="0.3">30%未満</option>
+                        <option value="0.2">20%未満</option>
+                    </select>
+                    <label>売上変化:</label>
+                    <select id="decline-sales-filter" onchange="filterDeclineAlert()">
+                        <option value="0">すべて</option>
+                        <option value="-0.1">10%以上減少</option>
+                        <option value="-0.2" selected>20%以上減少</option>
+                        <option value="-0.3">30%以上減少</option>
+                        <option value="-0.5">50%以上減少</option>
+                    </select>
+                </div>
+                <div id="decline-table-container"></div>
+                <div id="decline-pagination" class="pagination"></div>
+            </div>
 
-    # 新規開始校
-    html += '''
+            <!-- 新規開始校 -->
             <div id="alert-new_schools" class="alert-content">
-                <table class="alert-table">
-                    <thead><tr><th>学校名</th><th>属性</th><th>写真館</th><th>イベント数</th><th>初回開始日</th><th>売上</th></tr></thead>
-                    <tbody>
-'''
-    for item in alerts.get('new_schools', []):
-        html += f'<tr><td>{item["school_name"]}</td><td>{item["attribute"]}</td><td>{item["studio_name"]}</td><td>{item["event_count"]}件</td><td>{item["first_event_date"] or "-"}</td><td>¥{item["total_sales"]:,.0f}</td></tr>'
-    if not alerts.get('new_schools'):
-        html += '<tr><td colspan="6" style="text-align:center;color:#888;padding:40px;">新規開始校はありません</td></tr>'
-    html += '</tbody></table></div>'
+                <div class="alert-controls">
+                    <label>年度:</label>
+                    <select id="new_schools-year-filter" onchange="filterNewSchoolsAlert()">
+                        {' '.join([f'<option value="{y}">{y}年度</option>' for y in available_years])}
+                    </select>
+                    <label>月:</label>
+                    <select id="new_schools-month-filter" onchange="filterNewSchoolsAlert()">
+                        <option value="">すべて</option>
+                        <option value="4">4月</option>
+                        <option value="5">5月</option>
+                        <option value="6">6月</option>
+                        <option value="7">7月</option>
+                        <option value="8">8月</option>
+                        <option value="9">9月</option>
+                        <option value="10">10月</option>
+                        <option value="11">11月</option>
+                        <option value="12">12月</option>
+                        <option value="1">1月</option>
+                        <option value="2">2月</option>
+                        <option value="3">3月</option>
+                    </select>
+                </div>
+                <div id="new_schools-table-container"></div>
+                <div id="new_schools-pagination" class="pagination"></div>
+            </div>
 
-    # 写真館別低下
-    html += '''
+            <!-- 写真館別低下 -->
             <div id="alert-studio_decline" class="alert-content">
-                <table class="alert-table">
-                    <thead><tr><th>写真館名</th><th>今年度売上</th><th>前年度売上</th><th>変化率</th><th>担当校数</th><th>状態</th></tr></thead>
-                    <tbody>
-'''
-    for item in alerts.get('studio_performance_decline', []):
-        html += f'<tr><td>{item["studio_name"]}</td><td>¥{item["current_sales"]:,.0f}</td><td>¥{item["prev_sales"]:,.0f}</td><td class="trend-down">{item["change_rate"]*100:+.1f}%</td><td>{item["current_schools"]}校</td><td><span class="status-badge {item["level"]}">要確認</span></td></tr>'
-    if not alerts.get('studio_performance_decline'):
-        html += '<tr><td colspan="6" style="text-align:center;color:#888;padding:40px;">アラートはありません</td></tr>'
-    html += '</tbody></table></div>'
+                <div id="studio_decline-table-container"></div>
+                <div id="studio_decline-pagination" class="pagination"></div>
+            </div>
 
-    # 急成長校
-    html += '''
+            <!-- 急成長校 -->
             <div id="alert-rapid_growth" class="alert-content">
-                <table class="alert-table">
-                    <thead><tr><th>学校名</th><th>属性</th><th>写真館</th><th>今年度売上</th><th>前年度売上</th><th>成長率</th></tr></thead>
-                    <tbody>
-'''
-    for item in alerts.get('rapid_growth', []):
-        html += f'<tr><td>{item["school_name"]}</td><td>{item["attribute"]}</td><td>{item["studio_name"]}</td><td>¥{item["current_sales"]:,.0f}</td><td>¥{item["prev_sales"]:,.0f}</td><td class="trend-up">{item["growth_rate"]*100:+.1f}%</td></tr>'
-    if not alerts.get('rapid_growth'):
-        html += '<tr><td colspan="6" style="text-align:center;color:#888;padding:40px;">該当校はありません</td></tr>'
-    html += '</tbody></table></div></div>'
+                <div id="rapid_growth-table-container"></div>
+                <div id="rapid_growth-pagination" class="pagination"></div>
+            </div>
+        </div>'''
 
     # 分析セクション
     html += '''
@@ -843,6 +885,27 @@ def generate_html_dashboard(db_path=None, output_path=None):
         const allEventSalesData = {json.dumps(all_event_sales_data, ensure_ascii=False)};
         const branchSalesData = {json.dumps(branch_sales_data, ensure_ascii=False)};
         const personSalesData = {json.dumps(person_sales_data, ensure_ascii=False)};
+
+        // アラートデータ
+        const alertData = {{
+            no_events: {json.dumps(alerts.get('no_events_this_year', []), ensure_ascii=False)},
+            new_event_low: {json.dumps(alerts.get('new_event_low_registration', []), ensure_ascii=False)},
+            decline: {json.dumps(alerts.get('member_rate_decline', []), ensure_ascii=False)},
+            new_schools: {json.dumps(alerts.get('new_schools', []), ensure_ascii=False)},
+            studio_decline: {json.dumps(alerts.get('studio_performance_decline', []), ensure_ascii=False)},
+            rapid_growth: {json.dumps(alerts.get('rapid_growth', []), ensure_ascii=False)}
+        }};
+
+        // アラートページング・ソート状態管理
+        const alertState = {{
+            no_events: {{ page: 1, sortKey: 'prev_year_sales', sortDir: 'desc', data: alertData.no_events }},
+            new_event_low: {{ page: 1, sortKey: 'member_rate', sortDir: 'asc', data: alertData.new_event_low }},
+            decline: {{ page: 1, sortKey: 'member_rate', sortDir: 'asc', data: [] }},
+            new_schools: {{ page: 1, sortKey: 'first_event_date', sortDir: 'desc', data: alertData.new_schools }},
+            studio_decline: {{ page: 1, sortKey: 'change_rate', sortDir: 'asc', data: alertData.studio_decline }},
+            rapid_growth: {{ page: 1, sortKey: 'growth_rate', sortDir: 'desc', data: alertData.rapid_growth }}
+        }};
+        const PAGE_SIZE = 30;
 
         // 年度別サマリーデータ
         const allYearsStats = {json.dumps({str(k): v for k, v in all_years_stats.items()}, ensure_ascii=False)};
@@ -1668,7 +1731,203 @@ def generate_html_dashboard(db_path=None, output_path=None):
             document.querySelectorAll('.alert-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.alert-tab').forEach(el => el.classList.remove('active'));
             document.getElementById('alert-' + type).classList.add('active');
-            event.target.classList.add('active');
+            document.getElementById('tab-' + type).classList.add('active');
+        }}
+
+        // アラートテーブル共通描画関数
+        function renderAlertTable(type, columns, rowRenderer) {{
+            const state = alertState[type];
+            const data = state.data;
+            const totalPages = Math.ceil(data.length / PAGE_SIZE);
+            const startIdx = (state.page - 1) * PAGE_SIZE;
+            const pageData = data.slice(startIdx, startIdx + PAGE_SIZE);
+
+            // ソート済みデータを生成
+            const sortedData = [...data].sort((a, b) => {{
+                let aVal = a[state.sortKey];
+                let bVal = b[state.sortKey];
+                if (typeof aVal === 'string') aVal = aVal || '';
+                if (typeof bVal === 'string') bVal = bVal || '';
+                if (state.sortDir === 'asc') return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            }});
+            state.data = sortedData;
+
+            const displayData = sortedData.slice(startIdx, startIdx + PAGE_SIZE);
+
+            // テーブル生成
+            let html = '<table class="alert-table"><thead><tr>';
+            columns.forEach(col => {{
+                const sortClass = state.sortKey === col.key ? (state.sortDir === 'asc' ? 'asc' : 'desc') : '';
+                html += `<th class="sortable ${{sortClass}}" onclick="sortAlertTable('${{type}}', '${{col.key}}')">${{col.label}}</th>`;
+            }});
+            html += '</tr></thead><tbody>';
+
+            if (displayData.length === 0) {{
+                html += `<tr><td colspan="${{columns.length}}" style="text-align:center;color:#888;padding:40px;">データはありません</td></tr>`;
+            }} else {{
+                displayData.forEach(item => {{ html += rowRenderer(item); }});
+            }}
+            html += '</tbody></table>';
+
+            document.getElementById(type + '-table-container').innerHTML = html;
+
+            // ページネーション生成
+            let paginationHtml = '';
+            if (totalPages > 1) {{
+                paginationHtml += `<button onclick="changeAlertPage('${{type}}', 1)" ${{state.page === 1 ? 'disabled' : ''}}>&laquo;</button>`;
+                paginationHtml += `<button onclick="changeAlertPage('${{type}}', ${{state.page - 1}})" ${{state.page === 1 ? 'disabled' : ''}}>&lt;</button>`;
+
+                // ページ番号
+                let startPage = Math.max(1, state.page - 2);
+                let endPage = Math.min(totalPages, state.page + 2);
+                for (let i = startPage; i <= endPage; i++) {{
+                    paginationHtml += `<button class="${{i === state.page ? 'active' : ''}}" onclick="changeAlertPage('${{type}}', ${{i}})">${{i}}</button>`;
+                }}
+
+                paginationHtml += `<button onclick="changeAlertPage('${{type}}', ${{state.page + 1}})" ${{state.page === totalPages ? 'disabled' : ''}}>&gt;</button>`;
+                paginationHtml += `<button onclick="changeAlertPage('${{type}}', ${{totalPages}})" ${{state.page === totalPages ? 'disabled' : ''}}>&raquo;</button>`;
+                paginationHtml += `<span class="page-info">${{data.length}}件中 ${{startIdx + 1}}-${{Math.min(startIdx + PAGE_SIZE, data.length)}}件</span>`;
+            }} else if (data.length > 0) {{
+                paginationHtml = `<span class="page-info">${{data.length}}件</span>`;
+            }}
+            document.getElementById(type + '-pagination').innerHTML = paginationHtml;
+        }}
+
+        function sortAlertTable(type, key) {{
+            const state = alertState[type];
+            if (state.sortKey === key) {{
+                state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+            }} else {{
+                state.sortKey = key;
+                state.sortDir = 'asc';
+            }}
+            state.page = 1;
+            renderAlertByType(type);
+        }}
+
+        function changeAlertPage(type, page) {{
+            alertState[type].page = page;
+            renderAlertByType(type);
+        }}
+
+        // 各アラートタイプ別描画
+        function renderAlertByType(type) {{
+            switch(type) {{
+                case 'no_events':
+                    renderAlertTable('no_events', [
+                        {{key: 'school_name', label: '学校名'}},
+                        {{key: 'attribute', label: '属性'}},
+                        {{key: 'studio_name', label: '写真館'}},
+                        {{key: 'manager', label: '担当者'}},
+                        {{key: 'prev_year_events', label: '前年度イベント数'}},
+                        {{key: 'prev_year_sales', label: '前年度売上'}}
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.studio_name}}</td><td>${{item.manager || '-'}}</td><td>${{item.prev_year_events}}件</td><td>¥${{item.prev_year_sales.toLocaleString()}}</td></tr>`);
+                    break;
+                case 'new_event_low':
+                    renderAlertTable('new_event_low', [
+                        {{key: 'school_name', label: '学校名'}},
+                        {{key: 'event_name', label: 'イベント名'}},
+                        {{key: 'start_date', label: '開始日'}},
+                        {{key: 'days_since_start', label: '経過日数'}},
+                        {{key: 'member_rate', label: '会員率'}},
+                        {{key: 'level', label: '状態'}}
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{(item.event_name || '').substring(0,30)}}...</td><td>${{item.start_date || '-'}}</td><td>${{item.days_since_start}}日</td><td>${{(item.member_rate*100).toFixed(1)}}%</td><td><span class="status-badge ${{item.level}}">要フォロー</span></td></tr>`);
+                    break;
+                case 'decline':
+                    renderAlertTable('decline', [
+                        {{key: 'school_name', label: '学校名'}},
+                        {{key: 'attribute', label: '属性'}},
+                        {{key: 'manager', label: '担当者'}},
+                        {{key: 'member_rate', label: '会員率'}},
+                        {{key: 'current_sales', label: '今年度売上'}},
+                        {{key: 'prev_sales', label: '前年度売上'}},
+                        {{key: 'sales_change', label: '売上変化'}}
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.manager || '-'}}</td><td>${{(item.member_rate*100).toFixed(1)}}%</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-down">${{(item.sales_change*100).toFixed(1)}}%</td></tr>`);
+                    break;
+                case 'new_schools':
+                    renderAlertTable('new_schools', [
+                        {{key: 'school_name', label: '学校名'}},
+                        {{key: 'attribute', label: '属性'}},
+                        {{key: 'studio_name', label: '写真館'}},
+                        {{key: 'manager', label: '担当者'}},
+                        {{key: 'event_count', label: 'イベント数'}},
+                        {{key: 'first_event_date', label: '初回開始日'}},
+                        {{key: 'total_sales', label: '売上'}}
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.studio_name}}</td><td>${{item.manager || '-'}}</td><td>${{item.event_count}}件</td><td>${{item.first_event_date || '-'}}</td><td>¥${{item.total_sales.toLocaleString()}}</td></tr>`);
+                    break;
+                case 'studio_decline':
+                    renderAlertTable('studio_decline', [
+                        {{key: 'studio_name', label: '写真館名'}},
+                        {{key: 'current_sales', label: '今年度売上'}},
+                        {{key: 'prev_sales', label: '前年度売上'}},
+                        {{key: 'change_rate', label: '変化率'}},
+                        {{key: 'current_schools', label: '担当校数'}},
+                        {{key: 'level', label: '状態'}}
+                    ], item => `<tr><td>${{item.studio_name}}</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-down">${{(item.change_rate*100).toFixed(1)}}%</td><td>${{item.current_schools}}校</td><td><span class="status-badge ${{item.level}}">要確認</span></td></tr>`);
+                    break;
+                case 'rapid_growth':
+                    renderAlertTable('rapid_growth', [
+                        {{key: 'school_name', label: '学校名'}},
+                        {{key: 'attribute', label: '属性'}},
+                        {{key: 'studio_name', label: '写真館'}},
+                        {{key: 'manager', label: '担当者'}},
+                        {{key: 'current_sales', label: '今年度売上'}},
+                        {{key: 'prev_sales', label: '前年度売上'}},
+                        {{key: 'growth_rate', label: '成長率'}}
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.studio_name}}</td><td>${{item.manager || '-'}}</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-up">+${{(item.growth_rate*100).toFixed(1)}}%</td></tr>`);
+                    break;
+            }}
+        }}
+
+        // 会員率・売上低下フィルタ
+        function filterDeclineAlert() {{
+            const memberRateThreshold = parseFloat(document.getElementById('decline-member-rate-filter').value);
+            const salesThreshold = parseFloat(document.getElementById('decline-sales-filter').value);
+
+            alertState.decline.data = alertData.decline.filter(item => {{
+                const memberOk = item.member_rate < memberRateThreshold;
+                const salesOk = item.sales_change < salesThreshold;
+                return memberOk && salesOk;
+            }});
+            alertState.decline.page = 1;
+            document.getElementById('badge-decline').textContent = alertState.decline.data.length;
+            renderAlertByType('decline');
+        }}
+
+        // 新規開始校フィルタ
+        function filterNewSchoolsAlert() {{
+            const targetYear = parseInt(document.getElementById('new_schools-year-filter').value);
+            const targetMonth = document.getElementById('new_schools-month-filter').value;
+
+            alertState.new_schools.data = alertData.new_schools.filter(item => {{
+                // 年度フィルタ（first_event_dateから年度を判定）
+                if (!item.first_event_date) return false;
+                const date = new Date(item.first_event_date);
+                const month = date.getMonth() + 1;
+                const year = date.getFullYear();
+                const fiscalYear = month >= 4 ? year : year - 1;
+                if (fiscalYear !== targetYear) return false;
+
+                // 月フィルタ
+                if (targetMonth && month !== parseInt(targetMonth)) return false;
+                return true;
+            }});
+            alertState.new_schools.page = 1;
+            document.getElementById('badge-new_schools').textContent = alertState.new_schools.data.length;
+            renderAlertByType('new_schools');
+        }}
+
+        // 初期描画
+        function initAlertTables() {{
+            // 会員率・売上低下は初期フィルタを適用
+            filterDeclineAlert();
+            // 他のアラートを描画
+            renderAlertByType('no_events');
+            renderAlertByType('new_event_low');
+            renderAlertByType('new_schools');
+            renderAlertByType('studio_decline');
+            renderAlertByType('rapid_growth');
         }}
 
         // 初期グラフ（月ごと売上推移：線グラフ）
@@ -1720,6 +1979,9 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 }}
             }}
         }});
+
+        // アラートテーブル初期化
+        initAlertTables();
     </script>
 </body>
 </html>
