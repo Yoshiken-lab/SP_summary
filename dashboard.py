@@ -379,17 +379,9 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 <h1>スクールフォト売上分析ダッシュボード</h1>
                 <p class="date">レポート日: {stats['report_date']}</p>
             </div>
-            <div style="display: flex; align-items: center; gap: 24px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <label style="font-size: 14px; color: #666; font-weight: 600;">年度:</label>
-                    <select id="fiscalYearSelect" onchange="changeFiscalYear()" style="padding: 10px 16px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 16px; font-weight: 600; color: #1a1a2e; cursor: pointer; background: white;">
-                        {chr(10).join([f'<option value="{y}" {"selected" if y == stats["fiscal_year"] else ""}>{y}年度</option>' for y in available_years])}
-                    </select>
-                </div>
-                <div style="text-align: right;">
-                    <div style="font-size: 12px; color: #666;">蓄積データ</div>
-                    <div style="font-size: 20px; font-weight: bold;">{stats['school_count']}校 / {stats['event_count']}イベント</div>
-                </div>
+            <div style="text-align: right;">
+                <div style="font-size: 12px; color: #666;">蓄積データ</div>
+                <div style="font-size: 20px; font-weight: bold;">{stats['school_count']}校 / {stats['event_count']}イベント</div>
             </div>
         </div>
 
@@ -418,7 +410,15 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
         <!-- 月別売上推移セクション -->
         <div class="chart-card">
-            <h3>月別売上推移</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; border: none; padding: 0;">月別売上推移</h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-size: 14px; color: #666; font-weight: 600;">年度:</label>
+                    <select id="monthlySalesYearSelect" onchange="changeMonthlySalesYear()" style="padding: 8px 14px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; cursor: pointer; background: white;">
+                        {chr(10).join([f'<option value="{y}" {"selected" if y == stats["fiscal_year"] else ""}>{y}年度</option>' for y in available_years])}
+                    </select>
+                </div>
+            </div>
             <div style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
                 <button id="tabMonthly" onclick="switchMonthlySalesTab('monthly')" class="monthly-tab active" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">月ごと</button>
                 <button id="tabBranch" onclick="switchMonthlySalesTab('branch')" class="monthly-tab" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">事業所ごと</button>
@@ -466,9 +466,17 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
         <!-- 詳細グラフセクション（会員率推移・学校別売上推移） -->
         <div class="chart-card">
-            <div style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
-                <button id="tabMemberRate" onclick="switchDetailTab('memberRate')" class="detail-tab active" style="padding: 12px 24px; border: none; background: transparent; font-size: 16px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">会員率推移</button>
-                <button id="tabSales" onclick="switchDetailTab('sales')" class="detail-tab" style="padding: 12px 24px; border: none; background: transparent; font-size: 16px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">学校別売上推移</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div style="display: flex; gap: 0; border-bottom: 2px solid #e2e8f0;">
+                    <button id="tabMemberRate" onclick="switchDetailTab('memberRate')" class="detail-tab active" style="padding: 12px 24px; border: none; background: transparent; font-size: 16px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">会員率推移</button>
+                    <button id="tabSales" onclick="switchDetailTab('sales')" class="detail-tab" style="padding: 12px 24px; border: none; background: transparent; font-size: 16px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">学校別売上推移</button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-size: 14px; color: #666; font-weight: 600;">年度:</label>
+                    <select id="detailYearSelect" onchange="changeDetailYear()" style="padding: 8px 14px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; cursor: pointer; background: white;">
+                        {chr(10).join([f'<option value="{y}" {"selected" if y == stats["fiscal_year"] else ""}>{y}年度</option>' for y in available_years])}
+                    </select>
+                </div>
             </div>
 
             <!-- 会員率推移グラフ -->
@@ -749,12 +757,13 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
         // 年度別サマリーデータ
         const allYearsStats = {json.dumps({str(k): v for k, v in all_years_stats.items()}, ensure_ascii=False)};
-        let currentFiscalYear = {stats['fiscal_year']};
+        let currentMonthlySalesYear = {stats['fiscal_year']};
+        let currentDetailYear = {stats['fiscal_year']};
 
-        // 年度切り替え関数
-        function changeFiscalYear() {{
-            const selectedYear = document.getElementById('fiscalYearSelect').value;
-            currentFiscalYear = parseInt(selectedYear);
+        // 月別売上推移の年度切り替え関数（サマリーカードと連動）
+        function changeMonthlySalesYear() {{
+            const selectedYear = document.getElementById('monthlySalesYearSelect').value;
+            currentMonthlySalesYear = parseInt(selectedYear);
             const stats = allYearsStats[selectedYear];
 
             if (!stats) return;
@@ -777,6 +786,15 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
             // 月別グラフを更新
             updateMonthlyChart(stats);
+        }}
+
+        // 会員率推移・学校別売上推移の年度切り替え関数
+        function changeDetailYear() {{
+            const selectedYear = document.getElementById('detailYearSelect').value;
+            currentDetailYear = parseInt(selectedYear);
+            // 現在表示中のデータがあれば再検索を促すメッセージを表示
+            // （年度別データは動的に取得する必要があるため、ここでは選択値を保持するのみ）
+            console.log('詳細年度変更:', selectedYear);
         }}
 
         // 月別グラフ更新
