@@ -493,11 +493,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 <div class="card-value {'success' if stats['avg_budget_rate'] >= 1 else 'warning' if stats['avg_budget_rate'] >= 0.8 else 'danger'}" id="budgetCardValue">{stats['avg_budget_rate']*100:.1f}%</div>
                 <div class="card-sub">目標: 100%</div>
             </div>
-            <div class="card">
-                <div class="card-title">要対応アラート</div>
-                <div class="card-value {'danger' if total_alerts > 20 else 'warning' if total_alerts > 0 else 'success'}">{total_alerts}件</div>
-                <div class="card-sub">詳細は下記参照</div>
-            </div>
         </div>
 
         <!-- 月別売上推移セクション -->
@@ -692,27 +687,27 @@ def generate_html_dashboard(db_path=None, output_path=None):
             </div>
         </div>
 
-        <!-- アラート一覧 -->
+        <!-- 条件別集計 -->
         <div class="alert-section">
-            <h3>アラート一覧</h3>
+            <h3>条件別集計</h3>
             <div class="alert-tabs">
                 <button class="alert-tab active" onclick="showAlert('no_events')" id="tab-no_events">
-                    今年度未実施 <span class="badge" id="badge-no_events">{alert_counts.get('no_events_this_year', 0)}</span>
+                    今年度未実施
                 </button>
                 <button class="alert-tab" onclick="showAlert('new_event_low')" id="tab-new_event_low">
-                    販売開始後で会員率低 <span class="badge" id="badge-new_event_low">{alert_counts.get('new_event_low_registration', 0)}</span>
+                    イベント開始日別売上
                 </button>
                 <button class="alert-tab" onclick="showAlert('decline')" id="tab-decline">
-                    会員率・売上低下 <span class="badge" id="badge-decline">{alert_counts.get('member_rate_decline', 0)}</span>
-                </button>
-                <button class="alert-tab success" onclick="showAlert('new_schools')" id="tab-new_schools">
-                    新規開始校 <span class="badge" id="badge-new_schools">{alert_counts.get('new_schools', 0)}</span>
-                </button>
-                <button class="alert-tab" onclick="showAlert('studio_decline')" id="tab-studio_decline">
-                    写真館別低下 <span class="badge" id="badge-studio_decline">{alert_counts.get('studio_performance_decline', 0)}</span>
+                    会員率・売上低下
                 </button>
                 <button class="alert-tab success" onclick="showAlert('rapid_growth')" id="tab-rapid_growth">
-                    急成長校 <span class="badge" id="badge-rapid_growth">{alert_counts.get('rapid_growth', 0)}</span>
+                    売上好調校
+                </button>
+                <button class="alert-tab success" onclick="showAlert('new_schools')" id="tab-new_schools">
+                    新規開始校
+                </button>
+                <button class="alert-tab" onclick="showAlert('studio_decline')" id="tab-studio_decline">
+                    写真館別低下
                 </button>
             </div>
 
@@ -725,13 +720,16 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 <div id="no_events-pagination" class="pagination"></div>
             </div>
 
-            <!-- 販売開始後で会員率低 -->
+            <!-- イベント開始日別会員率 -->
             <div id="alert-new_event_low" class="alert-content">
-                <div class="alert-header">
+                <div class="alert-controls">
+                    <label>イベント開始日:</label>
+                    <input type="date" id="new_event_low-date-filter" onchange="filterNewEventLowByDate()" style="padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; background: white;">
                     <button class="csv-download-btn" onclick="downloadAlertCSV('new_event_low')">📥 CSV出力</button>
                 </div>
-                <div id="new_event_low-table-container"></div>
-                <div id="new_event_low-pagination" class="pagination"></div>
+                <div id="new_event_low-message" style="text-align: center; padding: 40px 20px; color: #888; font-size: 14px;">イベント開始日を選択してください</div>
+                <div id="new_event_low-table-container" style="display: none;"></div>
+                <div id="new_event_low-pagination" class="pagination" style="display: none;"></div>
             </div>
 
             <!-- 会員率・売上低下 -->
@@ -745,12 +743,12 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         <option value="0.3">30%未満</option>
                         <option value="0.2">20%未満</option>
                     </select>
-                    <label>売上変化:</label>
+                    <label>売上減少率:</label>
                     <select id="decline-sales-filter" onchange="filterDeclineAlert()">
                         <option value="0">指定なし</option>
-                        <option value="-0.1">10%以上減少</option>
-                        <option value="-0.2" selected>20%以上減少</option>
-                        <option value="-0.3">30%以上減少</option>
+                        <option value="-0.1">10%～20%減少</option>
+                        <option value="-0.2" selected>20%～30%減少</option>
+                        <option value="-0.3">30%～40%減少</option>
                         <option value="-0.5">50%以上減少</option>
                     </select>
                     <button class="csv-download-btn" onclick="downloadAlertCSV('decline')">📥 CSV出力</button>
@@ -1127,7 +1125,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         scales: {{
                             y: {{
                                 beginAtZero: true,
-                                ticks: {{ callback: v => '¥' + (v / 1000000).toFixed(1) + 'M' }}
+                                ticks: {{ callback: v => '¥' + Math.round(v / 10000).toLocaleString() + '万' }}
                             }}
                         }}
                     }}
@@ -1170,7 +1168,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         scales: {{
                             y: {{
                                 beginAtZero: true,
-                                ticks: {{ callback: v => '¥' + (v / 1000000).toFixed(1) + 'M' }}
+                                ticks: {{ callback: v => '¥' + Math.round(v / 10000).toLocaleString() + '万' }}
                             }}
                         }}
                     }}
@@ -1290,7 +1288,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     scales: {{
                         y: {{
                             beginAtZero: true,
-                            ticks: {{ callback: v => '¥' + (v / 1000000).toFixed(1) + 'M' }}
+                            ticks: {{ callback: v => '¥' + Math.round(v / 10000).toLocaleString() + '万' }}
                         }}
                     }}
                 }}
@@ -1358,7 +1356,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     scales: {{
                         y: {{
                             beginAtZero: true,
-                            ticks: {{ callback: v => '¥' + (v / 1000000).toFixed(1) + 'M' }}
+                            ticks: {{ callback: v => '¥' + Math.round(v / 10000).toLocaleString() + '万' }}
                         }}
                     }}
                 }}
@@ -1785,12 +1783,9 @@ def generate_html_dashboard(db_path=None, output_path=None):
         // アラートテーブル共通描画関数
         function renderAlertTable(type, columns, rowRenderer) {{
             const state = alertState[type];
-            const data = state.data;
-            const totalPages = Math.ceil(data.length / PAGE_SIZE);
-            const startIdx = (state.page - 1) * PAGE_SIZE;
-            const pageData = data.slice(startIdx, startIdx + PAGE_SIZE);
+            const data = state.data || [];
 
-            // ソート済みデータを生成
+            // ソート済みデータを生成（元のデータは保持）
             const sortedData = [...data].sort((a, b) => {{
                 let aVal = a[state.sortKey];
                 let bVal = b[state.sortKey];
@@ -1799,8 +1794,9 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 if (state.sortDir === 'asc') return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
                 return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
             }});
-            state.data = sortedData;
 
+            const totalPages = Math.ceil(sortedData.length / PAGE_SIZE);
+            const startIdx = (state.page - 1) * PAGE_SIZE;
             const displayData = sortedData.slice(startIdx, startIdx + PAGE_SIZE);
 
             // テーブル生成
@@ -1835,9 +1831,9 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
                 paginationHtml += `<button onclick="changeAlertPage('${{type}}', ${{state.page + 1}})" ${{state.page === totalPages ? 'disabled' : ''}}>&gt;</button>`;
                 paginationHtml += `<button onclick="changeAlertPage('${{type}}', ${{totalPages}})" ${{state.page === totalPages ? 'disabled' : ''}}>&raquo;</button>`;
-                paginationHtml += `<span class="page-info">${{data.length}}件中 ${{startIdx + 1}}-${{Math.min(startIdx + PAGE_SIZE, data.length)}}件</span>`;
-            }} else if (data.length > 0) {{
-                paginationHtml = `<span class="page-info">${{data.length}}件</span>`;
+                paginationHtml += `<span class="page-info">${{sortedData.length}}件中 ${{startIdx + 1}}-${{Math.min(startIdx + PAGE_SIZE, sortedData.length)}}件</span>`;
+            }} else if (sortedData.length > 0) {{
+                paginationHtml = `<span class="page-info">${{sortedData.length}}件</span>`;
             }}
             document.getElementById(type + '-pagination').innerHTML = paginationHtml;
         }}
@@ -1875,12 +1871,13 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 case 'new_event_low':
                     renderAlertTable('new_event_low', [
                         {{key: 'school_name', label: '学校名'}},
+                        {{key: 'attribute', label: '属性'}},
+                        {{key: 'studio_name', label: '事業所'}},
                         {{key: 'event_name', label: 'イベント名'}},
                         {{key: 'start_date', label: '開始日'}},
-                        {{key: 'days_since_start', label: '経過日数'}},
                         {{key: 'member_rate', label: '会員率'}},
-                        {{key: 'level', label: '状態'}}
-                    ], item => `<tr><td>${{item.school_name}}</td><td>${{(item.event_name || '').substring(0,30)}}...</td><td>${{item.start_date || '-'}}</td><td>${{item.days_since_start}}日</td><td>${{(item.member_rate*100).toFixed(1)}}%</td><td><span class="status-badge ${{item.level}}">要フォロー</span></td></tr>`);
+                        {{key: 'total_sales', label: '売上'}}
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute || '-'}}</td><td>${{item.studio_name || '-'}}</td><td>${{(item.event_name || '').substring(0,30)}}...</td><td>${{item.start_date || '-'}}</td><td>${{(item.member_rate*100).toFixed(1)}}%</td><td>¥${{(item.total_sales || 0).toLocaleString()}}</td></tr>`);
                     break;
                 case 'decline':
                     renderAlertTable('decline', [
@@ -1939,7 +1936,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 return memberOk && salesOk;
             }});
             alertState.decline.page = 1;
-            document.getElementById('badge-decline').textContent = alertState.decline.data.length;
             renderAlertByType('decline');
         }}
 
@@ -1962,7 +1958,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 return true;
             }});
             alertState.new_schools.page = 1;
-            document.getElementById('badge-new_schools').textContent = alertState.new_schools.data.length;
             renderAlertByType('new_schools');
         }}
 
@@ -1986,10 +1981,12 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 ],
                 'new_event_low': [
                     {{key: 'school_name', label: '学校名'}},
+                    {{key: 'attribute', label: '属性'}},
+                    {{key: 'studio_name', label: '事業所'}},
                     {{key: 'event_name', label: 'イベント名'}},
-                    {{key: 'start_date', label: '販売開始日'}},
-                    {{key: 'days_since_start', label: '経過日数'}},
-                    {{key: 'member_rate', label: '会員率'}}
+                    {{key: 'start_date', label: '開始日'}},
+                    {{key: 'member_rate', label: '会員率'}},
+                    {{key: 'total_sales', label: '売上'}}
                 ],
                 'decline': [
                     {{key: 'school_name', label: '学校名'}},
@@ -2066,11 +2063,11 @@ def generate_html_dashboard(db_path=None, output_path=None):
             // ダウンロードリンクを作成
             const alertNames = {{
                 'no_events': '今年度未実施',
-                'new_event_low': '販売開始後で会員率低',
+                'new_event_low': 'イベント開始日別売上',
                 'decline': '会員率売上低下',
                 'new_schools': '新規開始校',
                 'studio_decline': '写真館別低下',
-                'rapid_growth': '急成長校'
+                'rapid_growth': '売上好調校'
             }};
             const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
             const filename = `${{alertNames[type] || type}}_${{today}}.csv`;
@@ -2084,13 +2081,39 @@ def generate_html_dashboard(db_path=None, output_path=None):
             URL.revokeObjectURL(url);
         }}
 
+        // イベント開始日別会員率フィルタ（日付絞り込み）
+        function filterNewEventLowByDate() {{
+            const selectedDate = document.getElementById('new_event_low-date-filter').value;
+
+            if (!selectedDate) {{
+                // 日付未選択時はメッセージ表示
+                document.getElementById('new_event_low-message').style.display = 'block';
+                document.getElementById('new_event_low-table-container').style.display = 'none';
+                document.getElementById('new_event_low-pagination').style.display = 'none';
+                alertState.new_event_low.data = [];
+                return;
+            }}
+
+            // 選択された日付で絞り込み
+            alertState.new_event_low.data = alertData.new_event_low.filter(item => {{
+                return item.start_date === selectedDate;
+            }});
+            alertState.new_event_low.page = 1;
+
+            // テーブルとページネーションを表示
+            document.getElementById('new_event_low-message').style.display = 'none';
+            document.getElementById('new_event_low-table-container').style.display = 'block';
+            document.getElementById('new_event_low-pagination').style.display = 'flex';
+
+            renderAlertByType('new_event_low');
+        }}
+
         // 初期描画
         function initAlertTables() {{
             // 会員率・売上低下は初期フィルタを適用
             filterDeclineAlert();
-            // 他のアラートを描画
+            // 他のアラートを描画（new_event_lowは日付選択前は描画しない）
             renderAlertByType('no_events');
-            renderAlertByType('new_event_low');
             renderAlertByType('new_schools');
             renderAlertByType('studio_decline');
             renderAlertByType('rapid_growth');
@@ -2140,7 +2163,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 scales: {{
                     y: {{
                         beginAtZero: true,
-                        ticks: {{ callback: v => '¥' + (v / 1000000).toFixed(1) + 'M' }}
+                        ticks: {{ callback: v => '¥' + Math.round(v / 10000).toLocaleString() + '万' }}
                     }}
                 }}
             }}

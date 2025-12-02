@@ -99,20 +99,14 @@ def alert_no_events_this_year(cursor, config=AlertConfig):
 
 def alert_new_event_low_registration(cursor, config=AlertConfig):
     """
-    アラート2: 販売開始後で会員率が低い
+    イベント開始日別会員率
 
-    イベント開始から2週間以内で、会員登録率が30%未満の学校
-    全件取得（件数制限なし）
+    全てのイベントを開始日と共に一覧表示（日付で絞り込んで使用）
+    売上データも含めて取得
     """
     latest_report_id, report_date = get_latest_report_id(cursor)
     if not latest_report_id:
         return []
-
-    # 報告書の日付を基準に2週間前〜当日に開始したイベントを抽出
-    if isinstance(report_date, str):
-        report_date = datetime.strptime(report_date, '%Y-%m-%d').date()
-
-    days_ago = report_date - timedelta(days=config.NEW_EVENT_DAYS)
 
     query = '''
         SELECT
@@ -128,7 +122,8 @@ def alert_new_event_low_registration(cursor, config=AlertConfig):
                 WHEN COALESCE(school_mr.total_students, 0) > 0
                 THEN CAST(school_mr.total_members AS FLOAT) / school_mr.total_students
                 ELSE 0
-            END as member_rate
+            END as member_rate,
+            COALESCE(es.sales, 0) as total_sales
         FROM events e
         JOIN schools s ON e.school_id = s.id
         LEFT JOIN (
@@ -140,34 +135,32 @@ def alert_new_event_low_registration(cursor, config=AlertConfig):
             WHERE report_id = ?
             GROUP BY school_id
         ) school_mr ON school_mr.school_id = s.id
-        WHERE e.start_date BETWEEN ? AND ?
-          AND e.start_date IS NOT NULL
-        ORDER BY member_rate ASC
+        LEFT JOIN event_sales es ON es.event_id = e.id
+        WHERE e.start_date IS NOT NULL
+        ORDER BY e.start_date DESC, s.school_name ASC
     '''
 
-    cursor.execute(query, (latest_report_id, days_ago, report_date))
+    cursor.execute(query, (latest_report_id,))
     results = []
 
     for row in cursor.fetchall():
-        member_rate = row[9]
-        if member_rate < config.NEW_EVENT_MIN_RATE:
-            days_since_start = (report_date - datetime.strptime(str(row[5]), '%Y-%m-%d').date()).days if row[5] else 0
+        member_rate = row[8]
+        total_sales = row[9]
 
-            level = 'danger' if member_rate < config.MEMBER_RATE_DANGER else 'warning'
-            results.append({
-                'school_id': row[0],
-                'school_name': row[1],
-                'attribute': row[2] or '',
-                'studio_name': row[3] or '',
-                'event_name': row[4],
-                'start_date': row[5],
-                'days_since_start': days_since_start,
-                'total_students': row[6],
-                'total_members': row[7],
-                'member_rate': member_rate,
-                'level': level,
-                'message': f'開始から{days_since_start}日経過、会員率{member_rate*100:.1f}%'
-            })
+        results.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': row[2] or '',
+            'studio_name': row[3] or '',
+            'event_name': row[4],
+            'start_date': row[5],
+            'total_students': row[6],
+            'total_members': row[7],
+            'member_rate': member_rate,
+            'total_sales': total_sales,
+            'level': 'info',
+            'message': f'会員率{member_rate*100:.1f}%、売上¥{total_sales:,.0f}'
+        })
 
     return results
 
