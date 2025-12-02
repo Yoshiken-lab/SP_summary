@@ -723,11 +723,35 @@ def generate_html_dashboard(db_path=None, output_path=None):
             <!-- イベント開始日別会員率 -->
             <div id="alert-new_event_low" class="alert-content">
                 <div class="alert-controls">
-                    <label>イベント開始日:</label>
-                    <input type="date" id="new_event_low-date-filter" onchange="filterNewEventLowByDate()" style="padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; background: white;">
+                    <label>年:</label>
+                    <select id="new_event_low-year-filter" style="padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; background: white;">
+                        {' '.join([f'<option value="{y}">{y}年</option>' for y in available_years])}
+                    </select>
+                    <label>月:</label>
+                    <select id="new_event_low-month-filter" style="padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; background: white;">
+                        <option value="">-</option>
+                        <option value="01">1月</option>
+                        <option value="02">2月</option>
+                        <option value="03">3月</option>
+                        <option value="04">4月</option>
+                        <option value="05">5月</option>
+                        <option value="06">6月</option>
+                        <option value="07">7月</option>
+                        <option value="08">8月</option>
+                        <option value="09">9月</option>
+                        <option value="10">10月</option>
+                        <option value="11">11月</option>
+                        <option value="12">12月</option>
+                    </select>
+                    <label>日:</label>
+                    <select id="new_event_low-day-filter" style="padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; background: white;">
+                        <option value="">-</option>
+                        {' '.join([f'<option value="{str(d).zfill(2)}">{d}日</option>' for d in range(1, 32)])}
+                    </select>
+                    <button onclick="filterNewEventLowByDate()" style="padding: 6px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-left: 8px;">絞り込む</button>
                     <button class="csv-download-btn" onclick="downloadAlertCSV('new_event_low')">📥 CSV出力</button>
                 </div>
-                <div id="new_event_low-message" style="text-align: center; padding: 40px 20px; color: #888; font-size: 14px;">イベント開始日を選択してください</div>
+                <div id="new_event_low-message" style="text-align: center; padding: 40px 20px; color: #888; font-size: 14px;">年を選択して「絞り込む」をクリックしてください</div>
                 <div id="new_event_low-table-container" style="display: none;"></div>
                 <div id="new_event_low-pagination" class="pagination" style="display: none;"></div>
             </div>
@@ -744,13 +768,34 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         <option value="0.2">20%未満</option>
                     </select>
                     <label>売上減少率:</label>
-                    <select id="decline-sales-filter" onchange="filterDeclineAlert()">
-                        <option value="0">指定なし</option>
-                        <option value="-0.1">10%～20%減少</option>
-                        <option value="-0.2" selected>20%～30%減少</option>
-                        <option value="-0.3">30%～40%減少</option>
-                        <option value="-0.5">50%以上減少</option>
+                    <select id="decline-sales-from-filter" onchange="filterDeclineAlert()">
+                        <option value="">-</option>
+                        <option value="-0.1" selected>10%</option>
+                        <option value="-0.2">20%</option>
+                        <option value="-0.3">30%</option>
+                        <option value="-0.4">40%</option>
+                        <option value="-0.5">50%</option>
+                        <option value="-0.6">60%</option>
+                        <option value="-0.7">70%</option>
+                        <option value="-0.8">80%</option>
+                        <option value="-0.9">90%</option>
+                        <option value="-1.0">100%</option>
                     </select>
+                    <span style="margin: 0 4px;">～</span>
+                    <select id="decline-sales-to-filter" onchange="filterDeclineAlert()">
+                        <option value="">-</option>
+                        <option value="-0.1">10%</option>
+                        <option value="-0.2">20%</option>
+                        <option value="-0.3" selected>30%</option>
+                        <option value="-0.4">40%</option>
+                        <option value="-0.5">50%</option>
+                        <option value="-0.6">60%</option>
+                        <option value="-0.7">70%</option>
+                        <option value="-0.8">80%</option>
+                        <option value="-0.9">90%</option>
+                        <option value="-1.0">100%</option>
+                    </select>
+                    <span style="margin-right: 8px;">減少</span>
                     <button class="csv-download-btn" onclick="downloadAlertCSV('decline')">📥 CSV出力</button>
                 </div>
                 <div id="decline-table-container"></div>
@@ -1928,11 +1973,32 @@ def generate_html_dashboard(db_path=None, output_path=None):
         // 会員率・売上低下フィルタ
         function filterDeclineAlert() {{
             const memberRateThreshold = parseFloat(document.getElementById('decline-member-rate-filter').value);
-            const salesThreshold = parseFloat(document.getElementById('decline-sales-filter').value);
+            const salesFromValue = document.getElementById('decline-sales-from-filter').value;
+            const salesToValue = document.getElementById('decline-sales-to-filter').value;
+
+            // 範囲の下限と上限を設定（減少率なので負の値）
+            const salesFrom = salesFromValue ? parseFloat(salesFromValue) : null;
+            const salesTo = salesToValue ? parseFloat(salesToValue) : null;
 
             alertState.decline.data = alertData.decline.filter(item => {{
+                // 会員率フィルタ
                 const memberOk = item.member_rate < memberRateThreshold;
-                const salesOk = item.sales_change < salesThreshold;
+
+                // 売上減少率の範囲フィルタ
+                let salesOk = true;
+                if (salesFrom !== null && salesTo !== null) {{
+                    // 両方指定: salesFrom(-0.1)からsalesTo(-0.3)の範囲
+                    // 例: -0.1 ~ -0.3 は -0.3 <= sales_change <= -0.1
+                    salesOk = item.sales_change <= salesFrom && item.sales_change >= salesTo;
+                }} else if (salesFrom !== null) {{
+                    // 下限のみ指定: salesFrom以上の減少
+                    salesOk = item.sales_change <= salesFrom;
+                }} else if (salesTo !== null) {{
+                    // 上限のみ指定: salesTo以下の減少
+                    salesOk = item.sales_change >= salesTo;
+                }}
+                // 両方未指定なら全件表示
+
                 return memberOk && salesOk;
             }});
             alertState.decline.page = 1;
@@ -2081,12 +2147,14 @@ def generate_html_dashboard(db_path=None, output_path=None):
             URL.revokeObjectURL(url);
         }}
 
-        // イベント開始日別会員率フィルタ（日付絞り込み）
+        // イベント開始日別売上フィルタ（年・月・日絞り込み）
         function filterNewEventLowByDate() {{
-            const selectedDate = document.getElementById('new_event_low-date-filter').value;
+            const selectedYear = document.getElementById('new_event_low-year-filter').value;
+            const selectedMonth = document.getElementById('new_event_low-month-filter').value;
+            const selectedDay = document.getElementById('new_event_low-day-filter').value;
 
-            if (!selectedDate) {{
-                // 日付未選択時はメッセージ表示
+            if (!selectedYear) {{
+                // 年未選択時はメッセージ表示
                 document.getElementById('new_event_low-message').style.display = 'block';
                 document.getElementById('new_event_low-table-container').style.display = 'none';
                 document.getElementById('new_event_low-pagination').style.display = 'none';
@@ -2094,9 +2162,26 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 return;
             }}
 
-            // 選択された日付で絞り込み
+            // 選択された年・月・日で絞り込み
             alertState.new_event_low.data = alertData.new_event_low.filter(item => {{
-                return item.start_date === selectedDate;
+                if (!item.start_date) return false;
+                const dateParts = item.start_date.split('-');
+                if (dateParts.length < 3) return false;
+
+                const itemYear = dateParts[0];
+                const itemMonth = dateParts[1];
+                const itemDay = dateParts[2];
+
+                // 年は必須
+                if (itemYear !== selectedYear) return false;
+
+                // 月が指定されていれば絞り込み
+                if (selectedMonth && itemMonth !== selectedMonth) return false;
+
+                // 日が指定されていれば絞り込み
+                if (selectedDay && itemDay !== selectedDay) return false;
+
+                return true;
             }});
             alertState.new_event_low.page = 1;
 
