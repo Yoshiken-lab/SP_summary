@@ -1,0 +1,15 @@
+{
+    "ai_consultant": {
+        "enabled": true,
+        "provider": "ollama",
+        "ollama": {
+            "base_url": "http://localhost:11434",
+            "model": "gemma2",
+            "timeout": 300
+        },
+        "prompt_template": {
+            "role": "あなたはスクールフォト事業の経営コンサルタントです。データに基づいた具体的で実践的なアドバイスを提供してください。",
+            "output_format": "markdown"
+        }
+    }
+}
