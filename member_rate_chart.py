@@ -11,6 +11,18 @@ from datetime import datetime
 from collections import defaultdict
 from database import get_connection
 
+# 事業所名の統合マッピング（キー → 値 に統合）
+BRANCH_MAPPING = {
+    '栃木': '鹿沼',  # 栃木を鹿沼に統合
+}
+
+
+def normalize_branch(branch_name):
+    """事業所名を正規化（マッピングがあれば変換）"""
+    if branch_name is None:
+        return None
+    return BRANCH_MAPPING.get(branch_name, branch_name)
+
 
 def get_filter_options(db_path=None):
     """フィルター用の選択肢を取得"""
@@ -55,6 +67,9 @@ def get_member_rate_trend_by_school(school_id, by_grade=False, db_path=None):
     """
     学校単位の会員率推移を取得
 
+    会員率は報告書のスナップショット日ごとに蓄積されているため、
+    全てのスナップショット日のデータを時系列で表示する。
+
     Args:
         school_id: 学校ID
         by_grade: True=学年別, False=全学年まとめ
@@ -81,143 +96,77 @@ def get_member_rate_trend_by_school(school_id, by_grade=False, db_path=None):
     events = [{'name': row[0], 'date': str(row[1]), 'year': row[2]} for row in cursor.fetchall()]
 
     if by_grade:
-        # 学年別データ
+        # 学年別データ - 全てのスナップショット日を時系列で表示
         query = '''
             SELECT
-                r.report_date,
+                m.snapshot_date,
                 m.fiscal_year,
                 m.grade_category,
                 m.grade_name,
                 SUM(m.student_count) as students,
                 SUM(m.member_count) as members
             FROM member_rates m
-            JOIN reports r ON m.report_id = r.id
             WHERE m.school_id = ?
-            GROUP BY r.report_date, m.fiscal_year, m.grade_category, m.grade_name
-            ORDER BY r.report_date, m.grade_category
+            GROUP BY m.snapshot_date, m.fiscal_year, m.grade_category, m.grade_name
+            ORDER BY m.snapshot_date, m.grade_category
         '''
         cursor.execute(query, (school_id,))
 
-        # 学年ごとにグループ化
-        grade_data = defaultdict(lambda: {'dates': [], 'rates': [], 'fiscal_year': None})
+        # 学年ごとにグループ化（年度を跨いで全てのデータを表示）
+        grade_data = defaultdict(lambda: {'dates': [], 'rates': []})
         for row in cursor.fetchall():
-            report_date, fiscal_year, grade_cat, grade_name, students, members = row
+            snapshot_date, fiscal_year, grade_cat, grade_name, students, members = row
             rate = members / students if students > 0 else 0
 
             key = grade_name or grade_cat or '不明'
-            grade_data[key]['dates'].append(str(report_date))
+            grade_data[key]['dates'].append(str(snapshot_date))
             grade_data[key]['rates'].append(round(rate * 100, 1))
-            grade_data[key]['fiscal_year'] = fiscal_year
 
-        # 年度別に分離
-        current_year_data = {}
-        prev_year_data = {}
-
-        # 最新年度を特定
-        all_years = set()
-        for gd in grade_data.values():
-            if gd['fiscal_year']:
-                all_years.add(gd['fiscal_year'])
-
-        if all_years:
-            current_fy = max(all_years)
-            prev_fy = current_fy - 1
-
-            # データを年度別に再取得
-            for grade_name, data in grade_data.items():
-                current_year_data[grade_name] = {'dates': [], 'rates': []}
-                prev_year_data[grade_name] = {'dates': [], 'rates': []}
-
-            # 再クエリで年度別に取得
-            query2 = '''
-                SELECT
-                    r.report_date,
-                    m.fiscal_year,
-                    m.grade_name,
-                    SUM(m.student_count) as students,
-                    SUM(m.member_count) as members
-                FROM member_rates m
-                JOIN reports r ON m.report_id = r.id
-                WHERE m.school_id = ?
-                GROUP BY r.report_date, m.fiscal_year, m.grade_name
-                ORDER BY r.report_date
-            '''
-            cursor.execute(query2, (school_id,))
-
-            for row in cursor.fetchall():
-                report_date, fiscal_year, grade_name, students, members = row
-                rate = members / students if students > 0 else 0
-                key = grade_name or '不明'
-
-                if fiscal_year == current_fy:
-                    if key not in current_year_data:
-                        current_year_data[key] = {'dates': [], 'rates': []}
-                    current_year_data[key]['dates'].append(str(report_date))
-                    current_year_data[key]['rates'].append(round(rate * 100, 1))
-                elif fiscal_year == prev_fy:
-                    if key not in prev_year_data:
-                        prev_year_data[key] = {'dates': [], 'rates': []}
-                    prev_year_data[key]['dates'].append(str(report_date))
-                    prev_year_data[key]['rates'].append(round(rate * 100, 1))
-
+        # 全データを current_year に入れる（時系列表示用）
+        # prev_year は空にする（会員率は年度比較ではなく推移を見るため）
         result = {
             'school_name': school_name,
             'attribute': attribute,
             'by_grade': True,
-            'current_year': current_year_data,
-            'prev_year': prev_year_data,
+            'current_year': dict(grade_data),
+            'prev_year': {},  # 会員率推移では前年度比較は不要
             'events': events
         }
 
     else:
-        # 全学年まとめ
+        # 全学年まとめ - 全てのスナップショット日を時系列で表示
         query = '''
             SELECT
-                r.report_date,
-                m.fiscal_year,
+                m.snapshot_date,
                 SUM(m.student_count) as students,
                 SUM(m.member_count) as members
             FROM member_rates m
-            JOIN reports r ON m.report_id = r.id
             WHERE m.school_id = ?
-            GROUP BY r.report_date, m.fiscal_year
-            ORDER BY r.report_date
+            GROUP BY m.snapshot_date
+            ORDER BY m.snapshot_date
         '''
         cursor.execute(query, (school_id,))
 
-        current_year = {'dates': [], 'rates': []}
-        prev_year = {'dates': [], 'rates': []}
+        all_data = {'dates': [], 'rates': []}
 
-        rows = cursor.fetchall()
-        if rows:
-            # 年度を特定
-            years = set(row[1] for row in rows if row[1])
-            current_fy = max(years) if years else None
-            prev_fy = current_fy - 1 if current_fy else None
-
-            for row in rows:
-                report_date, fiscal_year, students, members = row
-                rate = members / students if students > 0 else 0
-
-                if fiscal_year == current_fy:
-                    current_year['dates'].append(str(report_date))
-                    current_year['rates'].append(round(rate * 100, 1))
-                elif fiscal_year == prev_fy:
-                    prev_year['dates'].append(str(report_date))
-                    prev_year['rates'].append(round(rate * 100, 1))
+        for row in cursor.fetchall():
+            snapshot_date, students, members = row
+            rate = members / students if students > 0 else 0
+            all_data['dates'].append(str(snapshot_date))
+            all_data['rates'].append(round(rate * 100, 1))
 
         result = {
             'school_name': school_name,
             'attribute': attribute,
             'by_grade': False,
-            'current_year': current_year,
-            'prev_year': prev_year,
+            'current_year': all_data,  # 全ての日付データを時系列表示
+            'prev_year': {'dates': [], 'rates': []},  # 会員率推移では前年度比較は不要
             'events': events
         }
 
     # 期待値（属性平均）を取得
     if attribute:
-        result['expected'] = get_attribute_average(attribute, cursor)
+        result['expected'] = get_attribute_average_all_dates(attribute, cursor)
     else:
         result['expected'] = None
 
@@ -226,7 +175,7 @@ def get_member_rate_trend_by_school(school_id, by_grade=False, db_path=None):
 
 
 def get_attribute_average(attribute, cursor):
-    """属性の平均会員率推移を取得"""
+    """属性の平均会員率推移を取得（旧バージョン・互換性のため残す）"""
     query = '''
         SELECT
             r.report_date,
@@ -265,9 +214,37 @@ def get_attribute_average(attribute, cursor):
     return {'current_year': current_year, 'prev_year': prev_year}
 
 
+def get_attribute_average_all_dates(attribute, cursor):
+    """属性の平均会員率推移を取得（全スナップショット日表示版）"""
+    query = '''
+        SELECT
+            m.snapshot_date,
+            SUM(m.student_count) as students,
+            SUM(m.member_count) as members
+        FROM member_rates m
+        JOIN schools s ON m.school_id = s.id
+        WHERE s.attribute = ?
+        GROUP BY m.snapshot_date
+        ORDER BY m.snapshot_date
+    '''
+    cursor.execute(query, (attribute,))
+
+    all_data = {'dates': [], 'rates': []}
+
+    for row in cursor.fetchall():
+        snapshot_date, students, members = row
+        rate = members / students if students > 0 else 0
+        all_data['dates'].append(str(snapshot_date))
+        all_data['rates'].append(round(rate * 100, 1))
+
+    return {'current_year': all_data, 'prev_year': {'dates': [], 'rates': []}}
+
+
 def get_member_rate_trend_by_attribute(attribute, studio=None, db_path=None):
     """
     属性単位の会員率推移を取得
+
+    全てのスナップショット日のデータを時系列で表示する。
 
     Args:
         attribute: 属性（幼稚園、小学校など）
@@ -294,74 +271,46 @@ def get_member_rate_trend_by_attribute(attribute, studio=None, db_path=None):
     ''', params)
     school_count = cursor.fetchone()[0]
 
-    # 会員率推移
+    # 会員率推移（全スナップショット日を時系列表示）
     query = f'''
         SELECT
-            r.report_date,
-            m.fiscal_year,
+            m.snapshot_date,
             SUM(m.student_count) as students,
             SUM(m.member_count) as members
         FROM member_rates m
-        JOIN reports r ON m.report_id = r.id
         JOIN schools s ON m.school_id = s.id
         WHERE {where_clause}
-        GROUP BY r.report_date, m.fiscal_year
-        ORDER BY r.report_date
+        GROUP BY m.snapshot_date
+        ORDER BY m.snapshot_date
     '''
     cursor.execute(query, params)
 
-    current_year = {'dates': [], 'rates': []}
-    prev_year = {'dates': [], 'rates': []}
+    all_data = {'dates': [], 'rates': []}
 
-    rows = cursor.fetchall()
-    if rows:
-        years = set(row[1] for row in rows if row[1])
-        current_fy = max(years) if years else None
-        prev_fy = current_fy - 1 if current_fy else None
+    for row in cursor.fetchall():
+        snapshot_date, students, members = row
+        rate = members / students if students > 0 else 0
+        all_data['dates'].append(str(snapshot_date))
+        all_data['rates'].append(round(rate * 100, 1))
 
-        for row in rows:
-            report_date, fiscal_year, students, members = row
-            rate = members / students if students > 0 else 0
-
-            if fiscal_year == current_fy:
-                current_year['dates'].append(str(report_date))
-                current_year['rates'].append(round(rate * 100, 1))
-            elif fiscal_year == prev_fy:
-                prev_year['dates'].append(str(report_date))
-                prev_year['rates'].append(round(rate * 100, 1))
-
-    # 全体平均（期待値として使用）
+    # 全体平均（期待値として使用）- 全スナップショット日
     cursor.execute('''
         SELECT
-            r.report_date,
-            m.fiscal_year,
+            m.snapshot_date,
             SUM(m.student_count) as students,
             SUM(m.member_count) as members
         FROM member_rates m
-        JOIN reports r ON m.report_id = r.id
-        GROUP BY r.report_date, m.fiscal_year
-        ORDER BY r.report_date
+        GROUP BY m.snapshot_date
+        ORDER BY m.snapshot_date
     ''')
 
-    overall_current = {'dates': [], 'rates': []}
-    overall_prev = {'dates': [], 'rates': []}
+    overall_data = {'dates': [], 'rates': []}
 
-    rows = cursor.fetchall()
-    if rows:
-        years = set(row[1] for row in rows if row[1])
-        current_fy = max(years) if years else None
-        prev_fy = current_fy - 1 if current_fy else None
-
-        for row in rows:
-            report_date, fiscal_year, students, members = row
-            rate = members / students if students > 0 else 0
-
-            if fiscal_year == current_fy:
-                overall_current['dates'].append(str(report_date))
-                overall_current['rates'].append(round(rate * 100, 1))
-            elif fiscal_year == prev_fy:
-                overall_prev['dates'].append(str(report_date))
-                overall_prev['rates'].append(round(rate * 100, 1))
+    for row in cursor.fetchall():
+        snapshot_date, students, members = row
+        rate = members / students if students > 0 else 0
+        overall_data['dates'].append(str(snapshot_date))
+        overall_data['rates'].append(round(rate * 100, 1))
 
     conn.close()
 
@@ -370,9 +319,9 @@ def get_member_rate_trend_by_attribute(attribute, studio=None, db_path=None):
         'studio': studio,
         'school_count': school_count,
         'by_grade': False,
-        'current_year': current_year,
-        'prev_year': prev_year,
-        'expected': {'current_year': overall_current, 'prev_year': overall_prev},
+        'current_year': all_data,  # 全スナップショット日のデータ
+        'prev_year': {'dates': [], 'rates': []},  # 会員率推移では前年度比較は不要
+        'expected': {'current_year': overall_data, 'prev_year': {'dates': [], 'rates': []}},
         'events': []  # 属性単位ではイベントなし
     }
 
@@ -691,7 +640,7 @@ def get_sales_trend_by_studio(studio_name, db_path=None):
 
 def get_monthly_sales_by_branch(db_path=None):
     """
-    事業所別の月別売上を取得
+    事業所別の月別売上を取得（マッピングによる統合対応）
 
     Returns:
         branches: 事業所ごとの月別売上（今年度/前年度/予算）
@@ -712,42 +661,49 @@ def get_monthly_sales_by_branch(db_path=None):
     current_fy = get_current_fiscal_year()
     prev_fy = current_fy - 1
 
-    # 事業所一覧
+    # 事業所一覧を取得し、マッピング適用後の一意なリストを作成
     cursor.execute('''
         SELECT DISTINCT region FROM schools
         WHERE region IS NOT NULL AND region != ''
         ORDER BY region
     ''')
-    branches = [row[0] for row in cursor.fetchall()]
+    raw_branches = [row[0] for row in cursor.fetchall()]
+
+    # マッピング適用後の事業所リスト（重複排除）
+    normalized_branches = list(dict.fromkeys([normalize_branch(b) for b in raw_branches]))
 
     result = {}
 
-    for branch in branches:
-        # 今年度の月別売上
-        cursor.execute('''
+    for branch in normalized_branches:
+        # マッピングで統合される事業所を取得（例：鹿沼 → [鹿沼, 栃木]）
+        source_branches = [b for b in raw_branches if normalize_branch(b) == branch]
+
+        # 今年度の月別売上（統合対象の事業所を合算）
+        placeholders = ','.join(['?' for _ in source_branches])
+        cursor.execute(f'''
             SELECT
                 ss.month,
                 SUM(ss.sales) as total_sales
             FROM school_sales ss
             JOIN schools s ON ss.school_id = s.id
-            WHERE s.region = ? AND ss.fiscal_year = ?
+            WHERE s.region IN ({placeholders}) AND ss.fiscal_year = ?
             GROUP BY ss.month
             ORDER BY CASE WHEN ss.month >= 4 THEN ss.month - 4 ELSE ss.month + 8 END
-        ''', (branch, current_fy))
+        ''', (*source_branches, current_fy))
 
         current_data = {row[0]: row[1] for row in cursor.fetchall()}
 
         # 前年度の月別売上
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT
                 ss.month,
                 SUM(ss.sales) as total_sales
             FROM school_sales ss
             JOIN schools s ON ss.school_id = s.id
-            WHERE s.region = ? AND ss.fiscal_year = ?
+            WHERE s.region IN ({placeholders}) AND ss.fiscal_year = ?
             GROUP BY ss.month
             ORDER BY CASE WHEN ss.month >= 4 THEN ss.month - 4 ELSE ss.month + 8 END
-        ''', (branch, prev_fy))
+        ''', (*source_branches, prev_fy))
 
         prev_data = {row[0]: row[1] for row in cursor.fetchall()}
 
@@ -765,7 +721,7 @@ def get_monthly_sales_by_branch(db_path=None):
     conn.close()
 
     return {
-        'branches': branches,
+        'branches': normalized_branches,
         'data': result,
         'fiscal_year': current_fy
     }
@@ -805,14 +761,15 @@ def get_monthly_sales_by_person(db_path=None):
     persons = list(set(row[0] for row in rows))
     persons.sort()
 
-    # 担当者と事業所の紐付け
+    # 担当者と事業所の紐付け（マッピング適用）
     person_branches = {}
     for row in rows:
         person, region = row
         if person not in person_branches:
             person_branches[person] = []
-        if region and region not in person_branches[person]:
-            person_branches[person].append(region)
+        normalized_region = normalize_branch(region)
+        if normalized_region and normalized_region not in person_branches[person]:
+            person_branches[person].append(normalized_region)
 
     result = {}
 
