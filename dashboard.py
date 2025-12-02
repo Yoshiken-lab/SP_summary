@@ -7,11 +7,13 @@
 """
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from database import get_connection
 from alerts import get_all_alerts, get_current_fiscal_year
 from analytics import get_all_analytics
+from ai_consultant import generate_ai_advice
 
 
 def get_available_fiscal_years(db_path=None):
@@ -52,12 +54,23 @@ def get_summary_stats(db_path=None, target_fy=None):
     ''', (latest_report_id, current_fy))
     current_total = cursor.fetchone()[0] or 0
 
-    # 前年度同期売上
+    # 今年度にデータがある月を取得
     cursor.execute('''
-        SELECT SUM(total_sales) FROM monthly_summary
+        SELECT month FROM monthly_summary
         WHERE report_id = ? AND fiscal_year = ?
-    ''', (latest_report_id, prev_fy))
-    prev_total = cursor.fetchone()[0] or 0
+    ''', (latest_report_id, current_fy))
+    current_months = [row[0] for row in cursor.fetchall()]
+
+    # 前年度同期売上（今年度と同じ月のみ集計）
+    if current_months:
+        placeholders = ','.join(['?' for _ in current_months])
+        cursor.execute(f'''
+            SELECT SUM(total_sales) FROM monthly_summary
+            WHERE report_id = ? AND fiscal_year = ? AND month IN ({placeholders})
+        ''', (latest_report_id, prev_fy, *current_months))
+        prev_total = cursor.fetchone()[0] or 0
+    else:
+        prev_total = 0
 
     # 平均予算達成率
     cursor.execute('''
@@ -140,6 +153,9 @@ def generate_html_dashboard(db_path=None, output_path=None):
     alert_counts = {k: len(v) for k, v in alerts.items()}
     total_alerts = sum(alert_counts.values())
 
+    # AIコンサルタント分析を実行
+    ai_advice = generate_ai_advice(db_path)
+
     # 月別チャートデータ
     months_labels = [f"{d['month']}月" for d in stats['monthly_data']]
     sales_data = [d['sales'] for d in stats['monthly_data']]
@@ -155,33 +171,44 @@ def generate_html_dashboard(db_path=None, output_path=None):
     filter_options = get_filter_options(db_path)
     sales_filter_options = get_sales_filter_options(db_path)
 
-    # 事業所別・担当者別の月別売上データを取得
-    branch_sales_data = get_monthly_sales_by_branch(db_path)
-    person_sales_data = get_monthly_sales_by_person(db_path)
+    # 事業所別・担当者別の月別売上データを取得（年度別）
+    # 2024年度と2025年度のデータを取得（2023年度は売上データ未収集のためスキップ）
+    target_years_for_branch = [y for y in available_years if y >= 2024]
+    branch_sales_data = get_monthly_sales_by_branch(db_path, target_years=target_years_for_branch)
+    person_sales_data = get_monthly_sales_by_person(db_path, target_years=target_years_for_branch)
 
-    # 会員率データを事前取得
+    # 会員率データを事前取得（年度別）
+    # 2024年度と2025年度のデータを取得（2023年度は会員率データ未収集のためスキップ）
+    target_years_for_member = [y for y in available_years if y >= 2024]
+
     all_school_data = {}
     for school in filter_options['schools']:
-        data_all = get_member_rate_trend_by_school(school['id'], by_grade=False, db_path=db_path)
-        if data_all:
-            all_school_data[f"school_{school['id']}_all"] = data_all
-        data_grade = get_member_rate_trend_by_school(school['id'], by_grade=True, db_path=db_path)
-        if data_grade:
-            all_school_data[f"school_{school['id']}_grade"] = data_grade
+        for year in target_years_for_member:
+            data_all = get_member_rate_trend_by_school(school['id'], by_grade=False, target_fy=year, db_path=db_path)
+            if data_all and data_all.get('current_year', {}).get('dates'):
+                all_school_data[f"school_{school['id']}_all_{year}"] = data_all
+            data_grade = get_member_rate_trend_by_school(school['id'], by_grade=True, target_fy=year, db_path=db_path)
+            if data_grade and data_grade.get('current_year'):
+                all_school_data[f"school_{school['id']}_grade_{year}"] = data_grade
 
     all_attribute_data = {}
     for attr in filter_options['attributes']:
-        data = get_member_rate_trend_by_attribute(attr, db_path=db_path)
-        if data:
-            all_attribute_data[f"attr_{attr}"] = data
+        for year in target_years_for_member:
+            data = get_member_rate_trend_by_attribute(attr, target_fy=year, db_path=db_path)
+            if data and data.get('current_year', {}).get('dates'):
+                all_attribute_data[f"attr_{attr}_{year}"] = data
 
-    # 売上推移データを事前取得
+    # 売上推移データを事前取得（年度別）
+    # 2024年度と2025年度のデータを取得（2023年度は売上推移データ未収集のためスキップ）
+    target_years = [y for y in available_years if y >= 2024]
+
     all_sales_school_data = {}
     all_event_sales_data = {}
     for school in sales_filter_options['schools']:
-        data = get_sales_trend_by_school(school['id'], db_path=db_path)
-        if data:
-            all_sales_school_data[f"school_{school['id']}"] = data
+        for year in target_years:
+            data = get_sales_trend_by_school(school['id'], target_fy=year, db_path=db_path)
+            if data and (data['current_year']['dates'] or data['prev_year']['dates']):
+                all_sales_school_data[f"school_{school['id']}_{year}"] = data
         # イベント別売上も取得
         event_data = get_event_sales_by_school(school['id'], db_path=db_path)
         if event_data:
@@ -189,9 +216,10 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
     all_sales_studio_data = {}
     for studio in sales_filter_options['studios']:
-        data = get_sales_trend_by_studio(studio, db_path=db_path)
-        if data:
-            all_sales_studio_data[f"studio_{studio}"] = data
+        for year in target_years:
+            data = get_sales_trend_by_studio(studio, target_fy=year, db_path=db_path)
+            if data and (data['current_year']['dates'] or data['prev_year']['dates']):
+                all_sales_studio_data[f"studio_{studio}_{year}"] = data
 
     html = f'''<!DOCTYPE html>
 <html lang="ja">
@@ -737,6 +765,67 @@ def generate_html_dashboard(db_path=None, output_path=None):
             html += f'<div class="trend-item"><span>{item["attribute"]} ({item["school_count"]}校)</span><span style="color:{color}">{rate:.1f}%</span></div>'
     html += '</div></div>'
 
+    # AIコンサルタントセクションを追加
+    if ai_advice.get('available', False):
+        if ai_advice.get('success', False):
+            # マークダウンをHTMLに簡易変換
+            ai_content = ai_advice.get('content', '')
+            # 改行をbrタグに変換（段落間）
+            ai_content_html = ai_content.replace('\n\n', '</p><p>').replace('\n', '<br>')
+            ai_content_html = f'<p>{ai_content_html}</p>'
+            # 見出しを変換
+            ai_content_html = re.sub(r'<p>\*\*(.+?)\*\*', r'<p><strong>\1</strong>', ai_content_html)
+            ai_content_html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', ai_content_html)
+            # リストを変換
+            ai_content_html = re.sub(r'<br>- ', r'</p><ul><li>', ai_content_html)
+            ai_content_html = re.sub(r'<br>(\d+)\. ', r'</p><ol><li>', ai_content_html)
+
+            ai_status_badge = '<span class="status-badge success">分析完了</span>'
+            ai_model_info = f'モデル: {ai_advice.get("model", "不明")} | 生成: {ai_advice.get("generated_at", "")[:19]}'
+        else:
+            ai_content_html = f'<p style="color: #ef4444;">{ai_advice.get("error", "エラーが発生しました")}</p>'
+            ai_status_badge = '<span class="status-badge danger">エラー</span>'
+            ai_model_info = ''
+
+        html += f'''
+        <!-- AIコンサルタントセクション -->
+        <div class="chart-card" style="background: linear-gradient(135deg, #fefefe 0%, #f0f9ff 100%); border-left: 4px solid #3b82f6;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; border: none; padding: 0; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 24px;">🤖</span>
+                    AIコンサルタント分析
+                    {ai_status_badge}
+                </h3>
+                <span style="font-size: 12px; color: #666;">{ai_model_info}</span>
+            </div>
+            <div style="background: white; border-radius: 12px; padding: 20px; line-height: 1.8; font-size: 14px; color: #333; max-height: 600px; overflow-y: auto;">
+                {ai_content_html}
+            </div>
+        </div>
+        '''
+    else:
+        # Ollamaが利用不可の場合
+        html += '''
+        <!-- AIコンサルタントセクション（無効） -->
+        <div class="chart-card" style="background: #f8fafc; border-left: 4px solid #94a3b8;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; border: none; padding: 0; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 24px;">🤖</span>
+                    AIコンサルタント分析
+                    <span class="status-badge info">未設定</span>
+                </h3>
+            </div>
+            <div style="text-align: center; padding: 40px 20px; color: #64748b;">
+                <p style="margin-bottom: 12px;">AIコンサルタント機能を利用するには、ローカルLLM（Ollama）のセットアップが必要です。</p>
+                <p style="font-size: 13px;">
+                    1. <a href="https://ollama.com" target="_blank" style="color: #3b82f6;">Ollama</a>をインストール<br>
+                    2. <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">ollama pull gemma2</code> でモデルをダウンロード<br>
+                    3. Ollamaを起動した状態でダッシュボードを再生成
+                </p>
+            </div>
+        </div>
+        '''
+
     html += f'''
         <div class="footer">
             Generated by スクールフォト売上分析システム | {datetime.now().strftime('%Y-%m-%d %H:%M')}
@@ -786,6 +875,22 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
             // 月別グラフを更新
             updateMonthlyChart(stats);
+
+            // 事業所・担当者グラフも更新（タブが表示されていれば）
+            if (document.getElementById('branchPanel').style.display === 'block') {{
+                renderBranchChart();
+            }}
+            if (document.getElementById('personPanel').style.display === 'block') {{
+                const branch = document.getElementById('personBranchFilter').value;
+                if (branch) {{
+                    renderPersonChartByBranch(branch);
+                }} else {{
+                    const person = document.getElementById('personFilter').value;
+                    if (person) {{
+                        renderPersonChart();
+                    }}
+                }}
+            }}
         }}
 
         // 会員率推移・学校別売上推移の年度切り替え関数
@@ -862,7 +967,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }}
         }}
 
-        // 事業所グラフ描画（棒グラフ）
+        // 事業所グラフ描画（棒グラフ）- 年度対応
         function renderBranchChart() {{
             const selectedBranch = document.getElementById('branchFilter').value;
             const months = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
@@ -871,15 +976,22 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
             if (branchSalesChart) branchSalesChart.destroy();
 
+            // 選択された年度のデータを取得
+            const yearData = branchSalesData.data_by_year?.[currentMonthlySalesYear];
+            if (!yearData) {{
+                console.log('年度データなし:', currentMonthlySalesYear);
+                return;
+            }}
+
             if (!selectedBranch) {{
-                // 全事業所の今年度売上を棒グラフで表示
+                // 全事業所の選択年度売上を棒グラフで表示
                 const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
                 const datasets = [];
                 let colorIdx = 0;
 
                 if (branchSalesData.branches) {{
                     branchSalesData.branches.forEach(branch => {{
-                        const data = branchSalesData.data[branch];
+                        const data = yearData[branch];
                         if (data) {{
                             datasets.push({{
                                 label: branch,
@@ -897,7 +1009,10 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     data: {{ labels, datasets }},
                     options: {{
                         responsive: true,
-                        plugins: {{ legend: {{ position: 'top' }} }},
+                        plugins: {{
+                            legend: {{ position: 'top' }},
+                            title: {{ display: true, text: currentMonthlySalesYear + '年度 事業所別月別売上' }}
+                        }},
                         scales: {{
                             y: {{
                                 beginAtZero: true,
@@ -907,19 +1022,19 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     }}
                 }});
             }} else {{
-                // 特定事業所の今年度・前年度・予算を棒グラフで表示
-                const data = branchSalesData.data[selectedBranch];
+                // 特定事業所の選択年度・前年度・予算を棒グラフで表示
+                const data = yearData[selectedBranch];
                 if (!data) return;
 
                 const datasets = [
                     {{
-                        label: '今年度売上',
+                        label: currentMonthlySalesYear + '年度売上',
                         data: months.map(m => data.current[m] || 0),
                         backgroundColor: 'rgba(59, 130, 246, 0.8)',
                         borderRadius: 4
                     }},
                     {{
-                        label: '前年度売上',
+                        label: (currentMonthlySalesYear - 1) + '年度売上',
                         data: months.map(m => data.prev[m] || 0),
                         backgroundColor: 'rgba(156, 163, 175, 0.6)',
                         borderRadius: 4
@@ -939,7 +1054,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         responsive: true,
                         plugins: {{
                             legend: {{ position: 'top' }},
-                            title: {{ display: true, text: selectedBranch + ' - 月別売上推移' }}
+                            title: {{ display: true, text: selectedBranch + ' - ' + currentMonthlySalesYear + '年度 月別売上推移' }}
                         }},
                         scales: {{
                             y: {{
@@ -1012,13 +1127,20 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }}
         }}
 
-        // 事業所の担当者全員を棒グラフで表示
+        // 事業所の担当者全員を棒グラフで表示 - 年度対応
         function renderPersonChartByBranch(branch) {{
             const months = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
             const labels = months.map(m => m + '月');
             const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
             const datasets = [];
             let colorIdx = 0;
+
+            // 選択された年度のデータを取得
+            const yearData = personSalesData.data_by_year?.[currentMonthlySalesYear];
+            if (!yearData) {{
+                console.log('担当者年度データなし:', currentMonthlySalesYear);
+                return;
+            }}
 
             // 事業所に属する担当者を取得
             const personsInBranch = personSalesData.persons?.filter(p => {{
@@ -1027,7 +1149,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }}) || [];
 
             personsInBranch.forEach(person => {{
-                const data = personSalesData.data[person];
+                const data = yearData[person];
                 if (data) {{
                     datasets.push({{
                         label: person,
@@ -1052,7 +1174,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     responsive: true,
                     plugins: {{
                         legend: {{ position: 'top' }},
-                        title: {{ display: true, text: branch + ' - 担当者別月別売上' }}
+                        title: {{ display: true, text: branch + ' - ' + currentMonthlySalesYear + '年度 担当者別月別売上' }}
                     }},
                     scales: {{
                         y: {{
@@ -1064,7 +1186,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }});
         }}
 
-        // 特定担当者の棒グラフ描画
+        // 特定担当者の棒グラフ描画 - 年度対応
         function renderPersonChart() {{
             const person = document.getElementById('personFilter').value;
             if (!person) {{
@@ -1080,20 +1202,27 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 return;
             }}
 
+            // 選択された年度のデータを取得
+            const yearData = personSalesData.data_by_year?.[currentMonthlySalesYear];
+            if (!yearData) {{
+                console.log('担当者年度データなし:', currentMonthlySalesYear);
+                return;
+            }}
+
             const months = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
             const labels = months.map(m => m + '月');
-            const data = personSalesData.data[person];
+            const data = yearData[person];
             if (!data) return;
 
             const datasets = [
                 {{
-                    label: '今年度売上',
+                    label: currentMonthlySalesYear + '年度売上',
                     data: months.map(m => data.current[m] || 0),
                     backgroundColor: 'rgba(59, 130, 246, 0.8)',
                     borderRadius: 4
                 }},
                 {{
-                    label: '前年度売上',
+                    label: (currentMonthlySalesYear - 1) + '年度売上',
                     data: months.map(m => data.prev[m] || 0),
                     backgroundColor: 'rgba(156, 163, 175, 0.6)',
                     borderRadius: 4
@@ -1113,7 +1242,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     responsive: true,
                     plugins: {{
                         legend: {{ position: 'top' }},
-                        title: {{ display: true, text: person + ' - 月別売上推移' }}
+                        title: {{ display: true, text: person + ' - ' + currentMonthlySalesYear + '年度 月別売上推移' }}
                     }},
                     scales: {{
                         y: {{
@@ -1178,13 +1307,16 @@ def generate_html_dashboard(db_path=None, output_path=None):
             const attr = document.getElementById('filterAttribute').value;
             const schoolId = document.getElementById('filterSchool').value;
             const gradeMode = document.querySelector('input[name="gradeMode"]:checked').value;
+            const selectedYear = currentDetailYear;  // 年度選択を使用
 
             if (schoolId) {{
-                const key = gradeMode === 'each' ? `school_${{schoolId}}_grade` : `school_${{schoolId}}_all`;
+                // 年度を含めたキーで検索
+                const key = gradeMode === 'each' ? `school_${{schoolId}}_grade_${{selectedYear}}` : `school_${{schoolId}}_all_${{selectedYear}}`;
                 currentMemberRateData = allSchoolData[key];
                 document.getElementById('gradeOptionGroup').style.display = 'flex';
             }} else if (attr) {{
-                currentMemberRateData = allAttributeData[`attr_${{attr}}`];
+                // 年度を含めたキーで検索
+                currentMemberRateData = allAttributeData[`attr_${{attr}}_${{selectedYear}}`];
                 document.getElementById('gradeOptionGroup').style.display = 'none';
             }} else {{
                 alert('属性または学校を選択してください');
@@ -1192,14 +1324,16 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }}
 
             if (currentMemberRateData) renderMemberRateChart();
-            else alert('データが見つかりませんでした');
+            else alert(selectedYear + '年度のデータが見つかりませんでした');
         }}
 
         function renderMemberRateChart() {{
             if (!currentMemberRateData) return;
 
             const showPrevYear = document.getElementById('showPrevYear').checked;
-            const title = currentMemberRateData.school_name || `${{currentMemberRateData.attribute}}（${{currentMemberRateData.school_count}}校平均）`;
+            const fiscalYear = currentMemberRateData.fiscal_year || currentDetailYear;
+            const baseName = currentMemberRateData.school_name || `${{currentMemberRateData.attribute}}（${{currentMemberRateData.school_count}}校平均）`;
+            const title = `${{baseName}} - ${{fiscalYear}}年度`;
             document.getElementById('memberRateChartTitle').textContent = title;
             document.getElementById('memberRateChartInfo').textContent = currentMemberRateData.attribute ? `属性: ${{currentMemberRateData.attribute}}` : '';
 
@@ -1212,7 +1346,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 for (const [grade, data] of Object.entries(currentMemberRateData.current_year)) {{
                     if (data.dates?.length > 0) {{
                         datasets.push({{
-                            label: `${{grade}}（今年度）`,
+                            label: `${{grade}}`,
                             data: data.dates.map((d, i) => ({{ x: d, y: data.rates[i] }})),
                             borderColor: colors[colorIdx % colors.length],
                             backgroundColor: 'transparent',
@@ -1221,27 +1355,13 @@ def generate_html_dashboard(db_path=None, output_path=None):
                             pointRadius: 4
                         }});
                     }}
-
-                    if (showPrevYear && currentMemberRateData.prev_year?.[grade]?.dates?.length > 0) {{
-                        const prevData = currentMemberRateData.prev_year[grade];
-                        datasets.push({{
-                            label: `${{grade}}（前年度）`,
-                            data: prevData.dates.map((d, i) => ({{ x: d, y: prevData.rates[i] }})),
-                            borderColor: colors[colorIdx % colors.length],
-                            backgroundColor: 'transparent',
-                            borderWidth: 2,
-                            borderDash: [5, 5],
-                            tension: 0.3,
-                            pointRadius: 3
-                        }});
-                    }}
                     colorIdx++;
                 }}
             }} else {{
                 const current = currentMemberRateData.current_year;
                 if (current?.dates?.length > 0) {{
                     datasets.push({{
-                        label: '今年度',
+                        label: fiscalYear + '年度',
                         data: current.dates.map((d, i) => ({{ x: d, y: current.rates[i] }})),
                         borderColor: '#3b82f6',
                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -1249,20 +1369,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         fill: true,
                         tension: 0.3,
                         pointRadius: 5
-                    }});
-                }}
-
-                if (showPrevYear && currentMemberRateData.prev_year?.dates?.length > 0) {{
-                    const prev = currentMemberRateData.prev_year;
-                    datasets.push({{
-                        label: '前年度',
-                        data: prev.dates.map((d, i) => ({{ x: d, y: prev.rates[i] }})),
-                        borderColor: '#888',
-                        backgroundColor: 'transparent',
-                        borderWidth: 2,
-                        borderDash: [5, 5],
-                        tension: 0.3,
-                        pointRadius: 3
                     }});
                 }}
             }}
@@ -1363,13 +1469,15 @@ def generate_html_dashboard(db_path=None, output_path=None):
         function searchSalesTrend() {{
             const studio = document.getElementById('salesFilterStudio').value;
             const schoolId = document.getElementById('salesFilterSchool').value;
+            const selectedYear = document.getElementById('detailYearSelect').value;
 
             if (schoolId) {{
-                currentSalesData = allSalesSchoolData[`school_${{schoolId}}`];
+                // 年度別キーでデータを取得
+                currentSalesData = allSalesSchoolData[`school_${{schoolId}}_${{selectedYear}}`];
                 currentSchoolId = schoolId;
                 showEventBreakdown(schoolId);
             }} else if (studio) {{
-                currentSalesData = allSalesStudioData[`studio_${{studio}}`];
+                currentSalesData = allSalesStudioData[`studio_${{studio}}_${{selectedYear}}`];
                 currentSchoolId = null;
                 document.getElementById('eventBreakdownSection').style.display = 'none';
             }} else {{
@@ -1378,7 +1486,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }}
 
             if (currentSalesData) renderSalesTrendChart();
-            else alert('データが見つかりませんでした');
+            else alert('選択した年度のデータが見つかりませんでした');
         }}
 
         // イベントソート更新
