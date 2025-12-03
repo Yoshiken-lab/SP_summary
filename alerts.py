@@ -135,7 +135,11 @@ def alert_new_event_low_registration(cursor, config=AlertConfig):
             WHERE report_id = ?
             GROUP BY school_id
         ) school_mr ON school_mr.school_id = s.id
-        LEFT JOIN event_sales es ON es.event_id = e.id
+        LEFT JOIN (
+            SELECT event_id, SUM(sales) as sales
+            FROM event_sales
+            GROUP BY event_id
+        ) es ON es.event_id = e.id
         WHERE e.start_date IS NOT NULL
         ORDER BY e.start_date DESC, s.school_name ASC
     '''
@@ -366,8 +370,13 @@ def alert_studio_performance_decline(cursor, config=AlertConfig):
     担当校全体で見たときに、前年比で売上が20%以上落ちている写真館
     全件取得（件数制限なし）
     """
-    latest_report_id, _ = get_latest_report_id(cursor)
-    current_fy = get_current_fiscal_year()
+    # school_yearly_salesにデータがある最新の年度を取得
+    cursor.execute('SELECT MAX(fiscal_year) FROM school_yearly_sales')
+    max_fy = cursor.fetchone()[0]
+    if not max_fy:
+        return []
+
+    current_fy = max_fy
     prev_fy = current_fy - 1
 
     query = '''
@@ -379,7 +388,6 @@ def alert_studio_performance_decline(cursor, config=AlertConfig):
                 COUNT(DISTINCT s.id) as school_count
             FROM school_yearly_sales sys
             JOIN schools s ON sys.school_id = s.id
-            WHERE sys.report_id = ?
             GROUP BY s.studio_name, sys.fiscal_year
         )
         SELECT
@@ -400,7 +408,6 @@ def alert_studio_performance_decline(cursor, config=AlertConfig):
     '''
 
     cursor.execute(query, (
-        latest_report_id,
         prev_fy,
         current_fy,
         config.YOY_DECLINE_WARNING
@@ -493,6 +500,285 @@ def alert_rapid_growth_schools(cursor, config=AlertConfig):
     return results
 
 
+def get_yearly_events_comparison(cursor, school_id, left_year, right_year, month=None):
+    """
+    年度別イベント比較（タイミング分析）
+
+    指定した学校の2つの年度のイベントを比較
+    """
+    query = '''
+        SELECT
+            e.id,
+            e.event_name,
+            e.start_date,
+            e.fiscal_year,
+            strftime('%m', e.start_date) as month,
+            COALESCE(es_sum.total_sales, 0) as sales
+        FROM events e
+        LEFT JOIN (
+            SELECT event_id, SUM(sales) as total_sales
+            FROM event_sales
+            GROUP BY event_id
+        ) es_sum ON es_sum.event_id = e.id
+        WHERE e.school_id = ?
+          AND e.fiscal_year IN (?, ?)
+          AND e.start_date IS NOT NULL
+    '''
+    params = [school_id, left_year, right_year]
+
+    if month:
+        query += ' AND strftime("%m", e.start_date) = ?'
+        params.append(f'{int(month):02d}')
+
+    query += ' ORDER BY e.start_date ASC'
+
+    cursor.execute(query, params)
+
+    results = {'left': [], 'right': [], 'school_info': None}
+
+    # 学校情報を取得
+    cursor.execute('SELECT school_name, attribute, studio_name FROM schools WHERE id = ?', (school_id,))
+    school_row = cursor.fetchone()
+    if school_row:
+        results['school_info'] = {
+            'school_name': school_row[0],
+            'attribute': school_row[1] or '',
+            'studio_name': school_row[2] or ''
+        }
+
+    cursor.execute(query, params)
+    for row in cursor.fetchall():
+        event_data = {
+            'event_id': row[0],
+            'event_name': row[1],
+            'start_date': row[2],
+            'fiscal_year': row[3],
+            'month': row[4],
+            'sales': row[5]
+        }
+        if row[3] == left_year:
+            results['left'].append(event_data)
+        else:
+            results['right'].append(event_data)
+
+    return results
+
+
+def get_member_rate_trend_improved(cursor, target_fy=None):
+    """
+    会員率トレンド（前年より改善した学校）
+
+    前年度と比較して会員率が改善した学校を取得
+    member_ratesテーブルでデータがある最新2年度を比較
+    """
+    # member_ratesでデータがある年度を取得
+    cursor.execute('SELECT DISTINCT fiscal_year FROM member_rates ORDER BY fiscal_year DESC LIMIT 2')
+    years = [row[0] for row in cursor.fetchall()]
+
+    if len(years) < 2:
+        return []  # 2年分のデータがない
+
+    current_fy = years[0]
+    prev_fy = years[1]
+
+    # 各年度の最新report_idを取得
+    cursor.execute('''
+        SELECT fiscal_year, MAX(report_id) as latest_report_id
+        FROM member_rates
+        WHERE fiscal_year IN (?, ?)
+        GROUP BY fiscal_year
+    ''', (current_fy, prev_fy))
+
+    report_ids = {row[0]: row[1] for row in cursor.fetchall()}
+    curr_report_id = report_ids.get(current_fy)
+    prev_report_id = report_ids.get(prev_fy)
+
+    if not curr_report_id or not prev_report_id:
+        return []
+
+    query = '''
+        WITH current_member AS (
+            SELECT
+                school_id,
+                SUM(student_count) as students,
+                SUM(member_count) as members,
+                CASE WHEN SUM(student_count) > 0
+                     THEN CAST(SUM(member_count) AS FLOAT) / SUM(student_count)
+                     ELSE 0 END as rate
+            FROM member_rates
+            WHERE report_id = ? AND fiscal_year = ?
+            GROUP BY school_id
+        ),
+        prev_member AS (
+            SELECT
+                school_id,
+                SUM(student_count) as students,
+                SUM(member_count) as members,
+                CASE WHEN SUM(student_count) > 0
+                     THEN CAST(SUM(member_count) AS FLOAT) / SUM(student_count)
+                     ELSE 0 END as rate
+            FROM member_rates
+            WHERE report_id = ? AND fiscal_year = ?
+            GROUP BY school_id
+        )
+        SELECT
+            s.id,
+            s.school_name,
+            s.attribute,
+            s.studio_name,
+            s.region,
+            cm.rate as current_rate,
+            pm.rate as prev_rate,
+            cm.rate - pm.rate as improvement
+        FROM schools s
+        JOIN current_member cm ON cm.school_id = s.id
+        JOIN prev_member pm ON pm.school_id = s.id
+        WHERE cm.rate > pm.rate
+          AND pm.rate > 0
+        ORDER BY improvement DESC
+    '''
+
+    cursor.execute(query, (curr_report_id, current_fy, prev_report_id, prev_fy))
+    results = []
+
+    for row in cursor.fetchall():
+        results.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': row[2] or '',
+            'studio_name': row[3] or '',
+            'branch_name': row[4] or '',
+            'current_rate': row[5],
+            'prev_rate': row[6],
+            'improvement': row[7],
+            'level': 'success',
+            'message': f'会員率{row[7]*100:+.1f}%改善'
+        })
+
+    return results
+
+
+def get_sales_unit_price_analysis(cursor, target_fy=None):
+    """
+    売上単価分析
+
+    会員あたり売上単価を計算し、属性平均と比較
+    """
+    if target_fy is None:
+        target_fy = get_current_fiscal_year()
+
+    latest_report_id, _ = get_latest_report_id(cursor)
+    if not latest_report_id:
+        return []
+
+    # まず属性別の平均単価を計算
+    attr_avg_query = '''
+        WITH school_data AS (
+            SELECT
+                s.id as school_id,
+                s.attribute,
+                COALESCE(SUM(es.sales), 0) as total_sales,
+                COALESCE(mr.total_members, 0) as total_members
+            FROM schools s
+            LEFT JOIN events e ON e.school_id = s.id AND e.fiscal_year = ?
+            LEFT JOIN (
+                SELECT event_id, SUM(sales) as sales
+                FROM event_sales
+                GROUP BY event_id
+            ) es ON es.event_id = e.id
+            LEFT JOIN (
+                SELECT school_id, SUM(member_count) as total_members
+                FROM member_rates
+                WHERE report_id = ? AND fiscal_year = ?
+                GROUP BY school_id
+            ) mr ON mr.school_id = s.id
+            GROUP BY s.id, s.attribute
+        )
+        SELECT
+            attribute,
+            AVG(CASE WHEN total_members > 0 THEN total_sales / total_members ELSE 0 END) as avg_unit_price
+        FROM school_data
+        WHERE total_members > 0
+        GROUP BY attribute
+    '''
+
+    cursor.execute(attr_avg_query, (target_fy, latest_report_id, target_fy))
+    attr_averages = {row[0]: row[1] for row in cursor.fetchall()}
+
+    # 学校ごとのデータを取得
+    query = '''
+        SELECT
+            s.id,
+            s.school_name,
+            s.attribute,
+            s.studio_name,
+            s.region,
+            COALESCE(mr.total_members, 0) as total_members,
+            COALESCE(mr.total_students, 0) as total_students,
+            COALESCE(sales.total_sales, 0) as total_sales,
+            CASE WHEN COALESCE(mr.total_students, 0) > 0
+                 THEN CAST(mr.total_members AS FLOAT) / mr.total_students
+                 ELSE 0 END as member_rate
+        FROM schools s
+        LEFT JOIN (
+            SELECT school_id, SUM(member_count) as total_members, SUM(student_count) as total_students
+            FROM member_rates
+            WHERE report_id = ? AND fiscal_year = ?
+            GROUP BY school_id
+        ) mr ON mr.school_id = s.id
+        LEFT JOIN (
+            SELECT e.school_id, SUM(es.sales) as total_sales
+            FROM events e
+            LEFT JOIN (
+                SELECT event_id, SUM(sales) as sales
+                FROM event_sales
+                GROUP BY event_id
+            ) es ON es.event_id = e.id
+            WHERE e.fiscal_year = ?
+            GROUP BY e.school_id
+        ) sales ON sales.school_id = s.id
+        WHERE mr.total_members > 0
+        ORDER BY s.school_name
+    '''
+
+    cursor.execute(query, (latest_report_id, target_fy, target_fy))
+    results = []
+
+    for row in cursor.fetchall():
+        total_members = row[5]
+        total_sales = row[7]
+        member_rate = row[8]
+        unit_price = total_sales / total_members if total_members > 0 else 0
+        attribute = row[2] or ''
+        attr_avg = attr_averages.get(attribute, 0)
+        diff = unit_price - attr_avg
+
+        results.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': attribute,
+            'studio_name': row[3] or '',
+            'branch_name': row[4] or '',
+            'total_members': total_members,
+            'total_students': row[6],
+            'total_sales': total_sales,
+            'member_rate': member_rate,
+            'unit_price': unit_price,
+            'attr_avg': attr_avg,
+            'diff': diff,
+            'level': 'success' if diff > 0 else 'warning',
+            'message': f'単価¥{unit_price:,.0f}（属性平均比{diff:+,.0f}）'
+        })
+
+    return results
+
+
+def get_schools_for_filter(cursor):
+    """フィルタ用の学校リストを取得"""
+    cursor.execute('SELECT id, school_name, attribute, studio_name, region FROM schools ORDER BY school_name')
+    return [{'id': row[0], 'school_name': row[1], 'attribute': row[2] or '', 'studio_name': row[3] or '', 'branch_name': row[4] or ''} for row in cursor.fetchall()]
+
+
 def get_all_alerts(db_path=None):
     """全アラートを取得"""
     conn = get_connection(db_path)
@@ -505,6 +791,9 @@ def get_all_alerts(db_path=None):
         'new_schools': alert_new_schools(cursor),
         'studio_performance_decline': alert_studio_performance_decline(cursor),
         'rapid_growth': alert_rapid_growth_schools(cursor),
+        'member_rate_trend_improved': get_member_rate_trend_improved(cursor),
+        'sales_unit_price': get_sales_unit_price_analysis(cursor),
+        'schools_for_filter': get_schools_for_filter(cursor),
     }
 
     conn.close()

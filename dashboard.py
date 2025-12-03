@@ -302,26 +302,63 @@ def generate_html_dashboard(db_path=None, output_path=None):
             color: #1a1a2e;
             margin-bottom: 20px;
         }}
+        .alert-category-container {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }}
+        .alert-category {{
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+        }}
+        .alert-category-title {{
+            font-size: 14px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .alert-category-title.positive {{ border-bottom-color: #10b981; color: #059669; }}
+        .alert-category-title.warning {{ border-bottom-color: #f59e0b; color: #d97706; }}
+        .alert-category-title.analysis {{ border-bottom-color: #3b82f6; color: #2563eb; }}
         .alert-tabs {{
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin-bottom: 16px;
         }}
         .alert-tab {{
-            padding: 10px 20px;
-            border-radius: 8px;
-            background: #f0f0f0;
+            padding: 8px 14px;
+            border-radius: 6px;
+            background: white;
             color: #333;
             cursor: pointer;
             font-weight: 500;
-            border: none;
-            transition: all 0.3s;
+            font-size: 13px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s;
         }}
-        .alert-tab:hover, .alert-tab.active {{
+        .alert-tab:hover {{
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }}
+        .alert-tab.active {{
             background: #3b82f6;
             color: white;
+            border-color: #3b82f6;
         }}
+        .alert-tab.positive {{ border-color: #10b981; color: #059669; }}
+        .alert-tab.positive:hover {{ background: #ecfdf5; }}
+        .alert-tab.positive.active {{ background: #10b981; color: white; }}
+        .alert-tab.warning {{ border-color: #f59e0b; color: #d97706; }}
+        .alert-tab.warning:hover {{ background: #fffbeb; }}
+        .alert-tab.warning.active {{ background: #f59e0b; color: white; }}
         .alert-tab .badge {{
             background: #ef4444;
             color: white;
@@ -330,7 +367,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
             font-size: 11px;
             margin-left: 6px;
         }}
-        .alert-tab.success .badge {{ background: #10b981; }}
+        .alert-tab.positive .badge {{ background: #10b981; }}
         .alert-content {{ display: none; }}
         .alert-content.active {{ display: block; }}
         .alert-table {{
@@ -456,6 +493,65 @@ def generate_html_dashboard(db_path=None, output_path=None):
         .trend-item:last-child {{ border-bottom: none; }}
         .trend-up {{ color: #10b981; }}
         .trend-down {{ color: #ef4444; }}
+        .comparison-container {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 16px;
+        }}
+        .comparison-column {{
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 16px;
+        }}
+        .comparison-column h4 {{
+            font-size: 14px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #3b82f6;
+        }}
+        .comparison-column.left h4 {{ border-bottom-color: #3b82f6; }}
+        .comparison-column.right h4 {{ border-bottom-color: #8b5cf6; }}
+        .comparison-event {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border: 1px solid #e2e8f0;
+        }}
+        .comparison-event-name {{
+            font-weight: 500;
+            color: #1a1a2e;
+        }}
+        .comparison-event-date {{
+            font-size: 12px;
+            color: #666;
+            margin-left: 8px;
+        }}
+        .comparison-event-sales {{
+            font-weight: 600;
+            color: #059669;
+        }}
+        .comparison-summary {{
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 600;
+        }}
+        .comparison-empty {{
+            text-align: center;
+            padding: 20px;
+            color: #888;
+            font-size: 13px;
+        }}
         .footer {{
             text-align: center;
             color: rgba(255,255,255,0.7);
@@ -690,29 +786,44 @@ def generate_html_dashboard(db_path=None, output_path=None):
         <!-- 条件別集計 -->
         <div class="alert-section">
             <h3>条件別集計</h3>
-            <div class="alert-tabs">
-                <button class="alert-tab active" onclick="showAlert('no_events')" id="tab-no_events">
-                    今年度未実施
-                </button>
-                <button class="alert-tab" onclick="showAlert('new_event_low')" id="tab-new_event_low">
-                    イベント開始日別売上
-                </button>
-                <button class="alert-tab" onclick="showAlert('decline')" id="tab-decline">
-                    会員率・売上低下
-                </button>
-                <button class="alert-tab success" onclick="showAlert('rapid_growth')" id="tab-rapid_growth">
-                    売上好調校
-                </button>
-                <button class="alert-tab success" onclick="showAlert('new_schools')" id="tab-new_schools">
-                    新規開始校
-                </button>
-                <button class="alert-tab" onclick="showAlert('studio_decline')" id="tab-studio_decline">
-                    写真館別低下
-                </button>
+            <div class="alert-category-container">
+                <!-- ポジティブ（売上・実績） -->
+                <div class="alert-category">
+                    <div class="alert-category-title positive">📊 売上・実績</div>
+                    <div class="alert-tabs">
+                        <button class="alert-tab positive active" onclick="showAlert('rapid_growth')" id="tab-rapid_growth">売上好調校</button>
+                        <button class="alert-tab positive" onclick="showAlert('new_schools')" id="tab-new_schools">新規開始校</button>
+                    </div>
+                </div>
+                <!-- 要注意・改善 -->
+                <div class="alert-category">
+                    <div class="alert-category-title warning">⚠️ 要注意・改善</div>
+                    <div class="alert-tabs">
+                        <button class="alert-tab warning" onclick="showAlert('no_events')" id="tab-no_events">今年度未実施</button>
+                        <button class="alert-tab warning" onclick="showAlert('decline')" id="tab-decline">会員率・売上低下</button>
+                        <button class="alert-tab warning" onclick="showAlert('studio_decline')" id="tab-studio_decline">写真館別低下</button>
+                    </div>
+                </div>
+                <!-- 分析・トレンド -->
+                <div class="alert-category">
+                    <div class="alert-category-title analysis">📈 トレンド分析</div>
+                    <div class="alert-tabs">
+                        <button class="alert-tab" onclick="showAlert('member_rate_trend')" id="tab-member_rate_trend">会員率改善校</button>
+                        <button class="alert-tab" onclick="showAlert('unit_price')" id="tab-unit_price">売上単価分析</button>
+                    </div>
+                </div>
+                <!-- イベント関連 -->
+                <div class="alert-category">
+                    <div class="alert-category-title analysis">📅 イベント関連</div>
+                    <div class="alert-tabs">
+                        <button class="alert-tab" onclick="showAlert('new_event_low')" id="tab-new_event_low">イベント開始日別売上</button>
+                        <button class="alert-tab" onclick="showAlert('yearly_comparison')" id="tab-yearly_comparison">年度別イベント比較</button>
+                    </div>
+                </div>
             </div>
 
             <!-- 今年度未実施 -->
-            <div id="alert-no_events" class="alert-content active">
+            <div id="alert-no_events" class="alert-content">
                 <div class="alert-header">
                     <button class="csv-download-btn" onclick="downloadAlertCSV('no_events')">📥 CSV出力</button>
                 </div>
@@ -841,12 +952,106 @@ def generate_html_dashboard(db_path=None, output_path=None):
             </div>
 
             <!-- 急成長校 -->
-            <div id="alert-rapid_growth" class="alert-content">
+            <div id="alert-rapid_growth" class="alert-content active">
                 <div class="alert-header">
                     <button class="csv-download-btn" onclick="downloadAlertCSV('rapid_growth')">📥 CSV出力</button>
                 </div>
                 <div id="rapid_growth-table-container"></div>
                 <div id="rapid_growth-pagination" class="pagination"></div>
+            </div>
+
+            <!-- 会員率改善校 -->
+            <div id="alert-member_rate_trend" class="alert-content">
+                <div class="alert-controls">
+                    <label>属性:</label>
+                    <select id="member_rate_trend-attribute-filter" onchange="updateMemberRateTrendFilters()">
+                        <option value="">全て</option>
+                    </select>
+                    <label>写真館:</label>
+                    <select id="member_rate_trend-studio-filter" onchange="updateMemberRateTrendFilters()">
+                        <option value="">全て</option>
+                    </select>
+                    <label>学校名:</label>
+                    <select id="member_rate_trend-school-filter" onchange="filterMemberRateTrendAlert()">
+                        <option value="">全て</option>
+                    </select>
+                    <label>年度:</label>
+                    <select id="member_rate_trend-year-filter" onchange="filterMemberRateTrendAlert()">
+                        {' '.join([f'<option value="{y}">{y}年度</option>' for y in available_years])}
+                    </select>
+                    <button onclick="filterMemberRateTrendAlert()" style="padding: 6px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">絞り込む</button>
+                    <button class="csv-download-btn" onclick="downloadAlertCSV('member_rate_trend')">📥 CSV出力</button>
+                </div>
+                <div id="member_rate_trend-message" style="text-align: center; padding: 40px 20px; color: #888; font-size: 14px;">年度を選択して「絞り込む」をクリックしてください</div>
+                <div id="member_rate_trend-table-container" style="display: none;"></div>
+                <div id="member_rate_trend-pagination" class="pagination" style="display: none;"></div>
+            </div>
+
+            <!-- 売上単価分析 -->
+            <div id="alert-unit_price" class="alert-content">
+                <div class="alert-controls">
+                    <label>属性:</label>
+                    <select id="unit_price-attribute-filter" onchange="filterUnitPriceAlert()">
+                        <option value="">全て</option>
+                    </select>
+                    <label>写真館:</label>
+                    <select id="unit_price-studio-filter" onchange="filterUnitPriceAlert()">
+                        <option value="">全て</option>
+                    </select>
+                    <label>学校名:</label>
+                    <select id="unit_price-school-filter" onchange="filterUnitPriceAlert()">
+                        <option value="">全て</option>
+                    </select>
+                    <button class="csv-download-btn" onclick="downloadAlertCSV('unit_price')">📥 CSV出力</button>
+                </div>
+                <div id="unit_price-table-container"></div>
+                <div id="unit_price-pagination" class="pagination"></div>
+            </div>
+
+            <!-- 年度別イベント比較 -->
+            <div id="alert-yearly_comparison" class="alert-content">
+                <div class="alert-controls">
+                    <label>属性:</label>
+                    <select id="yearly_comparison-attribute-filter" onchange="updateYearlyComparisonFilters()">
+                        <option value="">全て</option>
+                    </select>
+                    <label>写真館:</label>
+                    <select id="yearly_comparison-studio-filter" onchange="updateYearlyComparisonFilters()">
+                        <option value="">全て</option>
+                    </select>
+                    <label>学校<span style="color: #ef4444;">*</span>:</label>
+                    <select id="yearly_comparison-school-filter" style="min-width: 200px;" required>
+                        <option value="">-- 学校を選択 --</option>
+                    </select>
+                    <label>月:</label>
+                    <select id="yearly_comparison-month-filter">
+                        <option value="">全て</option>
+                        <option value="1">1月</option>
+                        <option value="2">2月</option>
+                        <option value="3">3月</option>
+                        <option value="4">4月</option>
+                        <option value="5">5月</option>
+                        <option value="6">6月</option>
+                        <option value="7">7月</option>
+                        <option value="8">8月</option>
+                        <option value="9">9月</option>
+                        <option value="10">10月</option>
+                        <option value="11">11月</option>
+                        <option value="12">12月</option>
+                    </select>
+                    <label>左年度<span style="color: #ef4444;">*</span>:</label>
+                    <select id="yearly_comparison-left-year-filter" required>
+                        {' '.join([f'<option value="{y}">{y}年度</option>' for y in available_years])}
+                    </select>
+                    <label>右年度<span style="color: #ef4444;">*</span>:</label>
+                    <select id="yearly_comparison-right-year-filter" required>
+                        {' '.join([f'<option value="{y}"' + (' selected' if i == 1 else '') + f'>{y}年度</option>' for i, y in enumerate(available_years)])}
+                    </select>
+                    <button onclick="filterYearlyComparisonAlert()" style="padding: 6px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">絞り込む</button>
+                    <button class="csv-download-btn" onclick="downloadYearlyComparisonCSV()">📥 CSV出力</button>
+                </div>
+                <div id="yearly_comparison-message" style="text-align: center; padding: 40px 20px; color: #888; font-size: 14px;"><span style="color: #ef4444;">*</span>は必須項目です。学校・月・年度を選択して「絞り込む」をクリックしてください</div>
+                <div id="yearly_comparison-container" style="display: none;"></div>
             </div>
         </div>'''
 
@@ -989,7 +1194,10 @@ def generate_html_dashboard(db_path=None, output_path=None):
             decline: {json.dumps(alerts.get('member_rate_decline', []), ensure_ascii=False)},
             new_schools: {json.dumps(alerts.get('new_schools', []), ensure_ascii=False)},
             studio_decline: {json.dumps(alerts.get('studio_performance_decline', []), ensure_ascii=False)},
-            rapid_growth: {json.dumps(alerts.get('rapid_growth', []), ensure_ascii=False)}
+            rapid_growth: {json.dumps(alerts.get('rapid_growth', []), ensure_ascii=False)},
+            member_rate_trend: {json.dumps(alerts.get('member_rate_trend_improved', []), ensure_ascii=False)},
+            unit_price: {json.dumps(alerts.get('sales_unit_price', []), ensure_ascii=False)},
+            schools_for_filter: {json.dumps(alerts.get('schools_for_filter', []), ensure_ascii=False)}
         }};
 
         // アラートページング・ソート状態管理
@@ -999,7 +1207,10 @@ def generate_html_dashboard(db_path=None, output_path=None):
             decline: {{ page: 1, sortKey: 'member_rate', sortDir: 'asc', data: [] }},
             new_schools: {{ page: 1, sortKey: 'first_event_date', sortDir: 'desc', data: alertData.new_schools }},
             studio_decline: {{ page: 1, sortKey: 'change_rate', sortDir: 'asc', data: alertData.studio_decline }},
-            rapid_growth: {{ page: 1, sortKey: 'growth_rate', sortDir: 'desc', data: alertData.rapid_growth }}
+            rapid_growth: {{ page: 1, sortKey: 'growth_rate', sortDir: 'desc', data: alertData.rapid_growth }},
+            member_rate_trend: {{ page: 1, sortKey: 'improvement', sortDir: 'desc', data: [] }},
+            unit_price: {{ page: 1, sortKey: 'unit_price', sortDir: 'desc', data: alertData.unit_price }},
+            yearly_comparison: {{ leftYear: {available_years[0] if available_years else 2025}, rightYear: {available_years[1] if len(available_years) > 1 else 2024}, data: {{ left: [], right: [] }} }}
         }};
         const PAGE_SIZE = 30;
 
@@ -2161,6 +2372,30 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         {{key: 'growth_rate', label: '成長率'}}
                     ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute}}</td><td>${{item.region || '-'}}</td><td>${{item.studio_name}}</td><td>¥${{item.current_sales.toLocaleString()}}</td><td>¥${{item.prev_sales.toLocaleString()}}</td><td class="trend-up">+${{(item.growth_rate*100).toFixed(1)}}%</td></tr>`);
                     break;
+                case 'member_rate_trend':
+                    renderAlertTable('member_rate_trend', [
+                        {{key: 'school_name', label: '学校名'}},
+                        {{key: 'attribute', label: '属性'}},
+                        {{key: 'studio_name', label: '写真館'}},
+                        {{key: 'branch_name', label: '事業所'}},
+                        {{key: 'current_rate', label: '今年度会員率'}},
+                        {{key: 'prev_rate', label: '前年度会員率'}},
+                        {{key: 'improvement', label: '改善幅'}}
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute || '-'}}</td><td>${{item.studio_name || '-'}}</td><td>${{item.branch_name || '-'}}</td><td>${{(item.current_rate*100).toFixed(1)}}%</td><td>${{(item.prev_rate*100).toFixed(1)}}%</td><td class="trend-up">+${{(item.improvement*100).toFixed(1)}}%</td></tr>`);
+                    break;
+                case 'unit_price':
+                    renderAlertTable('unit_price', [
+                        {{key: 'school_name', label: '学校名'}},
+                        {{key: 'attribute', label: '属性'}},
+                        {{key: 'studio_name', label: '写真館'}},
+                        {{key: 'member_rate', label: '会員率'}},
+                        {{key: 'total_sales', label: '売上'}},
+                        {{key: 'total_members', label: '会員数'}},
+                        {{key: 'unit_price', label: '単価'}},
+                        {{key: 'attr_avg', label: '属性平均'}},
+                        {{key: 'diff', label: '平均比'}}
+                    ], item => `<tr><td>${{item.school_name}}</td><td>${{item.attribute || '-'}}</td><td>${{item.studio_name || '-'}}</td><td>${{(item.member_rate*100).toFixed(1)}}%</td><td>¥${{item.total_sales.toLocaleString()}}</td><td>${{item.total_members}}人</td><td>¥${{Math.round(item.unit_price).toLocaleString()}}</td><td>¥${{Math.round(item.attr_avg).toLocaleString()}}</td><td class="${{item.diff >= 0 ? 'trend-up' : 'trend-down'}}">${{item.diff >= 0 ? '+' : ''}}¥${{Math.round(item.diff).toLocaleString()}}</td></tr>`);
+                    break;
             }}
         }}
 
@@ -2282,6 +2517,26 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     {{key: 'current_sales', label: '今年度売上'}},
                     {{key: 'prev_sales', label: '前年度売上'}},
                     {{key: 'growth_rate', label: '成長率'}}
+                ],
+                'member_rate_trend': [
+                    {{key: 'school_name', label: '学校名'}},
+                    {{key: 'attribute', label: '属性'}},
+                    {{key: 'studio_name', label: '写真館'}},
+                    {{key: 'branch_name', label: '事業所'}},
+                    {{key: 'current_rate', label: '今年度会員率'}},
+                    {{key: 'prev_rate', label: '前年度会員率'}},
+                    {{key: 'improvement', label: '改善幅'}}
+                ],
+                'unit_price': [
+                    {{key: 'school_name', label: '学校名'}},
+                    {{key: 'attribute', label: '属性'}},
+                    {{key: 'studio_name', label: '写真館'}},
+                    {{key: 'member_rate', label: '会員率'}},
+                    {{key: 'total_sales', label: '売上'}},
+                    {{key: 'total_members', label: '会員数'}},
+                    {{key: 'unit_price', label: '単価'}},
+                    {{key: 'attr_avg', label: '属性平均'}},
+                    {{key: 'diff', label: '平均比'}}
                 ]
             }};
 
@@ -2327,7 +2582,9 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 'decline': '会員率売上低下',
                 'new_schools': '新規開始校',
                 'studio_decline': '写真館別低下',
-                'rapid_growth': '売上好調校'
+                'rapid_growth': '売上好調校',
+                'member_rate_trend': '会員率改善校',
+                'unit_price': '売上単価分析'
             }};
             const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
             const filename = `${{alertNames[type] || type}}_${{today}}.csv`;
@@ -2396,6 +2653,312 @@ def generate_html_dashboard(db_path=None, output_path=None):
             renderAlertByType('new_schools');
             renderAlertByType('studio_decline');
             renderAlertByType('rapid_growth');
+            // 売上単価分析は初期表示
+            renderAlertByType('unit_price');
+            // フィルタ用プルダウンを初期化
+            initFilterDropdowns();
+        }}
+
+        // フィルタ用プルダウン初期化
+        function initFilterDropdowns() {{
+            const schools = alertData.schools_for_filter || [];
+            const attributes = [...new Set(schools.map(s => s.attribute).filter(a => a))];
+            const studios = [...new Set(schools.map(s => s.studio_name).filter(s => s))];
+            const branches = [...new Set(schools.map(s => s.branch_name).filter(b => b))];
+
+            // 会員率トレンドのフィルタ
+            const mrtAttr = document.getElementById('member_rate_trend-attribute-filter');
+            const mrtStudio = document.getElementById('member_rate_trend-studio-filter');
+            const mrtSchool = document.getElementById('member_rate_trend-school-filter');
+
+            attributes.forEach(attr => {{
+                mrtAttr.innerHTML += `<option value="${{attr}}">${{attr}}</option>`;
+            }});
+            studios.forEach(studio => {{
+                mrtStudio.innerHTML += `<option value="${{studio}}">${{studio}}</option>`;
+            }});
+            schools.forEach(school => {{
+                mrtSchool.innerHTML += `<option value="${{school.school_id || school.id}}">${{school.school_name}}</option>`;
+            }});
+
+            // 売上単価分析のフィルタ
+            const upAttr = document.getElementById('unit_price-attribute-filter');
+            const upStudio = document.getElementById('unit_price-studio-filter');
+            const upSchool = document.getElementById('unit_price-school-filter');
+
+            attributes.forEach(attr => {{
+                upAttr.innerHTML += `<option value="${{attr}}">${{attr}}</option>`;
+            }});
+            studios.forEach(studio => {{
+                upStudio.innerHTML += `<option value="${{studio}}">${{studio}}</option>`;
+            }});
+            schools.forEach(school => {{
+                upSchool.innerHTML += `<option value="${{school.school_id || school.id}}">${{school.school_name}}</option>`;
+            }});
+
+            // 年度別イベント比較のフィルタ
+            const ycAttr = document.getElementById('yearly_comparison-attribute-filter');
+            const ycStudio = document.getElementById('yearly_comparison-studio-filter');
+            const ycSchool = document.getElementById('yearly_comparison-school-filter');
+
+            attributes.forEach(attr => {{
+                ycAttr.innerHTML += `<option value="${{attr}}">${{attr}}</option>`;
+            }});
+            studios.forEach(studio => {{
+                ycStudio.innerHTML += `<option value="${{studio}}">${{studio}}</option>`;
+            }});
+            schools.forEach(school => {{
+                ycSchool.innerHTML += `<option value="${{school.school_id || school.id}}">${{school.school_name}}</option>`;
+            }});
+        }}
+
+        // 会員率トレンドフィルタの連動更新
+        function updateMemberRateTrendFilters() {{
+            const selectedAttr = document.getElementById('member_rate_trend-attribute-filter').value;
+            const selectedStudio = document.getElementById('member_rate_trend-studio-filter').value;
+
+            const schools = alertData.schools_for_filter || [];
+            let filteredSchools = schools;
+
+            if (selectedAttr) {{
+                filteredSchools = filteredSchools.filter(s => s.attribute === selectedAttr);
+            }}
+            if (selectedStudio) {{
+                filteredSchools = filteredSchools.filter(s => s.studio_name === selectedStudio);
+            }}
+
+            const schoolSelect = document.getElementById('member_rate_trend-school-filter');
+            schoolSelect.innerHTML = '<option value="">全て</option>';
+            filteredSchools.forEach(school => {{
+                schoolSelect.innerHTML += `<option value="${{school.school_id || school.id}}">${{school.school_name}}</option>`;
+            }});
+        }}
+
+        // 会員率トレンドフィルタ実行
+        function filterMemberRateTrendAlert() {{
+            const selectedAttr = document.getElementById('member_rate_trend-attribute-filter').value;
+            const selectedStudio = document.getElementById('member_rate_trend-studio-filter').value;
+            const selectedSchool = document.getElementById('member_rate_trend-school-filter').value;
+
+            alertState.member_rate_trend.data = alertData.member_rate_trend.filter(item => {{
+                if (selectedAttr && item.attribute !== selectedAttr) return false;
+                if (selectedStudio && item.studio_name !== selectedStudio) return false;
+                if (selectedSchool && String(item.school_id) !== selectedSchool) return false;
+                return true;
+            }});
+            alertState.member_rate_trend.page = 1;
+
+            document.getElementById('member_rate_trend-message').style.display = 'none';
+            document.getElementById('member_rate_trend-table-container').style.display = 'block';
+            document.getElementById('member_rate_trend-pagination').style.display = 'flex';
+
+            renderAlertByType('member_rate_trend');
+        }}
+
+        // 年度別イベント比較フィルタの連動更新
+        function updateYearlyComparisonFilters() {{
+            const selectedAttr = document.getElementById('yearly_comparison-attribute-filter').value;
+            const selectedStudio = document.getElementById('yearly_comparison-studio-filter').value;
+
+            const schools = alertData.schools_for_filter || [];
+            let filteredSchools = schools;
+
+            if (selectedAttr) {{
+                filteredSchools = filteredSchools.filter(s => s.attribute === selectedAttr);
+            }}
+            if (selectedStudio) {{
+                filteredSchools = filteredSchools.filter(s => s.studio_name === selectedStudio);
+            }}
+
+            const schoolSelect = document.getElementById('yearly_comparison-school-filter');
+            schoolSelect.innerHTML = '<option value="">-- 学校を選択 --</option>';
+            filteredSchools.forEach(school => {{
+                schoolSelect.innerHTML += `<option value="${{school.school_id || school.id}}">${{school.school_name}}</option>`;
+            }});
+        }}
+
+        // 売上単価分析フィルタ実行
+        function filterUnitPriceAlert() {{
+            const selectedAttr = document.getElementById('unit_price-attribute-filter').value;
+            const selectedStudio = document.getElementById('unit_price-studio-filter').value;
+            const selectedSchool = document.getElementById('unit_price-school-filter').value;
+
+            alertState.unit_price.data = alertData.unit_price.filter(item => {{
+                if (selectedAttr && item.attribute !== selectedAttr) return false;
+                if (selectedStudio && item.studio_name !== selectedStudio) return false;
+                if (selectedSchool && String(item.school_id) !== selectedSchool) return false;
+                return true;
+            }});
+            alertState.unit_price.page = 1;
+            renderAlertByType('unit_price');
+        }}
+
+        // 年度別イベント比較フィルタ実行
+        function filterYearlyComparisonAlert() {{
+            const selectedSchool = document.getElementById('yearly_comparison-school-filter').value;
+            const selectedMonth = document.getElementById('yearly_comparison-month-filter').value;
+            const leftYearVal = document.getElementById('yearly_comparison-left-year-filter').value;
+            const rightYearVal = document.getElementById('yearly_comparison-right-year-filter').value;
+
+            // 必須フィールドのバリデーション（月は任意）
+            const missingFields = [];
+            if (!selectedSchool) missingFields.push('学校');
+            if (!leftYearVal) missingFields.push('左年度');
+            if (!rightYearVal) missingFields.push('右年度');
+
+            if (missingFields.length > 0) {{
+                const msgEl = document.getElementById('yearly_comparison-message');
+                msgEl.innerHTML = `<span style="color: #ef4444;">必須項目を選択してください: ${{missingFields.join('、')}}</span>`;
+                msgEl.style.display = 'block';
+                document.getElementById('yearly_comparison-container').style.display = 'none';
+                return;
+            }}
+
+            const leftYear = parseInt(leftYearVal);
+            const rightYear = parseInt(rightYearVal);
+
+            // 学校のイベントを取得してフィルタリング
+            const allEvents = alertData.new_event_low || [];
+            const schoolEvents = allEvents.filter(e => String(e.school_id) === selectedSchool);
+
+            const leftEvents = schoolEvents.filter(e => {{
+                if (!e.start_date) return false;
+                const date = new Date(e.start_date);
+                const month = date.getMonth() + 1;
+                const year = date.getFullYear();
+                const fiscalYear = month >= 4 ? year : year - 1;
+                if (fiscalYear !== leftYear) return false;
+                if (selectedMonth && month !== parseInt(selectedMonth)) return false;
+                return true;
+            }});
+
+            const rightEvents = schoolEvents.filter(e => {{
+                if (!e.start_date) return false;
+                const date = new Date(e.start_date);
+                const month = date.getMonth() + 1;
+                const year = date.getFullYear();
+                const fiscalYear = month >= 4 ? year : year - 1;
+                if (fiscalYear !== rightYear) return false;
+                if (selectedMonth && month !== parseInt(selectedMonth)) return false;
+                return true;
+            }});
+
+            // 学校情報を取得
+            const schoolInfo = alertData.schools_for_filter.find(s => String(s.school_id || s.id) === selectedSchool) || {{}};
+
+            alertState.yearly_comparison.data = {{ left: leftEvents, right: rightEvents }};
+            alertState.yearly_comparison.leftYear = leftYear;
+            alertState.yearly_comparison.rightYear = rightYear;
+            alertState.yearly_comparison.schoolInfo = schoolInfo;
+
+            document.getElementById('yearly_comparison-message').style.display = 'none';
+            document.getElementById('yearly_comparison-container').style.display = 'block';
+
+            renderYearlyComparison();
+        }}
+
+        // 年度別イベント比較の描画
+        function renderYearlyComparison() {{
+            const data = alertState.yearly_comparison.data;
+            const leftYear = alertState.yearly_comparison.leftYear;
+            const rightYear = alertState.yearly_comparison.rightYear;
+            const schoolInfo = alertState.yearly_comparison.schoolInfo || {{}};
+
+            let leftTotal = 0;
+            let rightTotal = 0;
+
+            let html = `<div style="margin-bottom: 12px; font-weight: 600; color: #1a1a2e;">${{schoolInfo.school_name || '学校名不明'}} <span style="font-weight: normal; color: #666; margin-left: 8px;">${{schoolInfo.attribute || ''}} / ${{schoolInfo.studio_name || ''}}</span></div>`;
+            html += '<div class="comparison-container">';
+
+            // 左側（左年度）
+            html += '<div class="comparison-column left">';
+            html += `<h4>${{leftYear}}年度</h4>`;
+            if (data.left.length === 0) {{
+                html += '<div class="comparison-empty">イベントなし</div>';
+            }} else {{
+                data.left.forEach(e => {{
+                    const sales = e.total_sales || 0;
+                    leftTotal += sales;
+                    let dateStr = '-';
+                    if (e.start_date) {{
+                        const d = new Date(e.start_date);
+                        dateStr = `${{d.getMonth() + 1}}月${{d.getDate()}}日公開`;
+                    }}
+                    html += `<div class="comparison-event"><span><span class="comparison-event-name">${{(e.event_name || '').substring(0, 25)}}</span><span class="comparison-event-date">（${{dateStr}}）</span></span><span class="comparison-event-sales">¥${{sales.toLocaleString()}}</span></div>`;
+                }});
+            }}
+            html += `<div class="comparison-summary"><span>計: ${{data.left.length}}件</span><span>合計: ¥${{leftTotal.toLocaleString()}}</span></div>`;
+            html += '</div>';
+
+            // 右側（右年度）
+            html += '<div class="comparison-column right">';
+            html += `<h4>${{rightYear}}年度</h4>`;
+            if (data.right.length === 0) {{
+                html += '<div class="comparison-empty">イベントなし</div>';
+            }} else {{
+                data.right.forEach(e => {{
+                    const sales = e.total_sales || 0;
+                    rightTotal += sales;
+                    let dateStr = '-';
+                    if (e.start_date) {{
+                        const d = new Date(e.start_date);
+                        dateStr = `${{d.getMonth() + 1}}月${{d.getDate()}}日公開`;
+                    }}
+                    html += `<div class="comparison-event"><span><span class="comparison-event-name">${{(e.event_name || '').substring(0, 25)}}</span><span class="comparison-event-date">（${{dateStr}}）</span></span><span class="comparison-event-sales">¥${{sales.toLocaleString()}}</span></div>`;
+                }});
+            }}
+            html += `<div class="comparison-summary"><span>計: ${{data.right.length}}件</span><span>合計: ¥${{rightTotal.toLocaleString()}}</span></div>`;
+            html += '</div>';
+
+            html += '</div>';
+
+            document.getElementById('yearly_comparison-container').innerHTML = html;
+        }}
+
+        // 年度別イベント比較CSV出力（縦並び形式）
+        function downloadYearlyComparisonCSV() {{
+            const data = alertState.yearly_comparison.data;
+            const leftYear = alertState.yearly_comparison.leftYear;
+            const rightYear = alertState.yearly_comparison.rightYear;
+            const schoolInfo = alertState.yearly_comparison.schoolInfo || {{}};
+
+            if ((!data.left || data.left.length === 0) && (!data.right || data.right.length === 0)) {{
+                alert('ダウンロードするデータがありません。');
+                return;
+            }}
+
+            // CSVヘッダー
+            let csv = '学校名,属性,事業所,年度,月,イベント名,公開日,売上\\n';
+
+            // 左年度データ
+            (data.left || []).forEach(e => {{
+                const date = e.start_date ? new Date(e.start_date) : null;
+                const month = date ? date.getMonth() + 1 : '';
+                csv += `"${{schoolInfo.school_name || ''}}","${{schoolInfo.attribute || ''}}","${{schoolInfo.studio_name || ''}}",${{leftYear}},${{month}},"${{(e.event_name || '').replace(/"/g, '""')}}",${{e.start_date || ''}},${{e.total_sales || 0}}\\n`;
+            }});
+
+            // 右年度データ
+            (data.right || []).forEach(e => {{
+                const date = e.start_date ? new Date(e.start_date) : null;
+                const month = date ? date.getMonth() + 1 : '';
+                csv += `"${{schoolInfo.school_name || ''}}","${{schoolInfo.attribute || ''}}","${{schoolInfo.studio_name || ''}}",${{rightYear}},${{month}},"${{(e.event_name || '').replace(/"/g, '""')}}",${{e.start_date || ''}},${{e.total_sales || 0}}\\n`;
+            }});
+
+            // BOMを追加（Excel対応）
+            const bom = '\\uFEFF';
+            const blob = new Blob([bom + csv], {{type: 'text/csv;charset=utf-8;'}});
+            const url = URL.createObjectURL(blob);
+
+            const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const filename = `年度別イベント比較_${{schoolInfo.school_name || '学校'}}_${{today}}.csv`;
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }}
 
         // 初期グラフ（月ごと売上推移：線グラフ）
