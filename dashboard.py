@@ -12,7 +12,6 @@ from pathlib import Path
 from database import get_connection
 from alerts import get_all_alerts, get_current_fiscal_year
 from analytics import get_all_analytics
-from ai_consultant import generate_ai_advice
 
 
 def get_available_fiscal_years(db_path=None):
@@ -151,9 +150,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
     # アラート件数
     alert_counts = {k: len(v) for k, v in alerts.items()}
     total_alerts = sum(alert_counts.values())
-
-    # AIコンサルタント分析を実行
-    ai_advice = generate_ai_advice(db_path)
 
     # 月別チャートデータ
     months_labels = [f"{d['month']}月" for d in stats['monthly_data']]
@@ -1054,115 +1050,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 <div id="yearly_comparison-container" style="display: none;"></div>
             </div>
         </div>'''
-
-    # 分析セクション
-    html += '''
-        <div class="analysis-grid">
-            <div class="analysis-card">
-                <h4>会員率連続低下校</h4>
-'''
-    for item in analytics.get('member_rate_trends', [])[:8]:
-        html += f'<div class="trend-item"><span>{item["school_name"][:25]}</span><span class="trend-down">{item["start_rate"]*100:.1f}% → {item["current_rate"]*100:.1f}%</span></div>'
-    if not analytics.get('member_rate_trends'):
-        html += '<p style="color:#888;text-align:center;padding:20px;">データなし</p>'
-    html += '</div>'
-
-    html += '''
-            <div class="analysis-card">
-                <h4>成長カーブ評価（遅れている学校）</h4>
-'''
-    for item in analytics.get('growth_curves', {}).get('evaluations', [])[:8]:
-        if item['status'] == 'behind' and item['expected_rate']:
-            html += f'<div class="trend-item"><span>{item["school_name"][:25]}</span><span class="trend-down">現在{item["current_rate"]*100:.1f}% (期待{item["expected_rate"]*100:.1f}%)</span></div>'
-    if not [x for x in analytics.get('growth_curves', {}).get('evaluations', []) if x['status'] == 'behind']:
-        html += '<p style="color:#888;text-align:center;padding:20px;">遅れている学校はありません</p>'
-    html += '</div>'
-
-    html += '''
-            <div class="analysis-card">
-                <h4>属性別 平均会員率</h4>
-'''
-    for item in analytics.get('by_attribute', []):
-        if item['avg_member_rate']:
-            rate = item['avg_member_rate'] * 100
-            color = '#10b981' if rate >= 60 else '#f59e0b' if rate >= 40 else '#ef4444'
-            html += f'<div class="trend-item"><span>{item["attribute"]} ({item["school_count"]}校)</span><span style="color:{color}">{rate:.1f}%</span></div>'
-    html += '</div></div>'
-
-    # AIコンサルタントセクションを追加
-    if ai_advice.get('available', False):
-        ai_status_badge = '<span class="status-badge success">利用可能</span>'
-        ai_model_info = f'モデル: {ai_advice.get("model", "不明")}'
-
-        html += f'''
-        <!-- AIコンサルタントセクション -->
-        <div class="chart-card" style="background: linear-gradient(135deg, #fefefe 0%, #f0f9ff 100%); border-left: 4px solid #3b82f6;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; border: none; padding: 0; display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 24px;">🤖</span>
-                    AIコンサルタント分析
-                    {ai_status_badge}
-                </h3>
-                <span style="font-size: 12px; color: #666;">{ai_model_info}</span>
-            </div>
-            <div style="background: white; border-radius: 12px; padding: 24px;">
-                <p style="margin-bottom: 20px; color: #475569; font-size: 14px; text-align: center;">
-                    AIがスクールフォト事業の売上データを分析し、経営アドバイスを生成します。<br>
-                    コマンドラインから以下のコマンドを実行してレポートを生成してください。
-                </p>
-                <div style="background: #1e293b; border-radius: 8px; padding: 16px; margin: 16px 0;">
-                    <p style="color: #94a3b8; font-size: 12px; margin-bottom: 8px;">📁 出力形式を選んで実行</p>
-                    <div style="display: flex; flex-direction: column; gap: 8px; font-family: 'Consolas', 'Monaco', monospace;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span style="color: #22c55e; min-width: 100px;">Markdown:</span>
-                            <code style="color: #f8fafc; background: #334155; padding: 6px 12px; border-radius: 4px; flex: 1;">python ai_consultant.py markdown</code>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span style="color: #3b82f6; min-width: 100px;">Word:</span>
-                            <code style="color: #f8fafc; background: #334155; padding: 6px 12px; border-radius: 4px; flex: 1;">python ai_consultant.py word</code>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span style="color: #f59e0b; min-width: 100px;">PDF:</span>
-                            <code style="color: #f8fafc; background: #334155; padding: 6px 12px; border-radius: 4px; flex: 1;">python ai_consultant.py pdf</code>
-                        </div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 16px; margin-top: 16px; font-size: 13px; color: #64748b;">
-                    <div style="flex: 1; padding: 12px; background: #f8fafc; border-radius: 8px;">
-                        <strong style="color: #475569;">📄 出力先</strong><br>
-                        <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">output/</code> フォルダ
-                    </div>
-                    <div style="flex: 1; padding: 12px; background: #f8fafc; border-radius: 8px;">
-                        <strong style="color: #475569;">⚙️ 必要環境</strong><br>
-                        Word: python-docx<br>
-                        PDF: pandoc + xelatex
-                    </div>
-                </div>
-            </div>
-        </div>
-        '''
-    else:
-        # Ollamaが利用不可の場合
-        html += '''
-        <!-- AIコンサルタントセクション（無効） -->
-        <div class="chart-card" style="background: #f8fafc; border-left: 4px solid #94a3b8;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 style="margin: 0; border: none; padding: 0; display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 24px;">🤖</span>
-                    AIコンサルタント分析
-                    <span class="status-badge info">未設定</span>
-                </h3>
-            </div>
-            <div style="text-align: center; padding: 40px 20px; color: #64748b;">
-                <p style="margin-bottom: 12px;">AIコンサルタント機能を利用するには、ローカルLLM（Ollama）のセットアップが必要です。</p>
-                <p style="font-size: 13px;">
-                    1. <a href="https://ollama.com" target="_blank" style="color: #3b82f6;">Ollama</a>をインストール<br>
-                    2. <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">ollama pull gemma2</code> でモデルをダウンロード<br>
-                    3. Ollamaを起動した状態でダッシュボードを再生成
-                </p>
-            </div>
-        </div>
-        '''
 
     html += f'''
         <div class="footer">
