@@ -468,13 +468,21 @@ def get_sales_filter_options(db_path=None):
     ''')
     persons = [row[0] for row in cursor.fetchall()]
 
-    # 学校一覧（事業所・写真館・担当者付き）
+    # 属性一覧
     cursor.execute('''
-        SELECT id, school_name, region, studio_name, manager
+        SELECT DISTINCT attribute FROM schools
+        WHERE attribute IS NOT NULL AND attribute != ''
+        ORDER BY attribute
+    ''')
+    attributes = [row[0] for row in cursor.fetchall()]
+
+    # 学校一覧（事業所・写真館・担当者・属性付き）
+    cursor.execute('''
+        SELECT id, school_name, region, studio_name, manager, attribute
         FROM schools
         ORDER BY school_name
     ''')
-    schools = [{'id': row[0], 'name': row[1], 'branch': row[2], 'studio': row[3], 'person': row[4]}
+    schools = [{'id': row[0], 'name': row[1], 'branch': row[2], 'studio': row[3], 'person': row[4], 'attribute': row[5]}
                for row in cursor.fetchall()]
 
     conn.close()
@@ -483,6 +491,7 @@ def get_sales_filter_options(db_path=None):
         'branches': branches,
         'studios': studios,
         'persons': persons,
+        'attributes': attributes,
         'schools': schools
     }
 

@@ -662,13 +662,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
             <div id="memberRatePanel" class="detail-panel">
                 <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 16px;">
                     <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <label style="font-size: 12px; color: #666; font-weight: 600;">属性</label>
-                        <select id="filterAttribute" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 180px;">
-                            <option value="">-- 全て --</option>
-                            {chr(10).join([f'<option value="{attr}">{attr}</option>' for attr in filter_options['attributes']])}
-                        </select>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
                         <label style="font-size: 12px; color: #666; font-weight: 600;">写真館</label>
                         <select id="filterStudio" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 180px;">
                             <option value="">-- 全て --</option>
@@ -676,9 +669,16 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         </select>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <label style="font-size: 12px; color: #666; font-weight: 600;">属性</label>
+                        <select id="filterAttribute" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 180px;">
+                            <option value="">-- 全て --</option>
+                            {chr(10).join([f'<option value="{attr}">{attr}</option>' for attr in filter_options['attributes']])}
+                        </select>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
                         <label style="font-size: 12px; color: #666; font-weight: 600;">学校名</label>
                         <select id="filterSchool" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 250px;">
-                            <option value="">-- 属性/写真館で絞り込み --</option>
+                            <option value="">-- 写真館/属性で絞り込み --</option>
                         </select>
                     </div>
                     <button onclick="searchMemberRate()" style="padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #3b82f6; color: white;">検索</button>
@@ -713,10 +713,10 @@ def generate_html_dashboard(db_path=None, output_path=None):
             <div id="salesPanel" class="detail-panel" style="display: none;">
                 <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 16px;">
                     <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <label style="font-size: 12px; color: #666; font-weight: 600;">事業所</label>
-                        <select id="salesFilterBranch" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 150px;">
+                        <label style="font-size: 12px; color: #666; font-weight: 600;">担当者</label>
+                        <select id="salesFilterPerson" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 150px;">
                             <option value="">-- 全て --</option>
-                            {chr(10).join([f'<option value="{b}">{b}</option>' for b in sales_filter_options['branches']])}
+                            {chr(10).join([f'<option value="{p}">{p}</option>' for p in sales_filter_options['persons']])}
                         </select>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -727,10 +727,10 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         </select>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <label style="font-size: 12px; color: #666; font-weight: 600;">担当者</label>
-                        <select id="salesFilterPerson" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 150px;">
+                        <label style="font-size: 12px; color: #666; font-weight: 600;">属性</label>
+                        <select id="salesFilterAttribute" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 150px;">
                             <option value="">-- 全て --</option>
-                            {chr(10).join([f'<option value="{p}">{p}</option>' for p in sales_filter_options['persons']])}
+                            {chr(10).join([f'<option value="{a}">{a}</option>' for a in sales_filter_options['attributes']])}
                         </select>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -855,7 +855,8 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         <option value="">-</option>
                         {' '.join([f'<option value="{str(d).zfill(2)}">{d}日</option>' for d in range(1, 32)])}
                     </select>
-                    <button onclick="filterNewEventLowByDate()" style="padding: 6px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-left: 8px;">絞り込む</button>
+                    <span style="margin: 0 8px; color: #666; font-size: 13px;">に公開したイベントを</span>
+                    <button onclick="filterNewEventLowByDate()" style="padding: 6px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">絞り込む</button>
                     <button class="csv-download-btn" onclick="downloadAlertCSV('new_event_low')">📥 CSV出力</button>
                 </div>
                 <div id="new_event_low-message" style="text-align: center; padding: 40px 20px; color: #888; font-size: 14px;">年を選択して「絞り込む」をクリックしてください</div>
@@ -1035,18 +1036,21 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         <option value="11">11月</option>
                         <option value="12">12月</option>
                     </select>
+                    <span style="margin: 0 4px; color: #666; font-size: 13px;">を</span>
                     <label>左年度<span style="color: #ef4444;">*</span>:</label>
                     <select id="yearly_comparison-left-year-filter" required>
                         {' '.join([f'<option value="{y}">{y}年度</option>' for y in available_years])}
                     </select>
+                    <span style="margin: 0 4px; color: #666; font-size: 13px;">と</span>
                     <label>右年度<span style="color: #ef4444;">*</span>:</label>
                     <select id="yearly_comparison-right-year-filter" required>
                         {' '.join([f'<option value="{y}"' + (' selected' if i == 1 else '') + f'>{y}年度</option>' for i, y in enumerate(available_years)])}
                     </select>
-                    <button onclick="filterYearlyComparisonAlert()" style="padding: 6px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">絞り込む</button>
+                    <span style="margin: 0 8px; color: #666; font-size: 13px;">で公開したイベントを</span>
+                    <button onclick="filterYearlyComparisonAlert()" style="padding: 6px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">比較する</button>
                     <button class="csv-download-btn" onclick="downloadYearlyComparisonCSV()">📥 CSV出力</button>
                 </div>
-                <div id="yearly_comparison-message" style="text-align: center; padding: 40px 20px; color: #888; font-size: 14px;"><span style="color: #ef4444;">*</span>は必須項目です。学校・月・年度を選択して「絞り込む」をクリックしてください</div>
+                <div id="yearly_comparison-message" style="text-align: center; padding: 40px 20px; color: #888; font-size: 14px;"><span style="color: #ef4444;">*</span>は必須項目です。学校・月・年度を選択して「比較する」をクリックしてください</div>
                 <div id="yearly_comparison-container" style="display: none;"></div>
             </div>
         </div>'''
@@ -1068,6 +1072,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
         const allBranches = {json.dumps(sales_filter_options['branches'], ensure_ascii=False)};
         const allSalesStudios = {json.dumps(sales_filter_options['studios'], ensure_ascii=False)};
         const allPersons = {json.dumps(sales_filter_options['persons'], ensure_ascii=False)};
+        const allSalesAttributes = {json.dumps(sales_filter_options['attributes'], ensure_ascii=False)};
         const allSalesSchoolData = {json.dumps(all_sales_school_data, ensure_ascii=False)};
         const allSalesStudioData = {json.dumps(all_sales_studio_data, ensure_ascii=False)};
         const allEventSalesData = {json.dumps(all_event_sales_data, ensure_ascii=False)};
@@ -1530,40 +1535,22 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }}
         }}
 
-        // 会員率フィルター（連動フィルタリング）
-        document.getElementById('filterAttribute').addEventListener('change', () => updateMemberRateFilters('attribute'));
+        // 会員率フィルター（連動フィルタリング）: 写真館→属性→学校名
         document.getElementById('filterStudio').addEventListener('change', () => updateMemberRateFilters('studio'));
+        document.getElementById('filterAttribute').addEventListener('change', () => updateMemberRateFilters('attribute'));
 
         function updateMemberRateFilters(changedFilter) {{
-            const attrSelect = document.getElementById('filterAttribute');
             const studioSelect = document.getElementById('filterStudio');
+            const attrSelect = document.getElementById('filterAttribute');
             const schoolSelect = document.getElementById('filterSchool');
 
-            const currentAttr = attrSelect.value;
             const currentStudio = studioSelect.value;
+            const currentAttr = attrSelect.value;
 
             // 現在の条件でデータをフィルタリング
             let filtered = schoolsData;
-            if (currentAttr) filtered = filtered.filter(s => s.attribute === currentAttr);
             if (currentStudio) filtered = filtered.filter(s => s.studio === currentStudio);
-
-            // 属性が変更された場合、写真館の選択肢を更新
-            if (changedFilter === 'attribute') {{
-                const availableStudios = [...new Set(filtered.map(s => s.studio).filter(Boolean))].sort();
-                const prevStudio = currentStudio;
-                studioSelect.innerHTML = '<option value="">-- 全て --</option>';
-                availableStudios.forEach(studio => {{
-                    const opt = document.createElement('option');
-                    opt.value = studio;
-                    opt.textContent = studio;
-                    if (studio === prevStudio) opt.selected = true;
-                    studioSelect.appendChild(opt);
-                }});
-                // 選択していた写真館がなくなった場合はリセット
-                if (prevStudio && !availableStudios.includes(prevStudio)) {{
-                    filtered = schoolsData.filter(s => !currentAttr || s.attribute === currentAttr);
-                }}
-            }}
+            if (currentAttr) filtered = filtered.filter(s => s.attribute === currentAttr);
 
             // 写真館が変更された場合、属性の選択肢を更新
             if (changedFilter === 'studio') {{
@@ -1583,15 +1570,33 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 }}
             }}
 
+            // 属性が変更された場合、写真館の選択肢を更新
+            if (changedFilter === 'attribute') {{
+                const availableStudios = [...new Set(filtered.map(s => s.studio).filter(Boolean))].sort();
+                const prevStudio = currentStudio;
+                studioSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availableStudios.forEach(studio => {{
+                    const opt = document.createElement('option');
+                    opt.value = studio;
+                    opt.textContent = studio;
+                    if (studio === prevStudio) opt.selected = true;
+                    studioSelect.appendChild(opt);
+                }});
+                // 選択していた写真館がなくなった場合はリセット
+                if (prevStudio && !availableStudios.includes(prevStudio)) {{
+                    filtered = schoolsData.filter(s => !currentAttr || s.attribute === currentAttr);
+                }}
+            }}
+
             // 再度最終的なフィルタリング
-            const finalAttr = attrSelect.value;
             const finalStudio = studioSelect.value;
+            const finalAttr = attrSelect.value;
             filtered = schoolsData;
-            if (finalAttr) filtered = filtered.filter(s => s.attribute === finalAttr);
             if (finalStudio) filtered = filtered.filter(s => s.studio === finalStudio);
+            if (finalAttr) filtered = filtered.filter(s => s.attribute === finalAttr);
 
             // 学校プルダウンを更新
-            schoolSelect.innerHTML = '<option value="">-- 属性/写真館で絞り込み --</option>';
+            schoolSelect.innerHTML = '<option value="">-- 写真館/属性で絞り込み --</option>';
             filtered.forEach(s => {{
                 const opt = document.createElement('option');
                 opt.value = s.id;
@@ -1601,16 +1606,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
         }}
 
         function resetMemberRateFilters() {{
-            // 属性プルダウンを初期状態に復元
-            const attrSelect = document.getElementById('filterAttribute');
-            attrSelect.innerHTML = '<option value="">-- 全て --</option>';
-            allAttributes.forEach(attr => {{
-                const opt = document.createElement('option');
-                opt.value = attr;
-                opt.textContent = attr;
-                attrSelect.appendChild(opt);
-            }});
-
             // 写真館プルダウンを初期状態に復元
             const studioSelect = document.getElementById('filterStudio');
             studioSelect.innerHTML = '<option value="">-- 全て --</option>';
@@ -1621,7 +1616,17 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 studioSelect.appendChild(opt);
             }});
 
-            document.getElementById('filterSchool').innerHTML = '<option value="">-- 属性/写真館で絞り込み --</option>';
+            // 属性プルダウンを初期状態に復元
+            const attrSelect = document.getElementById('filterAttribute');
+            attrSelect.innerHTML = '<option value="">-- 全て --</option>';
+            allAttributes.forEach(attr => {{
+                const opt = document.createElement('option');
+                opt.value = attr;
+                opt.textContent = attr;
+                attrSelect.appendChild(opt);
+            }});
+
+            document.getElementById('filterSchool').innerHTML = '<option value="">-- 写真館/属性で絞り込み --</option>';
             document.getElementById('gradeAll').checked = true;
             document.getElementById('showPrevYear').checked = true;
         }}
@@ -1751,29 +1756,29 @@ def generate_html_dashboard(db_path=None, output_path=None):
         document.getElementById('showPrevYear').addEventListener('change', renderMemberRateChart);
         document.querySelectorAll('input[name="gradeMode"]').forEach(el => el.addEventListener('change', searchMemberRate));
 
-        // 売上推移フィルター（連動フィルタリング）
-        document.getElementById('salesFilterBranch').addEventListener('change', () => updateSalesFilters('branch'));
-        document.getElementById('salesFilterStudio').addEventListener('change', () => updateSalesFilters('studio'));
+        // 売上推移フィルター（連動フィルタリング）: 担当者→写真館→属性→学校名
         document.getElementById('salesFilterPerson').addEventListener('change', () => updateSalesFilters('person'));
+        document.getElementById('salesFilterStudio').addEventListener('change', () => updateSalesFilters('studio'));
+        document.getElementById('salesFilterAttribute').addEventListener('change', () => updateSalesFilters('attribute'));
 
         function updateSalesFilters(changedFilter) {{
-            const branchSelect = document.getElementById('salesFilterBranch');
-            const studioSelect = document.getElementById('salesFilterStudio');
             const personSelect = document.getElementById('salesFilterPerson');
+            const studioSelect = document.getElementById('salesFilterStudio');
+            const attributeSelect = document.getElementById('salesFilterAttribute');
             const schoolSelect = document.getElementById('salesFilterSchool');
 
-            const currentBranch = branchSelect.value;
-            const currentStudio = studioSelect.value;
             const currentPerson = personSelect.value;
+            const currentStudio = studioSelect.value;
+            const currentAttribute = attributeSelect.value;
 
             // 現在の条件でデータをフィルタリング
             let filtered = salesSchoolsData;
-            if (currentBranch) filtered = filtered.filter(s => s.branch === currentBranch);
-            if (currentStudio) filtered = filtered.filter(s => s.studio === currentStudio);
             if (currentPerson) filtered = filtered.filter(s => s.person === currentPerson);
+            if (currentStudio) filtered = filtered.filter(s => s.studio === currentStudio);
+            if (currentAttribute) filtered = filtered.filter(s => s.attribute === currentAttribute);
 
-            // 事業所が変更された場合
-            if (changedFilter === 'branch') {{
+            // 担当者が変更された場合
+            if (changedFilter === 'person') {{
                 // 写真館の選択肢を更新
                 const availableStudios = [...new Set(filtered.map(s => s.studio).filter(Boolean))].sort();
                 const prevStudio = currentStudio;
@@ -1786,33 +1791,21 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     studioSelect.appendChild(opt);
                 }});
 
-                // 担当者の選択肢を更新
-                const availablePersons = [...new Set(filtered.map(s => s.person).filter(Boolean))].sort();
-                const prevPerson = currentPerson;
-                personSelect.innerHTML = '<option value="">-- 全て --</option>';
-                availablePersons.forEach(person => {{
+                // 属性の選択肢を更新
+                const availableAttrs = [...new Set(filtered.map(s => s.attribute).filter(Boolean))].sort();
+                const prevAttr = currentAttribute;
+                attributeSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availableAttrs.forEach(attr => {{
                     const opt = document.createElement('option');
-                    opt.value = person;
-                    opt.textContent = person;
-                    if (person === prevPerson) opt.selected = true;
-                    personSelect.appendChild(opt);
+                    opt.value = attr;
+                    opt.textContent = attr;
+                    if (attr === prevAttr) opt.selected = true;
+                    attributeSelect.appendChild(opt);
                 }});
             }}
 
             // 写真館が変更された場合
             if (changedFilter === 'studio') {{
-                // 事業所の選択肢を更新
-                const availableBranches = [...new Set(filtered.map(s => s.branch).filter(Boolean))].sort();
-                const prevBranch = currentBranch;
-                branchSelect.innerHTML = '<option value="">-- 全て --</option>';
-                availableBranches.forEach(branch => {{
-                    const opt = document.createElement('option');
-                    opt.value = branch;
-                    opt.textContent = branch;
-                    if (branch === prevBranch) opt.selected = true;
-                    branchSelect.appendChild(opt);
-                }});
-
                 // 担当者の選択肢を更新
                 const availablePersons = [...new Set(filtered.map(s => s.person).filter(Boolean))].sort();
                 const prevPerson = currentPerson;
@@ -1824,20 +1817,32 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     if (person === prevPerson) opt.selected = true;
                     personSelect.appendChild(opt);
                 }});
+
+                // 属性の選択肢を更新
+                const availableAttrs = [...new Set(filtered.map(s => s.attribute).filter(Boolean))].sort();
+                const prevAttr = currentAttribute;
+                attributeSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availableAttrs.forEach(attr => {{
+                    const opt = document.createElement('option');
+                    opt.value = attr;
+                    opt.textContent = attr;
+                    if (attr === prevAttr) opt.selected = true;
+                    attributeSelect.appendChild(opt);
+                }});
             }}
 
-            // 担当者が変更された場合
-            if (changedFilter === 'person') {{
-                // 事業所の選択肢を更新
-                const availableBranches = [...new Set(filtered.map(s => s.branch).filter(Boolean))].sort();
-                const prevBranch = currentBranch;
-                branchSelect.innerHTML = '<option value="">-- 全て --</option>';
-                availableBranches.forEach(branch => {{
+            // 属性が変更された場合
+            if (changedFilter === 'attribute') {{
+                // 担当者の選択肢を更新
+                const availablePersons = [...new Set(filtered.map(s => s.person).filter(Boolean))].sort();
+                const prevPerson = currentPerson;
+                personSelect.innerHTML = '<option value="">-- 全て --</option>';
+                availablePersons.forEach(person => {{
                     const opt = document.createElement('option');
-                    opt.value = branch;
-                    opt.textContent = branch;
-                    if (branch === prevBranch) opt.selected = true;
-                    branchSelect.appendChild(opt);
+                    opt.value = person;
+                    opt.textContent = person;
+                    if (person === prevPerson) opt.selected = true;
+                    personSelect.appendChild(opt);
                 }});
 
                 // 写真館の選択肢を更新
@@ -1854,13 +1859,13 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }}
 
             // 再度最終的なフィルタリング
-            const finalBranch = branchSelect.value;
-            const finalStudio = studioSelect.value;
             const finalPerson = personSelect.value;
+            const finalStudio = studioSelect.value;
+            const finalAttribute = attributeSelect.value;
             filtered = salesSchoolsData;
-            if (finalBranch) filtered = filtered.filter(s => s.branch === finalBranch);
-            if (finalStudio) filtered = filtered.filter(s => s.studio === finalStudio);
             if (finalPerson) filtered = filtered.filter(s => s.person === finalPerson);
+            if (finalStudio) filtered = filtered.filter(s => s.studio === finalStudio);
+            if (finalAttribute) filtered = filtered.filter(s => s.attribute === finalAttribute);
 
             // 学校プルダウンを更新
             schoolSelect.innerHTML = '<option value="">-- 絞り込みで選択 --</option>';
@@ -1873,14 +1878,14 @@ def generate_html_dashboard(db_path=None, output_path=None):
         }}
 
         function resetSalesFilters() {{
-            // 事業所プルダウンを初期状態に復元
-            const branchSelect = document.getElementById('salesFilterBranch');
-            branchSelect.innerHTML = '<option value="">-- 全て --</option>';
-            allBranches.forEach(branch => {{
+            // 担当者プルダウンを初期状態に復元
+            const personSelect = document.getElementById('salesFilterPerson');
+            personSelect.innerHTML = '<option value="">-- 全て --</option>';
+            allPersons.forEach(person => {{
                 const opt = document.createElement('option');
-                opt.value = branch;
-                opt.textContent = branch;
-                branchSelect.appendChild(opt);
+                opt.value = person;
+                opt.textContent = person;
+                personSelect.appendChild(opt);
             }});
 
             // 写真館プルダウンを初期状態に復元
@@ -1893,14 +1898,14 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 studioSelect.appendChild(opt);
             }});
 
-            // 担当者プルダウンを初期状態に復元
-            const personSelect = document.getElementById('salesFilterPerson');
-            personSelect.innerHTML = '<option value="">-- 全て --</option>';
-            allPersons.forEach(person => {{
+            // 属性プルダウンを初期状態に復元
+            const attributeSelect = document.getElementById('salesFilterAttribute');
+            attributeSelect.innerHTML = '<option value="">-- 全て --</option>';
+            allSalesAttributes.forEach(attr => {{
                 const opt = document.createElement('option');
-                opt.value = person;
-                opt.textContent = person;
-                personSelect.appendChild(opt);
+                opt.value = attr;
+                opt.textContent = attr;
+                attributeSelect.appendChild(opt);
             }});
 
             document.getElementById('salesFilterSchool').innerHTML = '<option value="">-- 絞り込みで選択 --</option>';
