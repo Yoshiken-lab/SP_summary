@@ -550,7 +550,7 @@ def generate_member_rate_page(db_path=None, output_path=None):
                         }},
                         y: {{
                             min: 0,
-                            max: 100,
+                            max: calculateYAxisMax(datasets),
                             title: {{
                                 display: true,
                                 text: '会員率 (%)'
@@ -694,6 +694,22 @@ def generate_member_rate_page(db_path=None, output_path=None):
             link.href = URL.createObjectURL(blob);
             link.download = `会員率推移_${{title}}_${{new Date().toISOString().slice(0, 10)}}.csv`;
             link.click();
+        }}
+
+        // Y軸の最大値を動的に計算
+        function calculateYAxisMax(datasets) {{
+            let maxValue = 100; // 最小値は100%
+            datasets.forEach(ds => {{
+                if (ds.data && ds.data.length > 0) {{
+                    ds.data.forEach(point => {{
+                        if (point.y > maxValue) {{
+                            maxValue = point.y;
+                        }}
+                    }});
+                }}
+            }});
+            // 10%単位で切り上げ（例: 105% → 110%, 120% → 120%）
+            return Math.ceil(maxValue / 10) * 10;
         }}
 
         // オプション変更時に再描画

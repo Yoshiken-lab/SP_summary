@@ -73,7 +73,7 @@ def get_member_rate_trend_by_school(school_id, by_grade=False, target_fy=None, d
     Args:
         school_id: 学校ID
         by_grade: True=学年別, False=全学年まとめ
-        target_fy: 対象年度（例: 2024 = 2024年4月〜2025年3月）。Noneの場合は全期間
+        target_fy: 対象年度（例: 2024 = 2024年4月〜2025年3月）。Noneの場合は現在年度
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
@@ -87,35 +87,28 @@ def get_member_rate_trend_by_school(school_id, by_grade=False, target_fy=None, d
 
     school_name, attribute = school_info
 
-    # 年度フィルタの日付範囲を計算
-    date_filter = ""
-    date_params = []
-    if target_fy:
-        start_date = f"{target_fy}-04-01"
-        end_date = f"{target_fy + 1}-03-31"
-        date_filter = " AND m.snapshot_date >= ? AND m.snapshot_date <= ?"
-        date_params = [start_date, end_date]
+    # 対象年度が未指定の場合、データから最新年度を取得
+    if target_fy is None:
+        cursor.execute('''
+            SELECT MAX(fiscal_year) FROM member_rates WHERE school_id = ? AND fiscal_year IS NOT NULL
+        ''', (school_id,))
+        row = cursor.fetchone()
+        target_fy = row[0] if row and row[0] else 2025
+
+    prev_fy = target_fy - 1
 
     # イベント開始日を取得（アノテーション用）
-    if target_fy:
-        cursor.execute('''
-            SELECT event_name, start_date, fiscal_year
-            FROM events
-            WHERE school_id = ? AND fiscal_year = ? AND start_date IS NOT NULL
-            ORDER BY start_date
-        ''', (school_id, target_fy))
-    else:
-        cursor.execute('''
-            SELECT event_name, start_date, fiscal_year
-            FROM events
-            WHERE school_id = ? AND start_date IS NOT NULL
-            ORDER BY start_date
-        ''', (school_id,))
+    cursor.execute('''
+        SELECT event_name, start_date, fiscal_year
+        FROM events
+        WHERE school_id = ? AND fiscal_year IN (?, ?) AND start_date IS NOT NULL
+        ORDER BY start_date
+    ''', (school_id, target_fy, prev_fy))
     events = [{'name': row[0], 'date': str(row[1]), 'year': row[2]} for row in cursor.fetchall()]
 
     if by_grade:
-        # 学年別データ - スナップショット日を時系列で表示
-        query = f'''
+        # 学年別データ - 今年度と前年度を取得
+        query = '''
             SELECT
                 m.snapshot_date,
                 m.fiscal_year,
@@ -124,60 +117,73 @@ def get_member_rate_trend_by_school(school_id, by_grade=False, target_fy=None, d
                 SUM(m.student_count) as students,
                 SUM(m.member_count) as members
             FROM member_rates m
-            WHERE m.school_id = ?{date_filter}
+            WHERE m.school_id = ? AND m.fiscal_year IN (?, ?)
             GROUP BY m.snapshot_date, m.fiscal_year, m.grade_category, m.grade_name
             ORDER BY m.snapshot_date, m.grade_category
         '''
-        cursor.execute(query, (school_id, *date_params))
+        cursor.execute(query, (school_id, target_fy, prev_fy))
 
-        # 学年ごとにグループ化
-        grade_data = defaultdict(lambda: {'dates': [], 'rates': []})
+        # 学年ごと・年度ごとにグループ化
+        current_grade_data = defaultdict(lambda: {'dates': [], 'rates': []})
+        prev_grade_data = defaultdict(lambda: {'dates': [], 'rates': []})
+
         for row in cursor.fetchall():
             snapshot_date, fiscal_year, grade_cat, grade_name, students, members = row
             rate = members / students if students > 0 else 0
 
             key = grade_name or grade_cat or '不明'
-            grade_data[key]['dates'].append(str(snapshot_date))
-            grade_data[key]['rates'].append(round(rate * 100, 1))
+            if fiscal_year == target_fy:
+                current_grade_data[key]['dates'].append(str(snapshot_date))
+                current_grade_data[key]['rates'].append(round(rate * 100, 1))
+            elif fiscal_year == prev_fy:
+                prev_grade_data[key]['dates'].append(str(snapshot_date))
+                prev_grade_data[key]['rates'].append(round(rate * 100, 1))
 
         result = {
             'school_name': school_name,
             'attribute': attribute,
             'by_grade': True,
-            'current_year': dict(grade_data),
-            'prev_year': {},
+            'current_year': dict(current_grade_data),
+            'prev_year': dict(prev_grade_data),
             'events': events,
             'fiscal_year': target_fy
         }
 
     else:
-        # 全学年まとめ
-        query = f'''
+        # 全学年まとめ - 今年度と前年度を取得
+        query = '''
             SELECT
                 m.snapshot_date,
+                m.fiscal_year,
                 SUM(m.student_count) as students,
                 SUM(m.member_count) as members
             FROM member_rates m
-            WHERE m.school_id = ?{date_filter}
-            GROUP BY m.snapshot_date
+            WHERE m.school_id = ? AND m.fiscal_year IN (?, ?)
+            GROUP BY m.snapshot_date, m.fiscal_year
             ORDER BY m.snapshot_date
         '''
-        cursor.execute(query, (school_id, *date_params))
+        cursor.execute(query, (school_id, target_fy, prev_fy))
 
-        all_data = {'dates': [], 'rates': []}
+        current_data = {'dates': [], 'rates': []}
+        prev_data = {'dates': [], 'rates': []}
 
         for row in cursor.fetchall():
-            snapshot_date, students, members = row
+            snapshot_date, fiscal_year, students, members = row
             rate = members / students if students > 0 else 0
-            all_data['dates'].append(str(snapshot_date))
-            all_data['rates'].append(round(rate * 100, 1))
+
+            if fiscal_year == target_fy:
+                current_data['dates'].append(str(snapshot_date))
+                current_data['rates'].append(round(rate * 100, 1))
+            elif fiscal_year == prev_fy:
+                prev_data['dates'].append(str(snapshot_date))
+                prev_data['rates'].append(round(rate * 100, 1))
 
         result = {
             'school_name': school_name,
             'attribute': attribute,
             'by_grade': False,
-            'current_year': all_data,
-            'prev_year': {'dates': [], 'rates': []},
+            'current_year': current_data,
+            'prev_year': prev_data,
             'events': events,
             'fiscal_year': target_fy
         }
