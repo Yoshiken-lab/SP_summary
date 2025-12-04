@@ -65,6 +65,18 @@ def determine_fiscal_year_from_month(month):
     return None  # 使用しない
 
 
+def excel_serial_to_month(serial_value):
+    """Excelシリアル日付値から月を抽出"""
+    try:
+        if isinstance(serial_value, (int, float)) and 40000 < serial_value < 60000:
+            # Excelシリアル値を日付に変換
+            date = pd.Timestamp('1899-12-30') + pd.Timedelta(days=int(serial_value))
+            return date.month
+    except:
+        pass
+    return None
+
+
 def import_sales_summary(xlsx, cursor, report_id):
     """売上シートから月別サマリーを取り込み"""
     df = pd.read_excel(xlsx, sheet_name='売上', header=None)
@@ -84,8 +96,20 @@ def import_sales_summary(xlsx, cursor, report_id):
             header_row = df.iloc[i - 1]  # 1つ上が月ヘッダー
 
             for col_idx, header_val in enumerate(header_row):
-                if pd.notna(header_val) and '月' in str(header_val):
-                    month = int(re.search(r'(\d{1,2})', str(header_val)).group(1))
+                if pd.isna(header_val):
+                    continue
+
+                month = None
+                # パターン1: 「4月」「2024年4月」などの文字列形式
+                if '月' in str(header_val):
+                    match = re.search(r'(\d{1,2})', str(header_val))
+                    if match:
+                        month = int(match.group(1))
+                # パターン2: Excelシリアル日付値（45748.0など）
+                elif isinstance(header_val, (int, float)):
+                    month = excel_serial_to_month(header_val)
+
+                if month:
 
                     # 各指標を取得
                     total_sales = df.iloc[i, col_idx] if pd.notna(df.iloc[i, col_idx]) else None
