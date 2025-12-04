@@ -274,9 +274,9 @@ def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):
                 ''', (report_id, event_id, fy, month, float(sales)))
 
 
-def import_member_rates(xlsx, cursor, report_id, report_date):
+def import_member_rates(xlsx, cursor, report_id, report_date, sheet_name='会員率'):
     """会員率シートを取り込み"""
-    df = pd.read_excel(xlsx, sheet_name='会員率', header=None)
+    df = pd.read_excel(xlsx, sheet_name=sheet_name, header=None)
 
     # ヘッダー行を探す
     header_row_idx = None
@@ -431,20 +431,54 @@ def import_school_comparison(xlsx, cursor, report_id):
                 ''', (report_id, school_id, fiscal_year, float(sales)))
 
 
-def detect_fiscal_year_from_path(file_path):
-    """ファイルパスから年度を推測（2024年フォルダなら2024年度）"""
-    path_str = str(file_path)
-    # パスに「2024年」「2025年」などが含まれているか確認
-    match = re.search(r'(\d{4})年', path_str)
+def extract_fiscal_year_from_sheet_name(sheet_name):
+    """シート名から年度を抽出（例: '学校別（2024年度）' → 2024）"""
+    # パターン1: 「2024年度」形式
+    match = re.search(r'(\d{4})年度', sheet_name)
     if match:
         return int(match.group(1))
-    # ファイル名から日付を抽出して年度を推測
+    # パターン2: 「(2024)」や「（2024）」形式
+    match = re.search(r'[（(](\d{4})[）)]', sheet_name)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def detect_fiscal_year_from_path(file_path):
+    """ファイルパスから年度を推測（2024年度フォルダなら2024年度）"""
+    path_str = str(file_path)
+
+    # 優先度1: 「2024年度」形式（年度が明示されている）
+    match = re.search(r'(\d{4})年度', path_str)
+    if match:
+        return int(match.group(1))
+
+    # 優先度2: 「2024年」形式（後方互換性のため残すが、非推奨）
+    # ※この場合、ファイル作成日を見て年度を判定
+    match = re.search(r'(\d{4})年[^度]', path_str)
+    if match:
+        folder_year = int(match.group(1))
+        # ファイル名から日付を抽出して、年度との整合性を確認
+        date_match = re.search(r'(\d{4})(\d{2})(\d{2})', file_path.name)
+        if date_match:
+            file_year = int(date_match.group(1))
+            file_month = int(date_match.group(2))
+            # ファイル作成日から年度を計算
+            file_fiscal_year = file_year if file_month >= 4 else file_year - 1
+            # フォルダの年と異なる場合は警告（ただしファイルの年度を優先）
+            if file_fiscal_year != folder_year:
+                print(f"  警告: フォルダ年({folder_year})とファイル年度({file_fiscal_year})が異なります")
+            return file_fiscal_year
+        return folder_year
+
+    # 優先度3: ファイル名から日付を抽出して年度を推測
     date_match = re.search(r'(\d{4})(\d{2})(\d{2})', file_path.name)
     if date_match:
         year = int(date_match.group(1))
         month = int(date_match.group(2))
         # 4月始まりの年度計算
         return year if month >= 4 else year - 1
+
     return 2024  # デフォルト
 
 
@@ -491,21 +525,33 @@ def import_excel(file_path, db_path=None):
 
         for sheet_name in sheet_names:
             if '学校別' in sheet_name and '比較' not in sheet_name:
-                # シート名から年度を抽出、なければパスから推測した年度を使用
-                match = re.search(r'(\d{4})', sheet_name)
-                fiscal_year = int(match.group(1)) if match else default_fiscal_year
+                # シート名から年度を抽出（優先）、なければパスから推測した年度を使用
+                fiscal_year = extract_fiscal_year_from_sheet_name(sheet_name)
+                if fiscal_year is None:
+                    fiscal_year = default_fiscal_year
+                    print(f"  警告: {sheet_name}から年度を抽出できません。デフォルト年度({default_fiscal_year})を使用します")
                 print(f"  {sheet_name}を取り込み中（{fiscal_year}年度）...")
                 import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year)
 
             elif 'イベント別' in sheet_name:
-                match = re.search(r'(\d{4})', sheet_name)
-                fiscal_year = int(match.group(1)) if match else default_fiscal_year
+                # シート名から年度を抽出（優先）、なければパスから推測した年度を使用
+                fiscal_year = extract_fiscal_year_from_sheet_name(sheet_name)
+                if fiscal_year is None:
+                    fiscal_year = default_fiscal_year
+                    print(f"  警告: {sheet_name}から年度を抽出できません。デフォルト年度({default_fiscal_year})を使用します")
                 print(f"  {sheet_name}を取り込み中（{fiscal_year}年度）...")
                 import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year)
 
-        if '会員率' in sheet_names:
-            print("  会員率を取り込み中...")
-            import_member_rates(xlsx, cursor, report_id, report_date)
+        # 会員率シートを探す（「会員率」を含むシート名）
+        member_rate_sheet = None
+        for sheet_name in sheet_names:
+            if '会員率' in sheet_name:
+                member_rate_sheet = sheet_name
+                break
+
+        if member_rate_sheet:
+            print(f"  {member_rate_sheet}を取り込み中...")
+            import_member_rates(xlsx, cursor, report_id, report_date, member_rate_sheet)
 
         if '学校別売り上げ比較' in sheet_names:
             print("  学校別売り上げ比較を取り込み中...")
