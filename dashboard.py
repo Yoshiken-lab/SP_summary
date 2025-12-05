@@ -645,16 +645,10 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
         <!-- 詳細グラフセクション（会員率推移・学校別売上推移） -->
         <div class="chart-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 16px;">
                 <div style="display: flex; gap: 0; border-bottom: 2px solid #e2e8f0;">
                     <button id="tabMemberRate" onclick="switchDetailTab('memberRate')" class="detail-tab active" style="padding: 12px 24px; border: none; background: transparent; font-size: 16px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">会員率推移</button>
                     <button id="tabSales" onclick="switchDetailTab('sales')" class="detail-tab" style="padding: 12px 24px; border: none; background: transparent; font-size: 16px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">学校別売上推移</button>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <label style="font-size: 14px; color: #666; font-weight: 600;">年度:</label>
-                    <select id="detailYearSelect" onchange="changeDetailYear()" style="padding: 8px 14px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; cursor: pointer; background: white;">
-                        {chr(10).join([f'<option value="{y}" {"selected" if y == stats["fiscal_year"] else ""}>{y}年度</option>' for y in available_years])}
-                    </select>
                 </div>
             </div>
 
@@ -679,6 +673,12 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         <label style="font-size: 12px; color: #666; font-weight: 600;">学校名</label>
                         <select id="filterSchool" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 250px;">
                             <option value="">-- 写真館/属性で絞り込み --</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <label style="font-size: 12px; color: #666; font-weight: 600;">年度</label>
+                        <select id="detailYearSelect" onchange="changeDetailYear()" style="padding: 10px 14px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; cursor: pointer; background: white; min-width: 120px;">
+                            {chr(10).join([f'<option value="{y}" {"selected" if y == stats["fiscal_year"] else ""}>{y}年度</option>' for y in available_years])}
                         </select>
                     </div>
                     <button onclick="searchMemberRate()" style="padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #3b82f6; color: white;">検索</button>
@@ -737,6 +737,12 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         <label style="font-size: 12px; color: #666; font-weight: 600;">学校名</label>
                         <select id="salesFilterSchool" style="padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 250px;">
                             <option value="">-- 絞り込みで選択 --</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <label style="font-size: 12px; color: #666; font-weight: 600;">年度</label>
+                        <select id="salesYearSelect" onchange="changeSalesYear()" style="padding: 10px 14px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; cursor: pointer; background: white; min-width: 120px;">
+                            {chr(10).join([f'<option value="{y}" {"selected" if y == stats["fiscal_year"] else ""}>{y}年度</option>' for y in available_years])}
                         </select>
                     </div>
                     <button onclick="searchSalesTrend()" style="padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #3b82f6; color: white;">検索</button>
@@ -1154,13 +1160,27 @@ def generate_html_dashboard(db_path=None, output_path=None):
             }}
         }}
 
-        // 会員率推移・学校別売上推移の年度切り替え関数
+        // 会員率推移の年度切り替え関数
         function changeDetailYear() {{
             const selectedYear = document.getElementById('detailYearSelect').value;
             currentDetailYear = parseInt(selectedYear);
-            // 現在表示中のデータがあれば再検索を促すメッセージを表示
-            // （年度別データは動的に取得する必要があるため、ここでは選択値を保持するのみ）
-            console.log('詳細年度変更:', selectedYear);
+            // 現在表示中のデータがあれば自動的に再検索
+            const attr = document.getElementById('filterAttribute').value;
+            const schoolId = document.getElementById('filterSchool').value;
+            if (attr || schoolId) {{
+                searchMemberRate();
+            }}
+        }}
+
+        // 学校別売上推移の年度切り替え関数
+        function changeSalesYear() {{
+            const selectedYear = document.getElementById('salesYearSelect').value;
+            // 現在表示中のデータがあれば自動的に再検索
+            const studio = document.getElementById('salesFilterStudio').value;
+            const schoolId = document.getElementById('salesFilterSchool').value;
+            if (studio || schoolId) {{
+                searchSalesTrend();
+            }}
         }}
 
         // 月別グラフ更新
@@ -1703,6 +1723,16 @@ def generate_html_dashboard(db_path=None, output_path=None):
             const ctx = document.getElementById('memberRateChart').getContext('2d');
             if (memberRateChart) memberRateChart.destroy();
 
+            // データの最大値を取得してY軸の最大値を動的に設定
+            let maxRate = 100;
+            datasets.forEach(ds => {{
+                ds.data.forEach(point => {{
+                    if (point.y > maxRate) maxRate = point.y;
+                }});
+            }});
+            // 最大値に10%の余裕を持たせ、10刻みに切り上げ
+            const yMax = Math.ceil((maxRate * 1.1) / 10) * 10;
+
             memberRateChart = new Chart(ctx, {{
                 type: 'line',
                 data: {{ datasets }},
@@ -1715,7 +1745,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     }},
                     scales: {{
                         x: {{ type: 'category', title: {{ display: true, text: '日付' }} }},
-                        y: {{ min: 0, max: 100, title: {{ display: true, text: '会員率 (%)' }}, ticks: {{ callback: v => v + '%' }} }}
+                        y: {{ min: 0, max: yMax, title: {{ display: true, text: '会員率 (%)' }}, ticks: {{ callback: v => v + '%' }} }}
                     }}
                 }}
             }});
@@ -1919,7 +1949,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
         function searchSalesTrend() {{
             const studio = document.getElementById('salesFilterStudio').value;
             const schoolId = document.getElementById('salesFilterSchool').value;
-            const selectedYear = document.getElementById('detailYearSelect').value;
+            const selectedYear = document.getElementById('salesYearSelect').value;
 
             if (schoolId) {{
                 // 年度別キーでデータを取得
@@ -2042,18 +2072,29 @@ def generate_html_dashboard(db_path=None, output_path=None):
             const yoy = currentSalesData.yoy ? (currentSalesData.yoy * 100).toFixed(1) : '-';
             document.getElementById('salesChartInfo').textContent = `今年度累計: ¥${{currentSalesData.current_total?.toLocaleString() || 0}} / 前年比: ${{yoy}}%`;
 
+            // 固定の月順序（年度順：4月〜3月）
+            const monthOrder = ['4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月', '1月', '2月', '3月'];
+
+            // データを月順序にマッピングする関数
+            function mapDataToMonthOrder(dates, sales) {{
+                const dataMap = {{}};
+                dates.forEach((d, i) => {{ dataMap[d] = sales[i]; }});
+                return monthOrder.map(m => dataMap[m] ?? null);
+            }}
+
             const datasets = [];
             const current = currentSalesData.current_year;
             if (current?.dates?.length > 0) {{
                 datasets.push({{
                     label: '今年度',
-                    data: current.dates.map((d, i) => ({{ x: d, y: current.sales[i] }})),
+                    data: mapDataToMonthOrder(current.dates, current.sales),
                     borderColor: '#3b82f6',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     borderWidth: 3,
                     fill: true,
                     tension: 0.3,
-                    pointRadius: 5
+                    pointRadius: 5,
+                    spanGaps: true
                 }});
             }}
 
@@ -2061,13 +2102,14 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 const prev = currentSalesData.prev_year;
                 datasets.push({{
                     label: '前年度',
-                    data: prev.dates.map((d, i) => ({{ x: d, y: prev.sales[i] }})),
+                    data: mapDataToMonthOrder(prev.dates, prev.sales),
                     borderColor: '#888',
                     backgroundColor: 'transparent',
                     borderWidth: 2,
                     borderDash: [5, 5],
                     tension: 0.3,
-                    pointRadius: 3
+                    pointRadius: 3,
+                    spanGaps: true
                 }});
             }}
 
@@ -2076,7 +2118,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
             salesTrendChart = new Chart(ctx, {{
                 type: 'line',
-                data: {{ datasets }},
+                data: {{ labels: monthOrder, datasets }},
                 options: {{
                     responsive: true,
                     maintainAspectRatio: false,
