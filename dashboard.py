@@ -692,10 +692,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         <input type="radio" name="gradeMode" id="gradeEach" value="each" style="width: 18px; height: 18px; accent-color: #3b82f6;">
                         <label for="gradeEach" style="font-size: 14px; color: #333; cursor: pointer;">学年別に表示</label>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="showPrevYear" checked style="width: 18px; height: 18px; accent-color: #3b82f6;">
-                        <label for="showPrevYear" style="font-size: 14px; color: #333; cursor: pointer;">前年度を表示</label>
-                    </div>
                     <button onclick="exportMemberRateCSV()" style="padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #e2e8f0; color: #475569;">CSVエクスポート</button>
                 </div>
 
@@ -1647,7 +1643,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
             document.getElementById('filterSchool').innerHTML = '<option value="">-- 写真館/属性で絞り込み --</option>';
             document.getElementById('gradeAll').checked = true;
-            document.getElementById('showPrevYear').checked = true;
         }}
 
         function searchMemberRate() {{
@@ -1674,10 +1669,38 @@ def generate_html_dashboard(db_path=None, output_path=None):
             else alert(selectedYear + '年度のデータが見つかりませんでした');
         }}
 
+        // 日付データを月別に変換（同じ月は最新データを使用）
+        function convertToMonthlyData(dates, rates) {{
+            const monthlyMap = {{}};
+            // 年度の月順序（4月〜3月）
+            const fiscalMonthOrder = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
+
+            dates.forEach((dateStr, i) => {{
+                const date = new Date(dateStr);
+                const month = date.getMonth() + 1; // 1-12
+                const monthKey = month + '月';
+
+                // 同じ月のデータは後のもの（最新）で上書き
+                if (!monthlyMap[month] || new Date(dateStr) > new Date(monthlyMap[month].date)) {{
+                    monthlyMap[month] = {{ date: dateStr, rate: rates[i], month: month }};
+                }}
+            }});
+
+            // 年度順（4月〜3月）にソート
+            const result = {{ months: [], rates: [] }};
+            fiscalMonthOrder.forEach(m => {{
+                if (monthlyMap[m]) {{
+                    result.months.push(m + '月');
+                    result.rates.push(monthlyMap[m].rate);
+                }}
+            }});
+
+            return result;
+        }}
+
         function renderMemberRateChart() {{
             if (!currentMemberRateData) return;
 
-            const showPrevYear = document.getElementById('showPrevYear').checked;
             const fiscalYear = currentMemberRateData.fiscal_year || currentDetailYear;
             const baseName = currentMemberRateData.school_name || `${{currentMemberRateData.attribute}}（${{currentMemberRateData.school_count}}校平均）`;
             const title = `${{baseName}} - ${{fiscalYear}}年度`;
@@ -1685,16 +1708,20 @@ def generate_html_dashboard(db_path=None, output_path=None):
             document.getElementById('memberRateChartInfo').textContent = currentMemberRateData.attribute ? `属性: ${{currentMemberRateData.attribute}}` : '';
 
             const datasets = [];
+            // X軸のラベル（4月〜3月）
+            const allMonths = ['4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月', '1月', '2月', '3月'];
 
             if (currentMemberRateData.by_grade && typeof currentMemberRateData.current_year === 'object' && !Array.isArray(currentMemberRateData.current_year)) {{
+                // 学年別表示
                 const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
                 let colorIdx = 0;
 
                 for (const [grade, data] of Object.entries(currentMemberRateData.current_year)) {{
                     if (data.dates?.length > 0) {{
+                        const monthly = convertToMonthlyData(data.dates, data.rates);
                         datasets.push({{
                             label: `${{grade}}`,
-                            data: data.dates.map((d, i) => ({{ x: d, y: data.rates[i] }})),
+                            data: monthly.months.map((m, i) => ({{ x: m, y: monthly.rates[i] }})),
                             borderColor: colors[colorIdx % colors.length],
                             backgroundColor: 'transparent',
                             borderWidth: 2,
@@ -1705,11 +1732,13 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     colorIdx++;
                 }}
             }} else {{
+                // 全学年まとめて表示
                 const current = currentMemberRateData.current_year;
                 if (current?.dates?.length > 0) {{
+                    const monthly = convertToMonthlyData(current.dates, current.rates);
                     datasets.push({{
                         label: fiscalYear + '年度',
-                        data: current.dates.map((d, i) => ({{ x: d, y: current.rates[i] }})),
+                        data: monthly.months.map((m, i) => ({{ x: m, y: monthly.rates[i] }})),
                         borderColor: '#3b82f6',
                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
                         borderWidth: 3,
@@ -1735,7 +1764,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
             memberRateChart = new Chart(ctx, {{
                 type: 'line',
-                data: {{ datasets }},
+                data: {{ labels: allMonths, datasets }},
                 options: {{
                     responsive: true,
                     maintainAspectRatio: false,
@@ -1744,7 +1773,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         tooltip: {{ callbacks: {{ label: ctx => `${{ctx.dataset.label}}: ${{ctx.parsed.y}}%` }} }}
                     }},
                     scales: {{
-                        x: {{ type: 'category', title: {{ display: true, text: '日付' }} }},
+                        x: {{ type: 'category', title: {{ display: true, text: '月' }} }},
                         y: {{ min: 0, max: yMax, title: {{ display: true, text: '会員率 (%)' }}, ticks: {{ callback: v => v + '%' }} }}
                     }}
                 }}
@@ -1782,7 +1811,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
             link.click();
         }}
 
-        document.getElementById('showPrevYear').addEventListener('change', renderMemberRateChart);
         document.querySelectorAll('input[name="gradeMode"]').forEach(el => el.addEventListener('change', searchMemberRate));
 
         // 売上推移フィルター（連動フィルタリング）: 事業所→担当者→写真館→学校名
