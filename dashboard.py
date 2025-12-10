@@ -194,15 +194,17 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 all_attribute_data[f"attr_{attr}_{year}"] = data
 
     # 売上推移データを事前取得（年度別）
-    # 2024年度と2025年度のデータを取得（2023年度は売上推移データ未収集のためスキップ）
-    target_years = [y for y in available_years if y >= 2024]
+    # 全年度のデータを取得（2023年度以降で売上データがある学校は表示可能）
+    target_years = available_years
 
     all_sales_school_data = {}
     all_event_sales_data = {}
     for school in sales_filter_options['schools']:
         for year in target_years:
             data = get_sales_trend_by_school(school['id'], target_fy=year, db_path=db_path)
-            if data and (data['current_year']['dates'] or data['prev_year']['dates']):
+            # 指定した年度のデータが実際に存在する場合のみ保存
+            # （フォールバックで別年度のデータが返ってきた場合は保存しない）
+            if data and data.get('fiscal_year') == year and (data['current_year']['dates'] or data['prev_year']['dates']):
                 all_sales_school_data[f"school_{school['id']}_{year}"] = data
         # イベント別売上も取得
         event_data = get_event_sales_by_school(school['id'], db_path=db_path)
@@ -213,7 +215,8 @@ def generate_html_dashboard(db_path=None, output_path=None):
     for studio in sales_filter_options['studios']:
         for year in target_years:
             data = get_sales_trend_by_studio(studio, target_fy=year, db_path=db_path)
-            if data and (data['current_year']['dates'] or data['prev_year']['dates']):
+            # 指定した年度のデータが実際に存在する場合のみ保存
+            if data and data.get('fiscal_year') == year and (data['current_year']['dates'] or data['prev_year']['dates']):
                 all_sales_studio_data[f"studio_{studio}_{year}"] = data
 
     html = f'''<!DOCTYPE html>
@@ -2094,11 +2097,12 @@ def generate_html_dashboard(db_path=None, output_path=None):
             if (!currentSalesData) return;
 
             const showPrevYear = document.getElementById('showSalesPrevYear').checked;
+            const selectedYear = parseInt(document.getElementById('salesYearSelect').value);
             let title = currentSalesData.school_name || `${{currentSalesData.studio_name}}（${{currentSalesData.school_count}}校）`;
-            document.getElementById('salesChartTitle').textContent = title;
+            document.getElementById('salesChartTitle').textContent = `${{title}} - ${{selectedYear}}年度`;
 
             const yoy = currentSalesData.yoy ? (currentSalesData.yoy * 100).toFixed(1) : '-';
-            document.getElementById('salesChartInfo').textContent = `今年度累計: ¥${{currentSalesData.current_total?.toLocaleString() || 0}} / 前年比: ${{yoy}}%`;
+            document.getElementById('salesChartInfo').textContent = `${{selectedYear}}年度累計: ¥${{currentSalesData.current_total?.toLocaleString() || 0}} / 前年比: ${{yoy}}%`;
 
             // 固定の月順序（年度順：4月〜3月）
             const monthOrder = ['4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月', '1月', '2月', '3月'];
@@ -2114,7 +2118,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
             const current = currentSalesData.current_year;
             if (current?.dates?.length > 0) {{
                 datasets.push({{
-                    label: '今年度',
+                    label: selectedYear + '年度',
                     data: mapDataToMonthOrder(current.dates, current.sales),
                     borderColor: '#3b82f6',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -2129,7 +2133,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
             if (showPrevYear && currentSalesData.prev_year?.dates?.length > 0) {{
                 const prev = currentSalesData.prev_year;
                 datasets.push({{
-                    label: '前年度',
+                    label: (selectedYear - 1) + '年度',
                     data: mapDataToMonthOrder(prev.dates, prev.sales),
                     borderColor: '#888',
                     backgroundColor: 'transparent',

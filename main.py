@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from database import init_database, DEFAULT_DB_PATH
-from importer import import_excel, import_all_from_directory
+from importer import import_excel, import_all_from_directory, sync_school_master
 from dashboard import generate_html_dashboard
 from member_rate_page import generate_member_rate_page
 
@@ -48,6 +48,7 @@ def show_help():
     print("  all                                     - 全ページ生成")
     print("  init [--force]                          - DB初期化")
     print("  status                                  - DB状態確認")
+    print("  sync-master <マスタファイル>            - 学校マスタ同期")
 
 
 def show_status():
@@ -151,6 +152,14 @@ def main():
 
     elif command == 'status':
         show_status()
+
+    elif command == 'sync-master':
+        if len(sys.argv) < 3:
+            print("エラー: マスタファイルを指定してください")
+            print("使い方: python main.py sync-master <マスタファイル.xlsx>")
+            return
+        master_file = sys.argv[2]
+        sync_school_master(master_file)
 
     elif command in ['help', '-h', '--help']:
         show_help()

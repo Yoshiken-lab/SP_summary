@@ -79,6 +79,18 @@ def init_database(db_path=None):
     ''')
 
     # ========================================
+    # 3-1. 学校外部IDマッピング（元データの学校IDと統合後IDの紐付け）
+    # ========================================
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS school_external_ids (
+            external_id INTEGER PRIMARY KEY,     -- 元データの学校ID
+            school_id INTEGER NOT NULL,          -- 統合後の内部ID
+            original_name TEXT,                  -- 元の学校名（トリミング前）
+            FOREIGN KEY (school_id) REFERENCES schools(id)
+        )
+    ''')
+
+    # ========================================
     # 4. 学校別月別売上
     # ========================================
     cursor.execute('''
@@ -166,6 +178,7 @@ def init_database(db_path=None):
     # ========================================
     # インデックス作成
     # ========================================
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_school_external_ids_school ON school_external_ids(school_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_school_sales_school ON school_sales(school_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_school_sales_year ON school_sales(fiscal_year)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_events_school ON events(school_id)')
@@ -179,40 +192,135 @@ def init_database(db_path=None):
     print(f"データベースを初期化しました: {db_path or DEFAULT_DB_PATH}")
 
 
-def get_or_create_school(cursor, school_name, attribute=None, studio_name=None, manager=None, region=None):
-    """学校を取得または作成し、IDを返す"""
-    cursor.execute('SELECT id FROM schools WHERE school_name = ?', (school_name,))
+def normalize_school_name(school_name):
+    """
+    学校名を正規化（年度表記を除去して統合可能な形にする）
+
+    対応パターン:
+    - 末尾: 「宇都宮市立豊郷北小学校（2024年度）」→「宇都宮市立豊郷北小学校」
+    - 先頭: 「2024年度 おおたけ幼稚園」→「おおたけ幼稚園」
+    - 先頭(スペースなし): 「2024年度もりや幼稚園」→「もりや幼稚園」
+    """
+    import re
+    if not school_name:
+        return school_name
+
+    normalized = school_name.strip()
+
+    # 末尾の「（○○○○年度）」を除去（全角・半角括弧対応）
+    normalized = re.sub(r'[（(]\d{4}年度[）)]$', '', normalized)
+
+    # 先頭の「○○○○年度 」または「○○○○年度」を除去
+    normalized = re.sub(r'^\d{4}年度\s*', '', normalized)
+
+    return normalized.strip()
+
+
+def get_or_create_school(cursor, school_name, external_id=None, attribute=None, studio_name=None, manager=None, region=None):
+    """
+    学校を取得または作成し、IDを返す
+
+    Args:
+        cursor: DBカーソル
+        school_name: 学校名（トリミング前の元の名前）
+        external_id: 元データの学校ID（あれば優先的に使用）
+        attribute: 属性（幼稚園、小学校など）
+        studio_name: 写真館名
+        manager: 担当者
+        region: 事業所/地域
+
+    Returns:
+        統合後の内部学校ID
+    """
+    # 学校名を正規化（年度表記を除去）
+    original_name = school_name
+    normalized_name = normalize_school_name(school_name)
+
+    # 1. external_idが指定されている場合、まずexternal_idで検索
+    if external_id is not None:
+        cursor.execute('SELECT school_id FROM school_external_ids WHERE external_id = ?', (external_id,))
+        row = cursor.fetchone()
+        if row:
+            school_id = row[0]
+            # 属性情報を更新（external_idが大きい方が最新なので、常に上書きチェック）
+            _update_school_if_newer(cursor, school_id, external_id, attribute, studio_name, manager, region)
+            return school_id
+
+    # 2. 正規化した学校名で既存レコードを検索
+    cursor.execute('SELECT id FROM schools WHERE school_name = ?', (normalized_name,))
     row = cursor.fetchone()
 
     if row:
         school_id = row[0]
-        # 既存レコードの情報を更新（NULL以外の値で上書き）
-        updates = []
-        params = []
-        if attribute:
-            updates.append('attribute = ?')
-            params.append(attribute)
-        if studio_name:
-            updates.append('studio_name = ?')
-            params.append(studio_name)
-        if manager:
-            updates.append('manager = ?')
-            params.append(manager)
-        if region:
-            updates.append('region = ?')
-            params.append(region)
-
-        if updates:
-            params.append(school_id)
-            cursor.execute(f'UPDATE schools SET {", ".join(updates)} WHERE id = ?', params)
-
+        # external_idが指定されていれば、マッピングを登録
+        if external_id is not None:
+            _register_external_id(cursor, external_id, school_id, original_name)
+            # 属性情報を更新（external_idが大きい方が最新）
+            _update_school_if_newer(cursor, school_id, external_id, attribute, studio_name, manager, region)
+        else:
+            # external_idなしの場合は従来通り上書き
+            _update_school_attributes(cursor, school_id, attribute, studio_name, manager, region)
         return school_id
     else:
+        # 新規作成
         cursor.execute('''
             INSERT INTO schools (school_name, attribute, studio_name, manager, region)
             VALUES (?, ?, ?, ?, ?)
-        ''', (school_name, attribute, studio_name, manager, region))
-        return cursor.lastrowid
+        ''', (normalized_name, attribute, studio_name, manager, region))
+        school_id = cursor.lastrowid
+
+        # external_idが指定されていれば、マッピングを登録
+        if external_id is not None:
+            _register_external_id(cursor, external_id, school_id, original_name)
+
+        return school_id
+
+
+def _register_external_id(cursor, external_id, school_id, original_name):
+    """外部IDと内部IDのマッピングを登録"""
+    cursor.execute('''
+        INSERT OR IGNORE INTO school_external_ids (external_id, school_id, original_name)
+        VALUES (?, ?, ?)
+    ''', (external_id, school_id, original_name))
+
+
+def _update_school_if_newer(cursor, school_id, new_external_id, attribute, studio_name, manager, region):
+    """
+    新しいexternal_idのデータで学校情報を更新するか判定
+    external_idが大きい方が最新と判断
+    """
+    # 現在のschool_idに紐づく最大のexternal_idを取得
+    cursor.execute('''
+        SELECT MAX(external_id) FROM school_external_ids WHERE school_id = ?
+    ''', (school_id,))
+    row = cursor.fetchone()
+    max_external_id = row[0] if row and row[0] else 0
+
+    # 新しいexternal_idが最大値以上なら更新
+    if new_external_id >= max_external_id:
+        _update_school_attributes(cursor, school_id, attribute, studio_name, manager, region)
+
+
+def _update_school_attributes(cursor, school_id, attribute, studio_name, manager, region):
+    """学校の属性情報を更新（NULL以外の値で上書き）"""
+    updates = []
+    params = []
+    if attribute:
+        updates.append('attribute = ?')
+        params.append(attribute)
+    if studio_name:
+        updates.append('studio_name = ?')
+        params.append(studio_name)
+    if manager:
+        updates.append('manager = ?')
+        params.append(manager)
+    if region:
+        updates.append('region = ?')
+        params.append(region)
+
+    if updates:
+        params.append(school_id)
+        cursor.execute(f'UPDATE schools SET {", ".join(updates)} WHERE id = ?', params)
 
 
 def get_or_create_event(cursor, school_id, event_name, start_date=None, fiscal_year=None):

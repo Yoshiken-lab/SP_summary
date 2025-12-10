@@ -350,6 +350,13 @@ def import_member_rates(xlsx, cursor, report_id, report_date, sheet_name='会員
             continue
 
         school_name = str(school_name).strip()
+        # 元データの学校IDを取得
+        external_id = None
+        if 'school_id_col' in col_mapping:
+            ext_id_val = row[col_mapping['school_id_col']]
+            if pd.notna(ext_id_val):
+                external_id = int(ext_id_val)
+
         attribute = str(row[col_mapping.get('attribute', 3)]).strip() if pd.notna(row[col_mapping.get('attribute', 3)]) else None
         studio = str(row[col_mapping.get('studio', 4)]).strip() if pd.notna(row[col_mapping.get('studio', 4)]) else None
 
@@ -378,8 +385,8 @@ def import_member_rates(xlsx, cursor, report_id, report_date, sheet_name='会員
         # 会員率計算
         member_rate = member_count / student_count if student_count > 0 else 0
 
-        # 学校マスタに登録/更新
-        school_id = get_or_create_school(cursor, school_name, attribute=attribute, studio_name=studio)
+        # 学校マスタに登録/更新（external_idを使用）
+        school_id = get_or_create_school(cursor, school_name, external_id=external_id, attribute=attribute, studio_name=studio)
 
         # 会員率データを登録
         cursor.execute('''
@@ -587,6 +594,184 @@ def import_excel(file_path, db_path=None):
 
     finally:
         conn.close()
+
+
+def sync_school_master(master_file_path, db_path=None):
+    """
+    学校マスタファイルからDBを同期
+
+    処理内容:
+    1. マスタの外部IDでDBを検索
+    2. 見つかった場合: 学校名を最新に更新
+    3. 見つからない場合: 学校名で検索して外部IDを紐付け
+    4. どちらも見つからない場合: 新規登録
+
+    Args:
+        master_file_path: 学校マスタExcelファイルのパス
+        db_path: DBパス（省略時はデフォルト）
+    """
+    from database import normalize_school_name
+
+    master_path = Path(master_file_path)
+    print(f"学校マスタ同期開始: {master_path.name}")
+
+    # マスタファイル読み込み
+    df = pd.read_excel(master_path, header=0)
+
+    # カラム名を正規化（Unnamed列を除外）
+    df = df.dropna(axis=1, how='all')
+
+    # 必要なカラムを特定
+    id_col = None
+    name_col = None
+    region_col = None
+    manager_col = None
+    studio_col = None
+
+    for col in df.columns:
+        col_str = str(col)
+        if col_str == 'ID' or 'ID' in col_str:
+            id_col = col
+        elif '学校名' in col_str:
+            name_col = col
+        elif '事業所' in col_str:
+            region_col = col
+        elif '担当' in col_str:
+            manager_col = col
+        elif '写真館' in col_str:
+            studio_col = col
+
+    if id_col is None or name_col is None:
+        print("  エラー: IDまたは学校名カラムが見つかりません")
+        return
+
+    print(f"  カラム検出: ID={id_col}, 学校名={name_col}, 事業所={region_col}, 担当={manager_col}, 写真館={studio_col}")
+
+    # DB接続
+    from database import get_connection, init_database
+    init_database(db_path)
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
+    stats = {
+        'updated_name': 0,      # 学校名を更新
+        'linked_extid': 0,      # 外部IDを紐付け
+        'new_school': 0,        # 新規登録
+        'already_synced': 0,    # 既に同期済み
+        'skipped': 0,           # スキップ
+    }
+
+    try:
+        for _, row in df.iterrows():
+            external_id = row[id_col]
+            school_name = row[name_col]
+
+            # 無効な行をスキップ
+            if pd.isna(external_id) or pd.isna(school_name):
+                stats['skipped'] += 1
+                continue
+
+            external_id = int(external_id)
+            school_name = str(school_name).strip()
+            normalized_name = normalize_school_name(school_name)
+
+            region = str(row[region_col]).strip() if region_col and pd.notna(row[region_col]) else None
+            manager = str(row[manager_col]).strip() if manager_col and pd.notna(row[manager_col]) else None
+            studio = str(row[studio_col]).strip() if studio_col and pd.notna(row[studio_col]) else None
+
+            # 1. 外部IDで検索
+            cursor.execute('SELECT school_id FROM school_external_ids WHERE external_id = ?', (external_id,))
+            ext_row = cursor.fetchone()
+
+            if ext_row:
+                # 外部IDが既に登録済み → 学校名を更新
+                school_id = ext_row[0]
+                cursor.execute('SELECT school_name FROM schools WHERE id = ?', (school_id,))
+                current_name = cursor.fetchone()[0]
+
+                if current_name != normalized_name:
+                    # 新しい名前が既に別の学校として存在するかチェック
+                    cursor.execute('SELECT id FROM schools WHERE school_name = ? AND id != ?',
+                                   (normalized_name, school_id))
+                    existing_row = cursor.fetchone()
+
+                    if existing_row:
+                        # 同名の学校が既に存在 → 統合が必要
+                        # この場合は名前を更新せず、ログのみ出力
+                        print(f"  警告: 学校名の競合 - {current_name} を {normalized_name} に更新できません（同名の学校が既存）")
+                        stats['skipped'] += 1
+                    else:
+                        # 学校名が変更されている場合、更新
+                        cursor.execute('UPDATE schools SET school_name = ? WHERE id = ?',
+                                       (normalized_name, school_id))
+                        print(f"  学校名更新: {current_name} → {normalized_name} (外部ID:{external_id})")
+                        stats['updated_name'] += 1
+                else:
+                    stats['already_synced'] += 1
+
+                # 属性情報も更新
+                _update_school_attrs(cursor, school_id, region, manager, studio)
+            else:
+                # 2. 外部IDがない → 学校名で検索
+                cursor.execute('SELECT id FROM schools WHERE school_name = ?', (normalized_name,))
+                name_row = cursor.fetchone()
+
+                if name_row:
+                    # 学校名で見つかった → 外部IDを紐付け
+                    school_id = name_row[0]
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO school_external_ids (external_id, school_id, original_name)
+                        VALUES (?, ?, ?)
+                    ''', (external_id, school_id, school_name))
+                    print(f"  外部ID紐付け: {normalized_name} ← 外部ID:{external_id}")
+                    stats['linked_extid'] += 1
+
+                    # 属性情報も更新
+                    _update_school_attrs(cursor, school_id, region, manager, studio)
+                else:
+                    # 3. どちらも見つからない → 新規登録
+                    cursor.execute('''
+                        INSERT INTO schools (school_name, region, manager, studio_name)
+                        VALUES (?, ?, ?, ?)
+                    ''', (normalized_name, region, manager, studio))
+                    school_id = cursor.lastrowid
+
+                    cursor.execute('''
+                        INSERT INTO school_external_ids (external_id, school_id, original_name)
+                        VALUES (?, ?, ?)
+                    ''', (external_id, school_id, school_name))
+                    print(f"  新規登録: {normalized_name} (外部ID:{external_id})")
+                    stats['new_school'] += 1
+
+        conn.commit()
+        print(f"\n同期完了:")
+        print(f"  学校名更新: {stats['updated_name']}件")
+        print(f"  外部ID紐付け: {stats['linked_extid']}件")
+        print(f"  新規登録: {stats['new_school']}件")
+        print(f"  同期済み: {stats['already_synced']}件")
+        print(f"  スキップ: {stats['skipped']}件")
+
+    finally:
+        conn.close()
+
+
+def _update_school_attrs(cursor, school_id, region, manager, studio):
+    """学校の属性情報を更新（値がある場合のみ）"""
+    updates = []
+    params = []
+    if region:
+        updates.append('region = ?')
+        params.append(region)
+    if manager:
+        updates.append('manager = ?')
+        params.append(manager)
+    if studio:
+        updates.append('studio_name = ?')
+        params.append(studio)
+
+    if updates:
+        params.append(school_id)
+        cursor.execute(f'UPDATE schools SET {", ".join(updates)} WHERE id = ?', params)
 
 
 def import_all_from_directory(directory_path, db_path=None):

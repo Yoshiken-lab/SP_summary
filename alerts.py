@@ -389,6 +389,13 @@ def alert_studio_performance_decline(cursor, config=AlertConfig):
             FROM school_yearly_sales sys
             JOIN schools s ON sys.school_id = s.id
             GROUP BY s.studio_name, sys.fiscal_year
+        ),
+        studio_region AS (
+            SELECT studio_name, region
+            FROM schools
+            WHERE id IN (
+                SELECT MAX(id) FROM schools GROUP BY studio_name
+            )
         )
         SELECT
             curr.studio_name,
@@ -398,9 +405,11 @@ def alert_studio_performance_decline(cursor, config=AlertConfig):
             prev.school_count as prev_schools,
             CASE WHEN prev.total_sales > 0
                  THEN (curr.total_sales - prev.total_sales) / prev.total_sales
-                 ELSE 0 END as change_rate
+                 ELSE 0 END as change_rate,
+            sr.region
         FROM studio_sales curr
         LEFT JOIN studio_sales prev ON curr.studio_name = prev.studio_name AND prev.fiscal_year = ?
+        LEFT JOIN studio_region sr ON curr.studio_name = sr.studio_name
         WHERE curr.fiscal_year = ?
           AND prev.total_sales > 0
           AND (curr.total_sales - prev.total_sales) / prev.total_sales < ?
@@ -423,6 +432,7 @@ def alert_studio_performance_decline(cursor, config=AlertConfig):
             'prev_sales': row[3],
             'prev_schools': row[4],
             'change_rate': row[5],
+            'region': row[6],
             'level': level,
             'message': f'売上{row[5]*100:+.1f}%（{row[2]}校担当）'
         })
