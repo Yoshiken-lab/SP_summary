@@ -341,10 +341,19 @@ def create_app(config=None):
                 'input_file': str(filepath)
             }
 
+            # 既存累積ファイルがある場合
+            existing_file = files.get('existing_file')
+            if existing_file and existing_file.filename:
+                existing_filepath = file_handler.save_uploaded_file(
+                    existing_file, f"existing_{existing_file.filename}"
+                )
+                app.session_data[session_id]['existing_file'] = str(existing_filepath)
+
             return jsonify({
                 'status': 'success',
                 'session_id': session_id,
-                'filename': file.filename
+                'filename': file.filename,
+                'existing_filename': existing_file.filename if existing_file and existing_file.filename else None
             })
 
         except Exception as e:
@@ -371,8 +380,14 @@ def create_app(config=None):
             session = app.session_data[session_id]
             input_path = Path(session['input_file'])
 
-            # 出力先
-            output_dir = Path(app.config['OUTPUT_DIR'])
+            # 既存ファイルパス（アップロードされていれば）
+            existing_file_path = session.get('existing_file')
+            if existing_file_path:
+                existing_file_path = Path(existing_file_path)
+                # 既存ファイルの親ディレクトリを出力先とする
+                output_dir = existing_file_path.parent
+            else:
+                output_dir = Path(app.config['OUTPUT_DIR'])
 
             # 累積集計実行
             aggregator = CumulativeAggregator(
@@ -380,7 +395,8 @@ def create_app(config=None):
                 output_dir=output_dir,
                 year=year,
                 month=month,
-                fiscal_year=fiscal_year
+                fiscal_year=fiscal_year,
+                existing_file_path=existing_file_path
             )
             result = aggregator.process()
 
@@ -429,6 +445,172 @@ def create_app(config=None):
             logger.error(f"累積集計ダウンロードエラー: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
+    # ========== 複数ファイル累積集計API ==========
+
+    @app.route('/api/cumulative/upload-multiple', methods=['POST'])
+    def cumulative_upload_multiple():
+        """複数ファイル累積集計用アップロード"""
+        try:
+            files = request.files
+            form_data = request.form
+
+            # ファイル情報を取得
+            files_info_str = form_data.get('files_info')
+            if not files_info_str:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'ファイル情報がありません'
+                }), 400
+
+            files_info = json.loads(files_info_str)
+            fiscal_year = int(form_data.get('fiscal_year', 0))
+
+            # 各ファイルを保存
+            saved_files = []
+            for info in files_info:
+                file_key = f"input_file_{info['index']}"
+                if file_key not in files:
+                    return jsonify({
+                        'status': 'error',
+                        'message': f'ファイル {file_key} が見つかりません'
+                    }), 400
+
+                file = files[file_key]
+                if not file.filename:
+                    continue
+
+                filepath = file_handler.save_uploaded_file(
+                    file, f"cumulative_{info['year']}_{info['month']}_{file.filename}"
+                )
+                saved_files.append({
+                    'path': str(filepath),
+                    'year': info['year'],
+                    'month': info['month'],
+                    'filename': file.filename
+                })
+
+            if not saved_files:
+                return jsonify({
+                    'status': 'error',
+                    'message': '有効なファイルがありません'
+                }), 400
+
+            # セッションに保存
+            session_id = f"cum_multi_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            app.session_data[session_id] = {
+                'input_files': saved_files,
+                'fiscal_year': fiscal_year
+            }
+
+            # 既存累積ファイルのパスがある場合（テキスト入力からの直接パス）
+            existing_file_path = form_data.get('existing_file_path')
+            if existing_file_path:
+                existing_path = Path(existing_file_path)
+                if existing_path.exists():
+                    app.session_data[session_id]['existing_file'] = str(existing_path)
+                    logger.info(f"既存ファイルパス指定: {existing_path}")
+                else:
+                    logger.warning(f"指定された既存ファイルが存在しません: {existing_file_path}")
+
+            return jsonify({
+                'status': 'success',
+                'session_id': session_id,
+                'file_count': len(saved_files)
+            })
+
+        except Exception as e:
+            logger.error(f"複数ファイルアップロードエラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/cumulative/aggregate-multiple', methods=['POST'])
+    def cumulative_aggregate_multiple():
+        """複数ファイル累積集計実行"""
+        try:
+            data = request.get_json()
+            session_id = data.get('session_id')
+
+            # セッションデータ取得
+            if session_id not in app.session_data:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'セッションが見つかりません。ファイルを再アップロードしてください。'
+                }), 400
+
+            session = app.session_data[session_id]
+            input_files = session['input_files']
+            fiscal_year = session['fiscal_year']
+
+            # 既存ファイルパス（アップロードされていれば）
+            existing_file_path = session.get('existing_file')
+            if existing_file_path:
+                existing_file_path = Path(existing_file_path)
+                output_dir = existing_file_path.parent
+            else:
+                output_dir = Path(app.config['OUTPUT_DIR'])
+
+            # 年月順にソート（古い順）
+            input_files_sorted = sorted(input_files, key=lambda x: (x['year'], x['month']))
+
+            # 処理結果
+            total_school_count = 0
+            total_event_count = 0
+            processed_months = []
+            output_path = None
+
+            # 各ファイルを順番に処理
+            for i, file_info in enumerate(input_files_sorted):
+                input_path = Path(file_info['path'])
+                year = file_info['year']
+                month = file_info['month']
+
+                logger.info(f"処理中 ({i+1}/{len(input_files_sorted)}): {year}年{month}月")
+
+                # 最初のファイル以降は、出力ファイルを既存ファイルとして使用
+                if i > 0 and output_path:
+                    existing_file_path = Path(output_path)
+
+                aggregator = CumulativeAggregator(
+                    input_path=input_path,
+                    output_dir=output_dir,
+                    year=year,
+                    month=month,
+                    fiscal_year=fiscal_year,
+                    existing_file_path=existing_file_path
+                )
+                result = aggregator.process()
+
+                output_path = result['outputPath']
+                total_school_count = result['schoolCount']
+                total_event_count = result['eventCount']
+                processed_months.append(f"{year}年{month}月")
+
+            # 結果をセッションに保存
+            app.session_data[session_id]['output_path'] = output_path
+            app.session_data[session_id]['result'] = {
+                'schoolCount': total_school_count,
+                'eventCount': total_event_count,
+                'processedCount': len(input_files_sorted),
+                'processedMonths': ', '.join(processed_months)
+            }
+
+            return jsonify({
+                'status': 'success',
+                'schoolCount': total_school_count,
+                'eventCount': total_event_count,
+                'processedCount': len(input_files_sorted),
+                'processedMonths': ', '.join(processed_months),
+                'fiscalYear': fiscal_year,
+                'outputFilename': Path(output_path).name if output_path else None,
+                'outputPath': str(output_path) if output_path else None
+            })
+
+        except ValueError as e:
+            logger.error(f"複数ファイル累積集計バリデーションエラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 400
+        except Exception as e:
+            logger.error(f"複数ファイル累積集計エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
     # フロントエンド配信（ビルド済みの場合）
     @app.route('/')
     def serve_index():
@@ -443,6 +625,10 @@ def create_app(config=None):
     @app.route('/<path:path>')
     def serve_static(path):
         """静的ファイルを配信"""
+        # APIルートはここで処理しない（404を返す）
+        if path.startswith('api/'):
+            return jsonify({'status': 'error', 'message': 'Not found'}), 404
+
         dist_dir = FRONTEND_DIR / 'dist'
         if dist_dir.exists():
             file_path = dist_dir / path

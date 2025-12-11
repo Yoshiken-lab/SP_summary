@@ -240,80 +240,94 @@
     <!-- ========== 累積集計タブ ========== -->
     <div v-if="activeTab === 'cumulative'">
 
-    <!-- Step 1: ファイル選択 -->
+    <!-- Step 1: 月次集計ファイルを追加 -->
     <div v-if="cumulativeStep === 'upload'" class="card">
       <h2 class="card-title">
         <span class="step">1</span>
-        集計結果ファイルを選択
+        月次集計ファイルを追加
       </h2>
 
-      <div class="file-input-group">
-        <label>月次集計結果 (XLSX)</label>
-        <div class="file-input-wrapper">
-          <div :class="['file-input-display', { 'has-file': cumulativeFiles.input }]">
-            {{ cumulativeFiles.input ? cumulativeFiles.input.name : 'ファイルが選択されていません' }}
+      <!-- ファイル追加UI -->
+      <div class="file-add-section">
+        <div class="file-add-row">
+          <div class="file-input-wrapper" style="flex: 2;">
+            <div :class="['file-input-display', { 'has-file': newFileToAdd }]">
+              {{ newFileToAdd ? newFileToAdd.name : 'ファイルが選択されていません' }}
+            </div>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              @change="onNewFileSelect"
+              ref="newFileInput"
+              style="display: none"
+            >
+            <button class="file-input-btn" @click="$refs.newFileInput.click()">
+              選択...
+            </button>
           </div>
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            @change="e => selectCumulativeFile('input', e)"
-            ref="cumulativeInput"
-            style="display: none"
-          >
-          <button class="file-input-btn" @click="$refs.cumulativeInput.click()">
-            選択...
+          <div class="select-item" style="min-width: 100px;">
+            <select v-model="newFileYear">
+              <option v-for="year in availableYears" :key="year" :value="year">
+                {{ year }}年
+              </option>
+            </select>
+          </div>
+          <div class="select-item" style="min-width: 80px;">
+            <select v-model="newFileMonth">
+              <option v-for="month in 12" :key="month" :value="month">
+                {{ month }}月
+              </option>
+            </select>
+          </div>
+          <button class="btn-add" @click="addInputFile" :disabled="!newFileToAdd">
+            追加
           </button>
         </div>
-        <p class="file-hint">※月次集計で出力されたExcelファイル（学校別・イベント別シートを含む）</p>
+        <p class="file-hint">※月次集計で出力されたExcelファイルを選択し、対象年月を指定して追加してください</p>
       </div>
-    </div>
 
-    <!-- Step 2: 対象年月 -->
-    <div v-if="cumulativeStep === 'upload'" class="card">
-      <h2 class="card-title">
-        <span class="step">2</span>
-        対象年月を選択
-      </h2>
-
-      <div class="select-group">
-        <div class="select-item">
-          <label>年</label>
-          <select v-model="cumulativeOptions.year">
-            <option v-for="year in availableYears" :key="year" :value="year">
-              {{ year }}年
-            </option>
-          </select>
-        </div>
-        <div class="select-item">
-          <label>月</label>
-          <select v-model="cumulativeOptions.month">
-            <option v-for="month in 12" :key="month" :value="month">
-              {{ month }}月
-            </option>
-          </select>
+      <!-- 追加済みファイル一覧 -->
+      <div v-if="cumulativeInputFiles.length > 0" class="file-list">
+        <h3 class="file-list-title">追加済みファイル（{{ cumulativeInputFiles.length }}件）</h3>
+        <div class="file-list-items">
+          <div v-for="(item, index) in cumulativeInputFiles" :key="index" class="file-list-item">
+            <span class="file-name">{{ item.file.name }}</span>
+            <span class="file-period">{{ item.year }}年{{ item.month }}月分</span>
+            <button class="file-remove-btn" @click="removeInputFile(index)">削除</button>
+          </div>
         </div>
       </div>
 
-      <div class="fiscal-year-info">
+      <div v-if="cumulativeInputFiles.length > 0" class="fiscal-year-info">
         対象年度: <strong>{{ calculatedFiscalYear }}年度</strong>
         （出力ファイル: SP_年度累計_{{ calculatedFiscalYear }}.xlsx）
       </div>
     </div>
 
-    <!-- Step 3: 出力先 -->
+    <!-- Step 2: 既存累積ファイル（オプション） -->
     <div v-if="cumulativeStep === 'upload'" class="card">
       <h2 class="card-title">
-        <span class="step">3</span>
-        出力先フォルダ
+        <span class="step">2</span>
+        既存の累積ファイル（オプション）
       </h2>
 
       <div class="file-input-group">
+        <label>既存の年度累計ファイルのパス</label>
         <div class="file-input-wrapper">
-          <div class="file-input-display has-file">
-            {{ cumulativeOptions.outputFolder || 'ダウンロードフォルダ' }}
-          </div>
+          <input
+            type="text"
+            v-model="existingFilePath"
+            class="path-input"
+            placeholder="例: C:\Users\username\Downloads\SP_年度累計_2024.xlsx"
+          >
+          <button v-if="existingFilePath" class="file-clear-btn" @click="existingFilePath = ''">
+            クリア
+          </button>
         </div>
-        <p class="file-hint">※出力先は ~/Downloads フォルダになります</p>
+        <p class="file-hint">
+          ※既存ファイルのパスを入力すると、そのファイルに月別データを追記・上書き保存します<br>
+          ※空欄の場合は、ダウンロードフォルダに新規ファイルを作成します
+        </p>
       </div>
     </div>
 
@@ -324,7 +338,7 @@
         @click="startCumulativeAggregation"
         :disabled="!canStartCumulative"
       >
-        📊 累積集計を実行
+        📊 累積集計を実行（{{ cumulativeInputFiles.length }}ファイル）
       </button>
     </div>
 
@@ -359,11 +373,15 @@
       <div class="result-summary">
         <div class="summary-item">
           <span class="summary-label">対象年度</span>
-          <span class="summary-value">{{ calculatedFiscalYear }}年度</span>
+          <span class="summary-value">{{ cumulativeResult.fiscalYear }}年度</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">処理ファイル数</span>
+          <span class="summary-value">{{ cumulativeResult.processedCount }}件</span>
         </div>
         <div class="summary-item">
           <span class="summary-label">追記月</span>
-          <span class="summary-value">{{ cumulativeOptions.year }}年{{ cumulativeOptions.month }}月</span>
+          <span class="summary-value">{{ cumulativeResult.processedMonths }}</span>
         </div>
         <div class="summary-item">
           <span class="summary-label">学校別データ</span>
@@ -373,12 +391,13 @@
           <span class="summary-label">イベント別データ</span>
           <span class="summary-value">{{ cumulativeResult.eventCount }}件</span>
         </div>
+        <div class="summary-item">
+          <span class="summary-label">保存先</span>
+          <span class="summary-value output-path">{{ cumulativeResult.outputPath }}</span>
+        </div>
       </div>
 
-      <div class="action-buttons">
-        <button class="btn-success" @click="downloadCumulativeExcel">
-          📥 累積表ダウンロード
-        </button>
+      <div class="action-buttons" style="justify-content: center;">
         <button class="btn-secondary" @click="resetCumulativeForm">
           新規累積集計を開始
         </button>
@@ -427,14 +446,15 @@ export default {
 
       // === 累積集計用 ===
       cumulativeStep: 'upload', // upload, processing, result
+      existingFilePath: '', // 既存ファイルのパス（テキスト入力）
       cumulativeFiles: {
-        input: null
+        existing: null
       },
-      cumulativeOptions: {
-        year: currentDate.getFullYear(),
-        month: currentMonth,
-        outputFolder: null
-      },
+      // 複数ファイル用
+      cumulativeInputFiles: [], // [{file: File, year: number, month: number}, ...]
+      newFileToAdd: null,
+      newFileYear: currentDate.getFullYear(),
+      newFileMonth: currentMonth,
       cumulativeProgress: 0,
       cumulativeLogs: [],
       cumulativeResult: null,
@@ -455,13 +475,18 @@ export default {
       return Array.from({ length: 6 }, (_, i) => currentYear - 4 + i)
     },
     calculatedFiscalYear() {
-      // 4月〜3月を年度として計算
-      const year = this.cumulativeOptions.year
-      const month = this.cumulativeOptions.month
-      return month >= 4 ? year : year - 1
+      // 追加済みファイルの最初のファイルから年度を計算
+      if (this.cumulativeInputFiles.length > 0) {
+        const firstFile = this.cumulativeInputFiles[0]
+        return firstFile.month >= 4 ? firstFile.year : firstFile.year - 1
+      }
+      // デフォルト
+      const currentDate = new Date()
+      const currentMonth = currentDate.getMonth() + 1
+      return currentMonth >= 4 ? currentDate.getFullYear() : currentDate.getFullYear() - 1
     },
     canStartCumulative() {
-      return this.cumulativeFiles.input !== null
+      return this.cumulativeInputFiles.length > 0
     }
   },
   methods: {
@@ -666,6 +691,37 @@ export default {
       }
     },
 
+    // 新しいファイルを選択
+    onNewFileSelect(event) {
+      const file = event.target.files[0]
+      if (file) {
+        this.newFileToAdd = file
+        this.error = null
+      }
+    },
+
+    // ファイルをリストに追加
+    addInputFile() {
+      if (!this.newFileToAdd) return
+
+      this.cumulativeInputFiles.push({
+        file: this.newFileToAdd,
+        year: this.newFileYear,
+        month: this.newFileMonth
+      })
+
+      // リセット
+      this.newFileToAdd = null
+      if (this.$refs.newFileInput) {
+        this.$refs.newFileInput.value = ''
+      }
+    },
+
+    // ファイルをリストから削除
+    removeInputFile(index) {
+      this.cumulativeInputFiles.splice(index, 1)
+    },
+
     async startCumulativeAggregation() {
       this.error = null
       this.cumulativeStep = 'processing'
@@ -674,22 +730,18 @@ export default {
 
       try {
         // Step 1: ファイルアップロード
-        this.addCumulativeLog('ファイルをアップロード中...', 'processing')
-        await this.uploadCumulativeFile()
-        this.updateCumulativeLog(0, 'ファイルアップロード完了', 'success')
+        this.addCumulativeLog(`${this.cumulativeInputFiles.length}件のファイルをアップロード中...`, 'processing')
+        await this.uploadCumulativeFiles()
+        this.updateCumulativeLog(0, `${this.cumulativeInputFiles.length}件のファイルアップロード完了`, 'success')
         this.cumulativeProgress = 30
 
         // Step 2: 累積集計実行
-        this.addCumulativeLog('学校別データを処理中...', 'processing')
-        this.addCumulativeLog('イベント別データを処理中...', 'pending')
-        this.addCumulativeLog('累積表に追記中...', 'pending')
+        this.addCumulativeLog('累積集計を実行中...', 'processing')
 
         const result = await this.runCumulativeAggregation()
 
         // ログ更新
-        this.updateCumulativeLog(1, '学校別データ処理完了', 'success')
-        this.updateCumulativeLog(2, 'イベント別データ処理完了', 'success')
-        this.updateCumulativeLog(3, '累積表への追記完了', 'success')
+        this.updateCumulativeLog(1, '累積集計完了', 'success')
         this.cumulativeProgress = 100
 
         this.cumulativeResult = result
@@ -701,11 +753,30 @@ export default {
       }
     },
 
-    async uploadCumulativeFile() {
+    async uploadCumulativeFiles() {
       const formData = new FormData()
-      formData.append('input_file', this.cumulativeFiles.input)
 
-      const response = await fetch('/api/cumulative/upload', {
+      // 複数の入力ファイルと年月情報を追加
+      const filesInfo = []
+      this.cumulativeInputFiles.forEach((item, index) => {
+        formData.append(`input_file_${index}`, item.file)
+        filesInfo.push({
+          index: index,
+          year: item.year,
+          month: item.month
+        })
+      })
+      formData.append('files_info', JSON.stringify(filesInfo))
+
+      // 既存ファイルのパスがあれば追加
+      if (this.existingFilePath) {
+        formData.append('existing_file_path', this.existingFilePath)
+      }
+
+      // 年度情報
+      formData.append('fiscal_year', this.calculatedFiscalYear)
+
+      const response = await fetch('/api/cumulative/upload-multiple', {
         method: 'POST',
         body: formData
       })
@@ -718,15 +789,19 @@ export default {
       this.cumulativeSessionId = data.session_id
     },
 
+    clearExistingFile() {
+      this.cumulativeFiles.existing = null
+      if (this.$refs.cumulativeExistingInput) {
+        this.$refs.cumulativeExistingInput.value = ''
+      }
+    },
+
     async runCumulativeAggregation() {
-      const response = await fetch('/api/cumulative/aggregate', {
+      const response = await fetch('/api/cumulative/aggregate-multiple', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          session_id: this.cumulativeSessionId,
-          year: this.cumulativeOptions.year,
-          month: this.cumulativeOptions.month,
-          fiscal_year: this.calculatedFiscalYear
+          session_id: this.cumulativeSessionId
         })
       })
 
@@ -755,7 +830,10 @@ export default {
 
     resetCumulativeForm() {
       this.cumulativeStep = 'upload'
-      this.cumulativeFiles = { input: null }
+      this.cumulativeFiles = { existing: null }
+      this.existingFilePath = ''
+      this.cumulativeInputFiles = []
+      this.newFileToAdd = null
       this.cumulativeProgress = 0
       this.cumulativeLogs = []
       this.cumulativeResult = null
