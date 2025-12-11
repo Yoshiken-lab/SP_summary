@@ -1,6 +1,9 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
+.env
+venv/
 
 # Database
 *.db
@@ -8,11 +11,37 @@ __pycache__/
 # Generated HTML dashboards
 dashboard_*.html
 member_rate_chart.html
+dashboard/
 
 # Debug/test files
 check_*.py
+debug_*.py
+test_*.py
+fix_*.py
+merge_*.py
 *_result.txt
 excel_structure.txt
+attribute_check.txt
+
+# Test output
+test_output.xlsx
+
+# Old/deprecated tools
+sales_summary_tool.py
+web_app/
+
+# Node.js
+node_modules/
+app/frontend/node_modules/
+app/frontend/dist/
+
+# Upload/temp files
+app/uploads/
+
+# IDE
+.vscode/
+.idea/
 
 # Misc
 nul
+*.log
