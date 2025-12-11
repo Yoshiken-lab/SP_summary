@@ -20,13 +20,13 @@ class SalesSummaryResult:
     sales_per_school: float = 0.0     # 売上/学校
 
     def to_dict(self):
-        """辞書形式に変換"""
+        """辞書形式に変換（JSON互換の標準Python型に変換）"""
         return {
-            'total_sales': self.total_sales,
-            'direct_sales': self.direct_sales,
-            'studio_sales': self.studio_sales,
-            'school_count': self.school_count,
-            'sales_per_school': self.sales_per_school
+            'total_sales': float(self.total_sales),
+            'direct_sales': float(self.direct_sales),
+            'studio_sales': float(self.studio_sales),
+            'school_count': int(self.school_count),
+            'sales_per_school': float(self.sales_per_school)
         }
 
 

@@ -4,6 +4,7 @@ Flask APIエンドポイント
 from flask import Flask, request, jsonify, send_file, Response, send_from_directory
 from flask_cors import CORS
 from pathlib import Path
+import sys
 import json
 import logging
 import queue
@@ -11,8 +12,13 @@ import threading
 from datetime import datetime
 from typing import Optional
 
-from .aggregator import SalesAggregator, AccountsCalculator, ExcelExporter
-from .services import FileHandler, DatabaseService
+# パス設定（直接実行時のため）
+APP_DIR = Path(__file__).parent.parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+
+from backend.aggregator import SalesAggregator, AccountsCalculator, ExcelExporter, SchoolMasterMismatchError, CumulativeAggregator
+from backend.services import FileHandler, DatabaseService
 
 # ロギング設定
 logging.basicConfig(
@@ -49,7 +55,7 @@ def create_app(config=None):
     if config:
         app.config.from_object(config)
     else:
-        from ..config import get_config
+        from config import get_config
         app.config.from_object(get_config())
 
     # ディレクトリ設定
@@ -172,6 +178,14 @@ def create_app(config=None):
                 }
             })
 
+        except SchoolMasterMismatchError as e:
+            logger.error(f"マスタ不一致エラー: {e}")
+            return jsonify({
+                'status': 'error',
+                'error_type': 'master_mismatch',
+                'message': str(e),
+                'unmatched_schools': e.unmatched_schools
+            }), 400
         except ValueError as e:
             logger.error(f"バリデーションエラー: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 400
@@ -256,7 +270,7 @@ def create_app(config=None):
                 }), 500
 
             # 公開
-            from ..config import Config
+            from config import Config
             success = db_service.publish_dashboard(Config.PUBLISH_PATH)
 
             return jsonify({
@@ -270,9 +284,8 @@ def create_app(config=None):
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
     @app.route('/api/config', methods=['GET'])
-    def get_config():
+    def get_app_config():
         """設定情報取得"""
-        from ..config import Config
         return jsonify({
             'fiscal_years': list(range(2020, datetime.now().year + 2)),
             'months': list(range(1, 13)),
@@ -295,6 +308,126 @@ def create_app(config=None):
                     yield f"data: {json.dumps({'status': 'waiting'})}\n\n"
 
         return Response(generate(), mimetype='text/event-stream')
+
+    # ========== 累積集計API ==========
+
+    @app.route('/api/cumulative/upload', methods=['POST'])
+    def cumulative_upload():
+        """累積集計用ファイルアップロード"""
+        try:
+            files = request.files
+
+            if 'input_file' not in files:
+                return jsonify({
+                    'status': 'error',
+                    'message': '入力ファイルがありません'
+                }), 400
+
+            file = files['input_file']
+            if not file.filename:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'ファイルが選択されていません'
+                }), 400
+
+            # ファイル保存
+            filepath = file_handler.save_uploaded_file(
+                file, f"cumulative_{file.filename}"
+            )
+
+            # セッションに保存
+            session_id = f"cum_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            app.session_data[session_id] = {
+                'input_file': str(filepath)
+            }
+
+            return jsonify({
+                'status': 'success',
+                'session_id': session_id,
+                'filename': file.filename
+            })
+
+        except Exception as e:
+            logger.error(f"累積集計アップロードエラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/cumulative/aggregate', methods=['POST'])
+    def cumulative_aggregate():
+        """累積集計実行"""
+        try:
+            data = request.get_json()
+            session_id = data.get('session_id')
+            year = data.get('year')
+            month = data.get('month')
+            fiscal_year = data.get('fiscal_year')
+
+            # セッションデータ取得
+            if session_id not in app.session_data:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'セッションが見つかりません。ファイルを再アップロードしてください。'
+                }), 400
+
+            session = app.session_data[session_id]
+            input_path = Path(session['input_file'])
+
+            # 出力先
+            output_dir = Path(app.config['OUTPUT_DIR'])
+
+            # 累積集計実行
+            aggregator = CumulativeAggregator(
+                input_path=input_path,
+                output_dir=output_dir,
+                year=year,
+                month=month,
+                fiscal_year=fiscal_year
+            )
+            result = aggregator.process()
+
+            # 結果をセッションに保存
+            app.session_data[session_id]['output_path'] = result['outputPath']
+            app.session_data[session_id]['result'] = result
+
+            return jsonify({
+                'status': 'success',
+                'schoolCount': result['schoolCount'],
+                'eventCount': result['eventCount'],
+                'outputFilename': result['outputFilename']
+            })
+
+        except ValueError as e:
+            logger.error(f"累積集計バリデーションエラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 400
+        except Exception as e:
+            logger.error(f"累積集計エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/cumulative/download/<session_id>', methods=['GET'])
+    def cumulative_download(session_id):
+        """累積集計結果ダウンロード"""
+        try:
+            if session_id not in app.session_data:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'セッションが見つかりません'
+                }), 404
+
+            output_path = app.session_data[session_id].get('output_path')
+            if not output_path or not Path(output_path).exists():
+                return jsonify({
+                    'status': 'error',
+                    'message': 'ファイルが見つかりません'
+                }), 404
+
+            return send_file(
+                output_path,
+                as_attachment=True,
+                download_name=Path(output_path).name
+            )
+
+        except Exception as e:
+            logger.error(f"累積集計ダウンロードエラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
 
     # フロントエンド配信（ビルド済みの場合）
     @app.route('/')

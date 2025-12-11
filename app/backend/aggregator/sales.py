@@ -12,6 +12,14 @@ from .summary import SalesSummary, SalesSummaryResult
 logger = logging.getLogger(__name__)
 
 
+class SchoolMasterMismatchError(Exception):
+    """マスタに存在しない学校がある場合の例外"""
+    def __init__(self, unmatched_schools: list):
+        self.unmatched_schools = unmatched_schools
+        message = f"マスタに登録されていない学校が{len(unmatched_schools)}件あります。担当者マスタを更新してください。"
+        super().__init__(message)
+
+
 @dataclass
 class SchoolSalesRecord:
     """学校別売上レコード"""
@@ -161,7 +169,12 @@ class SalesAggregator:
         logger.info(f"フィルタリング後データ: {len(self.filtered_df)}件")
 
     def _check_school_master(self) -> None:
-        """売上データの学校がマスタに存在するかチェック"""
+        """
+        売上データの学校がマスタに存在するかチェック
+
+        Raises:
+            SchoolMasterMismatchError: マスタに存在しない学校がある場合
+        """
         sales_schools = set(self.sales_df["学校名"].unique())
         master_schools = set(self.master_df["学校名"].unique())
 
@@ -172,6 +185,8 @@ class SalesAggregator:
             logger.warning(f"マスタにない学校: {len(unmatched)}件")
             for school in unmatched:
                 logger.warning(f"  - {school}")
+            # マスタ不一致エラーをスロー（担当者別以降の集計を中断）
+            raise SchoolMasterMismatchError(list(unmatched))
 
     def _aggregate_total_sales(self) -> None:
         """全体売上を集計"""
