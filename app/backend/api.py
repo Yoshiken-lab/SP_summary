@@ -611,6 +611,212 @@ def create_app(config=None):
             logger.error(f"複数ファイル累積集計エラー: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
+    # ========== 実績反映API ==========
+
+    @app.route('/api/publish/check-duplicates', methods=['POST'])
+    def check_duplicates():
+        """重複データチェック"""
+        try:
+            data = request.get_json()
+            filenames = data.get('filenames', [])
+
+            # ファイル名から年月を抽出して重複チェック
+            duplicates = []
+            db_service = DatabaseService()
+
+            for filename in filenames:
+                # ファイル名から年月を抽出（SP_SalesResult_202504.xlsx → 2025年4月）
+                import re
+                match = re.search(r'(\d{4})(\d{2})\.xlsx', filename)
+                if match:
+                    year = int(match.group(1))
+                    month = int(match.group(2))
+
+                    # DBで既存データをチェック
+                    if db_service.check_month_exists(year, month):
+                        duplicates.append(f"{year}年{month}月")
+
+            return jsonify({
+                'status': 'success',
+                'duplicates': duplicates
+            })
+
+        except Exception as e:
+            logger.error(f"重複チェックエラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/publish/upload', methods=['POST'])
+    def publish_upload():
+        """実績反映用ファイルアップロード"""
+        try:
+            files = request.files
+            form_data = request.form
+            file_count = int(form_data.get('file_count', 0))
+
+            saved_files = []
+            for i in range(file_count):
+                file_key = f"file_{i}"
+                if file_key in files:
+                    file = files[file_key]
+                    if file.filename:
+                        filepath = file_handler.save_uploaded_file(
+                            file, f"publish_{file.filename}"
+                        )
+                        saved_files.append({
+                            'path': str(filepath),
+                            'filename': file.filename
+                        })
+
+            if not saved_files:
+                return jsonify({
+                    'status': 'error',
+                    'message': '有効なファイルがありません'
+                }), 400
+
+            # セッションに保存
+            session_id = f"pub_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            app.session_data[session_id] = {
+                'files': saved_files
+            }
+
+            return jsonify({
+                'status': 'success',
+                'session_id': session_id,
+                'file_count': len(saved_files)
+            })
+
+        except Exception as e:
+            logger.error(f"実績反映アップロードエラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/publish/import', methods=['POST'])
+    def publish_import():
+        """実績反映（DBインポート）実行"""
+        try:
+            data = request.get_json()
+            session_id = data.get('session_id')
+
+            if session_id not in app.session_data:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'セッションが見つかりません'
+                }), 400
+
+            session = app.session_data[session_id]
+            files = session['files']
+
+            # 各ファイルをインポート
+            imported_count = 0
+            for file_info in files:
+                filepath = Path(file_info['path'])
+                if filepath.exists():
+                    try:
+                        # 既存のimporterを使用
+                        from importer import import_excel
+                        import_excel(str(filepath))
+                        imported_count += 1
+                        logger.info(f"インポート完了: {file_info['filename']}")
+                    except Exception as e:
+                        logger.error(f"インポートエラー ({file_info['filename']}): {e}")
+
+            return jsonify({
+                'status': 'success',
+                'fileCount': imported_count
+            })
+
+        except Exception as e:
+            logger.error(f"実績反映エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/publish/generate-dashboard', methods=['POST'])
+    def generate_dashboard():
+        """ダッシュボード生成"""
+        try:
+            db_service = DatabaseService()
+            dashboard_path = db_service.generate_dashboard()
+
+            if dashboard_path:
+                # 生成日時を記録
+                app.config['DASHBOARD_LAST_GENERATED'] = datetime.now().isoformat()
+                return jsonify({
+                    'status': 'success',
+                    'path': str(dashboard_path)
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'ダッシュボード生成に失敗しました'
+                }), 500
+
+        except Exception as e:
+            logger.error(f"ダッシュボード生成エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/publish/dashboard-status', methods=['GET'])
+    def dashboard_status():
+        """ダッシュボード状態取得"""
+        try:
+            last_generated = app.config.get('DASHBOARD_LAST_GENERATED')
+            last_published = app.config.get('DASHBOARD_LAST_PUBLISHED')
+
+            # ダッシュボードHTMLファイルの存在確認
+            dashboard_path = APP_DIR.parent / 'dashboard.html'
+            has_dashboard = dashboard_path.exists()
+
+            return jsonify({
+                'status': 'success',
+                'dashboard': {
+                    'lastGenerated': last_generated,
+                    'lastPublished': last_published,
+                    'hasUnpublishedChanges': last_generated and (not last_published or last_generated > last_published)
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"ダッシュボード状態取得エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/publish/preview', methods=['GET'])
+    def preview_dashboard():
+        """ダッシュボードプレビュー"""
+        try:
+            dashboard_path = APP_DIR.parent / 'dashboard.html'
+            if dashboard_path.exists():
+                return send_file(str(dashboard_path), mimetype='text/html')
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'ダッシュボードが生成されていません'
+                }), 404
+
+        except Exception as e:
+            logger.error(f"プレビューエラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/publish/publish-dashboard', methods=['POST'])
+    def publish_dashboard_api():
+        """ダッシュボード公開"""
+        try:
+            db_service = DatabaseService()
+            from config import Config
+            success = db_service.publish_dashboard(Config.PUBLISH_PATH)
+
+            if success:
+                app.config['DASHBOARD_LAST_PUBLISHED'] = datetime.now().isoformat()
+                return jsonify({
+                    'status': 'success',
+                    'message': 'ダッシュボードを公開しました'
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'ダッシュボード公開に失敗しました'
+                }), 500
+
+        except Exception as e:
+            logger.error(f"ダッシュボード公開エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
     # フロントエンド配信（ビルド済みの場合）
     @app.route('/')
     def serve_index():

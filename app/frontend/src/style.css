@@ -661,3 +661,104 @@ body {
     width: 100%;
   }
 }
+
+/* ========== 実績反映タブ用スタイル ========== */
+
+/* 警告カード */
+.warning-card {
+  background: #fffbeb;
+  border: 1px solid #fbbf24;
+  text-align: center;
+}
+
+.warning-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.warning-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #b45309;
+  margin-bottom: 12px;
+}
+
+.warning-message {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.duplicate-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.duplicate-item {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.btn-warning {
+  padding: 12px 24px;
+  background: #f59e0b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-warning:hover {
+  background: #d97706;
+}
+
+/* ダッシュボード状態 */
+.dashboard-status {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.status-item:last-child {
+  border-bottom: none;
+}
+
+.status-label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.status-value {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.status-notice {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fef3c7;
+  border-radius: 4px;
+  color: #92400e;
+  font-size: 0.85rem;
+  text-align: center;
+}

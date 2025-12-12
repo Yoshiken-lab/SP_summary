@@ -135,3 +135,38 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"データベース状態取得エラー: {e}")
             return {}
+
+    def check_month_exists(self, year: int, month: int) -> bool:
+        """
+        指定した年月のデータが既にDBに存在するかチェック
+
+        Args:
+            year: 年（例: 2025）
+            month: 月（1-12）
+
+        Returns:
+            bool: データが存在する場合True
+        """
+        try:
+            from database import get_connection
+
+            conn = get_connection(str(self.db_path))
+            cursor = conn.cursor()
+
+            # 年度計算（4月始まり）
+            fiscal_year = year if month >= 4 else year - 1
+
+            # monthly_summaryテーブルで該当月のデータを検索
+            cursor.execute('''
+                SELECT COUNT(*) FROM monthly_summary
+                WHERE fiscal_year = ? AND month = ?
+            ''', (fiscal_year, month))
+
+            count = cursor.fetchone()[0]
+            conn.close()
+
+            return count > 0
+
+        except Exception as e:
+            logger.error(f"月データ存在チェックエラー: {e}")
+            return False
