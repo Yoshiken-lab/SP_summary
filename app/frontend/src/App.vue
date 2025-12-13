@@ -26,6 +26,12 @@
       >
         実績反映
       </button>
+      <button
+        :class="['tab-btn', { active: activeTab === 'data' }]"
+        @click="switchTab('data')"
+      >
+        データ確認
+      </button>
     </div>
 
     <!-- エラー表示 -->
@@ -517,11 +523,11 @@
       <div class="dashboard-status">
         <div class="status-item">
           <span class="status-label">最終生成日時</span>
-          <span class="status-value">{{ dashboardStatus.lastGenerated || '未生成' }}</span>
+          <span class="status-value">{{ formatDateTime(dashboardStatus.lastGenerated) || '未生成' }}</span>
         </div>
         <div class="status-item">
           <span class="status-label">最終公開日時</span>
-          <span class="status-value">{{ dashboardStatus.lastPublished || '未公開' }}</span>
+          <span class="status-value">{{ formatDateTime(dashboardStatus.lastPublished) || '未公開' }}</span>
         </div>
         <div v-if="dashboardStatus.hasUnpublishedChanges" class="status-notice">
           ※未公開の更新があります
@@ -547,6 +553,165 @@
     </div>
 
     </div><!-- 実績反映タブ終了 -->
+
+    <!-- ========== データ確認タブ ========== -->
+    <div v-if="activeTab === 'data'">
+
+    <!-- テーブル選択 -->
+    <div class="card">
+      <h2 class="card-title">
+        <span class="step">1</span>
+        テーブル選択
+      </h2>
+      <div class="table-select-group">
+        <div
+          v-for="table in dataTables"
+          :key="table.id"
+          :class="['table-option', { active: dataSelectedTable === table.id }]"
+          @click="selectDataTable(table.id)"
+        >
+          <span class="table-name">{{ table.name }}</span>
+          <span class="table-desc">{{ table.description }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 検索フィルター -->
+    <div class="card">
+      <h2 class="card-title">
+        <span class="step">2</span>
+        検索条件
+      </h2>
+
+      <div class="filter-grid">
+        <div class="filter-item">
+          <label>年度</label>
+          <select v-model="dataFilters.fiscal_year">
+            <option :value="null">すべて</option>
+            <option v-for="year in dataFilterOptions.fiscal_years" :key="year" :value="year">
+              {{ year }}年度
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-item" v-if="dataSelectedTable !== 'member_rates'">
+          <label>月</label>
+          <select v-model="dataFilters.month">
+            <option :value="null">すべて</option>
+            <option v-for="month in 12" :key="month" :value="month">
+              {{ month }}月
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-item" v-if="dataSelectedTable !== 'monthly_summary'">
+          <label>事業所</label>
+          <select v-model="dataFilters.region">
+            <option :value="null">すべて</option>
+            <option v-for="region in dataFilterOptions.regions" :key="region" :value="region">
+              {{ region }}
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-item" v-if="dataSelectedTable !== 'monthly_summary'">
+          <label>担当者</label>
+          <select v-model="dataFilters.manager">
+            <option :value="null">すべて</option>
+            <option v-for="manager in dataFilterOptions.managers" :key="manager" :value="manager">
+              {{ manager }}
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-item" v-if="dataSelectedTable !== 'monthly_summary'">
+          <label>学校名（部分一致）</label>
+          <input
+            type="text"
+            v-model="dataFilters.school_name"
+            placeholder="例: 幼稚園"
+          >
+        </div>
+
+        <div class="filter-item" v-if="dataSelectedTable === 'event_sales'">
+          <label>イベント開始日</label>
+          <input
+            type="date"
+            v-model="dataFilters.event_start_date"
+          >
+        </div>
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn-secondary" @click="clearDataFilters">
+          条件をクリア
+        </button>
+        <button class="btn-primary" @click="searchData">
+          🔍 検索
+        </button>
+      </div>
+    </div>
+
+    <!-- 検索結果 -->
+    <div class="card" v-if="dataSearchResult">
+      <h2 class="card-title">
+        <span class="step">3</span>
+        検索結果
+        <span class="result-count">（{{ dataSearchResult.total_count }}件）</span>
+      </h2>
+
+      <div v-if="dataSearchResult.data.length === 0" class="no-data">
+        該当するデータがありません
+      </div>
+
+      <div v-else class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th v-for="col in dataSearchResult.columns" :key="col">{{ col }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, index) in dataSearchResult.data" :key="index">
+              <td v-for="col in dataSearchResult.columns" :key="col">
+                {{ formatCellValue(row[col], col) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ページング -->
+      <div v-if="dataSearchResult.total_count > dataSearchResult.limit" class="pagination">
+        <button
+          class="page-btn"
+          :disabled="dataCurrentPage <= 1"
+          @click="goToPage(dataCurrentPage - 1)"
+        >
+          前へ
+        </button>
+        <span class="page-info">
+          {{ dataCurrentPage }} / {{ dataTotalPages }} ページ
+        </span>
+        <button
+          class="page-btn"
+          :disabled="dataCurrentPage >= dataTotalPages"
+          @click="goToPage(dataCurrentPage + 1)"
+        >
+          次へ
+        </button>
+      </div>
+
+      <!-- CSVエクスポート -->
+      <div class="export-section">
+        <button class="btn-success" @click="exportDataCsv">
+          📥 CSVダウンロード
+        </button>
+        <span class="export-hint">※現在の検索条件で全件をCSV出力します</span>
+      </div>
+    </div>
+
+    </div><!-- データ確認タブ終了 -->
 
   </div>
 </template>
@@ -615,7 +780,33 @@ export default {
         lastGenerated: null,
         lastPublished: null,
         hasUnpublishedChanges: false
-      }
+      },
+
+      // === データ確認用 ===
+      dataTables: [
+        { id: 'monthly_summary', name: '月別サマリー', description: '月ごとの売上概要' },
+        { id: 'school_sales', name: '学校別売上', description: '学校ごとの月別売上' },
+        { id: 'event_sales', name: 'イベント別売上', description: 'イベントごとの月別売上' },
+        { id: 'member_rates', name: '会員率', description: '学校・学年ごとの会員率' }
+      ],
+      dataSelectedTable: 'monthly_summary',
+      dataFilters: {
+        fiscal_year: null,
+        month: null,
+        region: null,
+        manager: null,
+        school_name: '',
+        event_start_date: ''
+      },
+      dataFilterOptions: {
+        fiscal_years: [],
+        regions: [],
+        managers: [],
+        schools: []
+      },
+      dataSearchResult: null,
+      dataCurrentPage: 1,
+      dataPageSize: 50
     }
   },
   computed: {
@@ -644,9 +835,30 @@ export default {
     },
     canStartCumulative() {
       return this.cumulativeInputFiles.length > 0
+    },
+    // データ確認用
+    dataTotalPages() {
+      if (!this.dataSearchResult) return 1
+      return Math.ceil(this.dataSearchResult.total_count / this.dataPageSize)
     }
   },
   methods: {
+    formatDateTime(isoString) {
+      if (!isoString) return null
+      try {
+        const date = new Date(isoString)
+        const year = date.getFullYear()
+        const month = date.getMonth() + 1
+        const day = date.getDate()
+        const hours = date.getHours().toString().padStart(2, '0')
+        const minutes = date.getMinutes().toString().padStart(2, '0')
+        const seconds = date.getSeconds().toString().padStart(2, '0')
+        return `${year}年${month}月${day}日 ${hours}時${minutes}分${seconds}秒`
+      } catch {
+        return isoString
+      }
+    },
+
     selectFile(type, event) {
       const file = event.target.files[0]
       if (file) {
@@ -1204,11 +1416,140 @@ export default {
       this.publishSessionId = null
       this.publishDuplicateWarning = null
       this.error = null
+    },
+
+    // ========== データ確認用メソッド ==========
+
+    selectDataTable(tableId) {
+      this.dataSelectedTable = tableId
+      this.dataSearchResult = null
+      this.dataCurrentPage = 1
+    },
+
+    async fetchDataFilterOptions() {
+      try {
+        const response = await fetch('/api/data/filters')
+        const data = await response.json()
+        if (data.status === 'success') {
+          this.dataFilterOptions = data.filters
+        }
+      } catch (err) {
+        console.error('フィルター選択肢取得エラー:', err)
+      }
+    },
+
+    clearDataFilters() {
+      this.dataFilters = {
+        fiscal_year: null,
+        month: null,
+        region: null,
+        manager: null,
+        school_name: '',
+        event_start_date: ''
+      }
+      this.dataSearchResult = null
+      this.dataCurrentPage = 1
+    },
+
+    async searchData() {
+      this.error = null
+      try {
+        // nullや空文字のフィルターを除去
+        const filters = {}
+        for (const [key, value] of Object.entries(this.dataFilters)) {
+          if (value !== null && value !== '') {
+            filters[key] = value
+          }
+        }
+
+        const response = await fetch('/api/data/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            table: this.dataSelectedTable,
+            filters: filters,
+            limit: this.dataPageSize,
+            offset: (this.dataCurrentPage - 1) * this.dataPageSize
+          })
+        })
+
+        const data = await response.json()
+        if (data.status !== 'success') {
+          throw new Error(data.message)
+        }
+
+        this.dataSearchResult = data
+      } catch (err) {
+        this.error = err.message || 'データ検索中にエラーが発生しました'
+      }
+    },
+
+    goToPage(page) {
+      this.dataCurrentPage = page
+      this.searchData()
+    },
+
+    formatCellValue(value, colName) {
+      if (value === null || value === undefined) return '-'
+
+      // 売上・金額系のカラムは通貨フォーマット
+      if (colName.includes('売上') || colName.includes('予算')) {
+        return '¥' + Math.round(value).toLocaleString()
+      }
+
+      // 比率系は%表示
+      if (colName.includes('比') || colName.includes('率')) {
+        if (typeof value === 'number') {
+          return (value * 100).toFixed(1) + '%'
+        }
+      }
+
+      return value
+    },
+
+    async exportDataCsv() {
+      try {
+        // nullや空文字のフィルターを除去
+        const filters = {}
+        for (const [key, value] of Object.entries(this.dataFilters)) {
+          if (value !== null && value !== '') {
+            filters[key] = value
+          }
+        }
+
+        const response = await fetch('/api/data/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            table: this.dataSelectedTable,
+            filters: filters
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error('CSVエクスポートに失敗しました')
+        }
+
+        // ファイルダウンロード
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `export_${this.dataSelectedTable}_${new Date().toISOString().slice(0, 10)}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } catch (err) {
+        this.error = err.message || 'CSVエクスポート中にエラーが発生しました'
+      }
     }
   },
   mounted() {
     // 実績反映タブ用：ダッシュボード状態を取得
     this.fetchDashboardStatus()
+    // データ確認タブ用：フィルター選択肢を取得
+    this.fetchDataFilterOptions()
   }
 }
 </script>

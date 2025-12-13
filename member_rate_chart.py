@@ -583,12 +583,13 @@ def get_sales_trend_by_school(school_id, target_fy=None, db_path=None):
     }
 
 
-def get_event_sales_by_school(school_id, db_path=None):
+def get_event_sales_by_school(school_id, target_fy=None, db_path=None):
     """
     学校単位のイベント別売上を取得
 
     Args:
         school_id: 学校ID
+        target_fy: 対象年度（指定しない場合は最新年度）
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
@@ -617,40 +618,61 @@ def get_event_sales_by_school(school_id, db_path=None):
         ORDER BY es.fiscal_year DESC, total_sales DESC
     ''', (school_id,))
 
-    events = []
     rows = cursor.fetchall()
-    if rows:
+
+    # 対象年度を特定（指定年度がない場合はフォールバックしない）
+    if rows and target_fy:
         years = set(row[3] for row in rows if row[3])
-        current_fy = max(years) if years else None
-        prev_fy = current_fy - 1 if current_fy else None
+        # 指定年度または前年度のデータがある場合のみ処理
+        if target_fy in years or (target_fy - 1) in years:
+            current_fy = target_fy
+            prev_fy = target_fy - 1
 
-        # 年度別に集計
-        current_year_events = []
-        prev_year_events = []
+            # 年度別に集計
+            current_year_events = []
+            prev_year_events = []
 
-        for row in rows:
-            event_id, event_name, start_date, fiscal_year, total_sales = row
-            event_data = {
-                'event_id': event_id,
-                'event_name': event_name,
-                'start_date': str(start_date) if start_date else None,
-                'sales': total_sales or 0
+            for row in rows:
+                event_id, event_name, start_date, fiscal_year, total_sales = row
+                event_data = {
+                    'event_id': event_id,
+                    'event_name': event_name,
+                    'start_date': str(start_date) if start_date else None,
+                    'sales': total_sales or 0
+                }
+                if fiscal_year == current_fy:
+                    current_year_events.append(event_data)
+                elif fiscal_year == prev_fy:
+                    prev_year_events.append(event_data)
+
+            events = {
+                'current_year': current_year_events,
+                'prev_year': prev_year_events,
+                'current_fy': current_fy,
+                'prev_fy': prev_fy
             }
-            if fiscal_year == current_fy:
-                current_year_events.append(event_data)
-            elif fiscal_year == prev_fy:
-                prev_year_events.append(event_data)
-
+        else:
+            # 指定年度のデータがない場合は空を返す
+            events = {
+                'current_year': [],
+                'prev_year': [],
+                'current_fy': target_fy,
+                'prev_fy': target_fy - 1
+            }
+    else:
         events = {
-            'current_year': current_year_events,
-            'prev_year': prev_year_events
+            'current_year': [],
+            'prev_year': [],
+            'current_fy': target_fy,
+            'prev_fy': target_fy - 1 if target_fy else None
         }
 
     conn.close()
 
     return {
         'school_name': school_name,
-        'events': events
+        'events': events,
+        'fiscal_year': target_fy
     }
 
 

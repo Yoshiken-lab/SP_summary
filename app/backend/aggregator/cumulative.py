@@ -222,7 +222,7 @@ class CumulativeAggregator:
 
         key_cols = ['担当者', '写真館', '学校名']
         merged = pd.merge(existing_df, new_data, on=key_cols, how='outer')
-        merged = self._reorder_month_columns(merged, key_cols)
+        merged = self._reorder_month_columns(merged, key_cols, sheet_type='school')
 
         month_cols = [col for col in merged.columns if '年' in col and '月分' in col]
         merged['総計'] = merged[month_cols].fillna(0).sum(axis=1).astype(int)
@@ -293,15 +293,21 @@ class CumulativeAggregator:
             mask = (merged['事業所'].isna()) | (merged['事業所'] == '')
             merged.loc[mask, '事業所'] = merged.loc[mask, '学校名'].map(branch_mapping).fillna('')
 
-        merged = self._reorder_month_columns(merged, actual_key_cols)
+        merged = self._reorder_month_columns(merged, actual_key_cols, sheet_type='event')
 
         month_cols = [col for col in merged.columns if '年' in col and '月分' in col]
         merged['総計'] = merged[month_cols].fillna(0).sum(axis=1).astype(int)
 
         return merged
 
-    def _reorder_month_columns(self, df: pd.DataFrame, key_cols: list) -> pd.DataFrame:
-        """月列を年月順に並べ替え、事業所は先頭に配置"""
+    def _reorder_month_columns(self, df: pd.DataFrame, key_cols: list, sheet_type: str = 'event') -> pd.DataFrame:
+        """月列を年月順に並べ替え、シートタイプに応じてカラム順序を設定
+
+        Args:
+            df: 対象のDataFrame
+            key_cols: キーカラムのリスト
+            sheet_type: 'school'（学校別）または 'event'（イベント別）
+        """
         month_cols = [col for col in df.columns if '年' in col and '月分' in col]
 
         def parse_month_col(col):
@@ -313,8 +319,14 @@ class CumulativeAggregator:
 
         month_cols_sorted = sorted(month_cols, key=parse_month_col)
 
-        # 固定カラムの順序を定義（事業所を先頭に）
-        fixed_col_order = ['事業所', '学校名', 'イベント名', 'イベント開始日', '担当者', '写真館']
+        # シートタイプに応じて固定カラムの順序を定義
+        if sheet_type == 'school':
+            # 学校別: 担当者・写真館・学校名の順
+            fixed_col_order = ['担当者', '写真館', '学校名']
+        else:
+            # イベント別: 事業所・学校名・イベント名・イベント開始日の順
+            fixed_col_order = ['事業所', '学校名', 'イベント名', 'イベント開始日']
+
         other_cols = []
         for col in fixed_col_order:
             if col in df.columns:

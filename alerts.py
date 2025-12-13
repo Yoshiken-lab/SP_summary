@@ -451,15 +451,15 @@ def alert_rapid_growth_schools(cursor, config=AlertConfig):
     current_fy = get_current_fiscal_year()
     prev_fy = current_fy - 1
 
-    # event_salesから売上を集計（school_yearly_salesにデータがない場合に対応）
+    # event_salesから売上を集計（売上月の年度で比較）
     query = '''
         WITH current_sales AS (
             SELECT
                 e.school_id,
                 COALESCE(SUM(es.sales), 0) as total_sales
             FROM events e
-            LEFT JOIN event_sales es ON es.event_id = e.id
-            WHERE e.fiscal_year = ?
+            INNER JOIN event_sales es ON es.event_id = e.id
+            WHERE es.fiscal_year = ?
             GROUP BY e.school_id
         ),
         prev_sales AS (
@@ -467,8 +467,8 @@ def alert_rapid_growth_schools(cursor, config=AlertConfig):
                 e.school_id,
                 COALESCE(SUM(es.sales), 0) as total_sales
             FROM events e
-            LEFT JOIN event_sales es ON es.event_id = e.id
-            WHERE e.fiscal_year = ?
+            INNER JOIN event_sales es ON es.event_id = e.id
+            WHERE es.fiscal_year = ?
             GROUP BY e.school_id
         )
         SELECT

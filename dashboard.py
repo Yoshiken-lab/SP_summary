@@ -39,8 +39,12 @@ def get_summary_stats(db_path=None, target_fy=None):
     current_fy = target_fy if target_fy else get_current_fiscal_year()
     prev_fy = current_fy - 1
 
-    # 最新の報告書情報
-    cursor.execute('SELECT id, report_date FROM reports ORDER BY report_date DESC LIMIT 1')
+    # 最新の報告書情報（monthly_summaryにデータがある報告書のみ対象）
+    cursor.execute('''
+        SELECT r.id, r.report_date FROM reports r
+        WHERE EXISTS (SELECT 1 FROM monthly_summary ms WHERE ms.report_id = r.id)
+        ORDER BY r.report_date DESC, r.id DESC LIMIT 1
+    ''')
     row = cursor.fetchone()
     latest_report_id = row[0] if row else None
     report_date = row[1] if row else datetime.now().strftime('%Y-%m-%d')
@@ -206,10 +210,13 @@ def generate_html_dashboard(db_path=None, output_path=None):
             # （フォールバックで別年度のデータが返ってきた場合は保存しない）
             if data and data.get('fiscal_year') == year and (data['current_year']['dates'] or data['prev_year']['dates']):
                 all_sales_school_data[f"school_{school['id']}_{year}"] = data
-        # イベント別売上も取得
-        event_data = get_event_sales_by_school(school['id'], db_path=db_path)
-        if event_data:
-            all_event_sales_data[f"school_{school['id']}"] = event_data
+            # イベント別売上も年度別に取得（実際にイベントがある場合のみ保存）
+            event_data = get_event_sales_by_school(school['id'], target_fy=year, db_path=db_path)
+            if event_data and event_data.get('events'):
+                events = event_data['events']
+                # 選択年度または前年度にイベントがある場合のみ保存（空リストは除外）
+                if len(events.get('current_year', [])) > 0 or len(events.get('prev_year', [])) > 0:
+                    all_event_sales_data[f"school_{school['id']}_{year}"] = event_data
 
     all_sales_studio_data = {}
     for studio in sales_filter_options['studios']:
@@ -1318,12 +1325,6 @@ def generate_html_dashboard(db_path=None, output_path=None):
                         data: months.map(m => data.prev[m] || 0),
                         backgroundColor: 'rgba(156, 163, 175, 0.6)',
                         borderRadius: 4
-                    }},
-                    {{
-                        label: '予算',
-                        data: months.map(m => data.budget[m] || 0),
-                        backgroundColor: 'rgba(251, 191, 36, 0.6)',
-                        borderRadius: 4
                     }}
                 ];
 
@@ -1986,7 +1987,7 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 // 年度別キーでデータを取得
                 currentSalesData = allSalesSchoolData[`school_${{schoolId}}_${{selectedYear}}`];
                 currentSchoolId = schoolId;
-                showEventBreakdown(schoolId);
+                showEventBreakdown(schoolId, selectedYear);
             }} else if (studio) {{
                 currentSalesData = allSalesStudioData[`studio_${{studio}}_${{selectedYear}}`];
                 currentSchoolId = null;
@@ -2003,11 +2004,13 @@ def generate_html_dashboard(db_path=None, output_path=None):
         // イベントソート更新
         function updateEventSort() {{
             currentEventSortType = document.getElementById('eventSortType').value;
-            if (currentSchoolId) showEventBreakdown(currentSchoolId);
+            const selectedYear = document.getElementById('salesYearSelect').value;
+            if (currentSchoolId) showEventBreakdown(currentSchoolId, selectedYear);
         }}
 
-        function showEventBreakdown(schoolId) {{
-            const eventData = allEventSalesData[`school_${{schoolId}}`];
+        function showEventBreakdown(schoolId, selectedYear) {{
+            // 年度別キーでイベントデータを取得
+            const eventData = allEventSalesData[`school_${{schoolId}}_${{selectedYear}}`];
             const container = document.getElementById('eventBreakdownContainer');
             const section = document.getElementById('eventBreakdownSection');
 
@@ -2018,6 +2021,11 @@ def generate_html_dashboard(db_path=None, output_path=None):
 
             section.style.display = 'block';
             container.innerHTML = '';
+
+            // 引数から年度を取得（parseIntで数値化）
+            const yearNum = parseInt(selectedYear);
+            const currentFy = eventData.events.current_fy || yearNum;
+            const prevFy = eventData.events.prev_fy || (yearNum - 1);
 
             // ソート関数
             let sortFn;
@@ -2038,12 +2046,12 @@ def generate_html_dashboard(db_path=None, output_path=None):
                     sortFn = (a, b) => b.sales - a.sales;
             }}
 
-            // 今年度
+            // 選択年度のイベント
             if (eventData.events.current_year?.length > 0) {{
                 const sorted = [...eventData.events.current_year].sort(sortFn);
                 const div = document.createElement('div');
                 div.innerHTML = `
-                    <h5 style="font-size: 13px; color: #3b82f6; margin-bottom: 8px;">今年度</h5>
+                    <h5 style="font-size: 13px; color: #3b82f6; margin-bottom: 8px;">${{currentFy}}年度</h5>
                     <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
                         <thead><tr style="background: #f8fafc;">
                             <th style="text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0;">イベント名</th>
@@ -2065,12 +2073,12 @@ def generate_html_dashboard(db_path=None, output_path=None):
                 container.appendChild(div);
             }}
 
-            // 前年度
+            // 前年度のイベント
             if (eventData.events.prev_year?.length > 0) {{
                 const sorted = [...eventData.events.prev_year].sort(sortFn);
                 const div = document.createElement('div');
                 div.innerHTML = `
-                    <h5 style="font-size: 13px; color: #888; margin-bottom: 8px;">前年度</h5>
+                    <h5 style="font-size: 13px; color: #888; margin-bottom: 8px;">${{prevFy}}年度</h5>
                     <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
                         <thead><tr style="background: #f8fafc;">
                             <th style="text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0;">イベント名</th>

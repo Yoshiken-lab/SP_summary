@@ -780,9 +780,14 @@ def create_app(config=None):
     def preview_dashboard():
         """ダッシュボードプレビュー"""
         try:
-            dashboard_path = APP_DIR.parent / 'dashboard.html'
-            if dashboard_path.exists():
-                return send_file(str(dashboard_path), mimetype='text/html')
+            # 最新のダッシュボードファイルを検索
+            dashboard_dir = APP_DIR.parent
+            dashboard_files = list(dashboard_dir.glob('dashboard_*.html'))
+
+            if dashboard_files:
+                # 最新のファイルを取得（更新日時順）
+                latest_dashboard = max(dashboard_files, key=lambda p: p.stat().st_mtime)
+                return send_file(str(latest_dashboard), mimetype='text/html')
             else:
                 return jsonify({
                     'status': 'error',
@@ -816,6 +821,312 @@ def create_app(config=None):
         except Exception as e:
             logger.error(f"ダッシュボード公開エラー: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    # ========== データ確認API ==========
+
+    @app.route('/api/data/tables', methods=['GET'])
+    def get_tables():
+        """利用可能なテーブル一覧を取得"""
+        tables = [
+            {'id': 'monthly_summary', 'name': '月別サマリー', 'description': '月ごとの売上概要'},
+            {'id': 'school_sales', 'name': '学校別売上', 'description': '学校ごとの月別売上'},
+            {'id': 'event_sales', 'name': 'イベント別売上', 'description': 'イベントごとの月別売上'},
+            {'id': 'member_rates', 'name': '会員率', 'description': '学校・学年ごとの会員率'}
+        ]
+        return jsonify({'status': 'success', 'tables': tables})
+
+    @app.route('/api/data/filters', methods=['GET'])
+    def get_filter_options():
+        """フィルター選択肢を取得"""
+        try:
+            from database import get_connection
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            # 年度一覧
+            cursor.execute('SELECT DISTINCT fiscal_year FROM monthly_summary ORDER BY fiscal_year DESC')
+            fiscal_years = [row[0] for row in cursor.fetchall()]
+
+            # 事業所一覧
+            cursor.execute('SELECT DISTINCT region FROM schools WHERE region IS NOT NULL AND region != "" ORDER BY region')
+            regions = [row[0] for row in cursor.fetchall()]
+
+            # 担当者一覧
+            cursor.execute('SELECT DISTINCT manager FROM schools WHERE manager IS NOT NULL AND manager != "" ORDER BY manager')
+            managers = [row[0] for row in cursor.fetchall()]
+
+            # 学校一覧
+            cursor.execute('SELECT id, school_name FROM schools ORDER BY school_name')
+            schools = [{'id': row[0], 'name': row[1]} for row in cursor.fetchall()]
+
+            conn.close()
+
+            return jsonify({
+                'status': 'success',
+                'filters': {
+                    'fiscal_years': fiscal_years,
+                    'months': list(range(1, 13)),
+                    'regions': regions,
+                    'managers': managers,
+                    'schools': schools
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"フィルター選択肢取得エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/data/search', methods=['POST'])
+    def search_data():
+        """データ検索"""
+        try:
+            from database import get_connection
+            data = request.get_json()
+            table = data.get('table', 'monthly_summary')
+            filters = data.get('filters', {})
+            limit = data.get('limit', 100)
+            offset = data.get('offset', 0)
+
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            # テーブルごとにクエリを構築
+            if table == 'monthly_summary':
+                query, params = _build_monthly_summary_query(filters)
+            elif table == 'school_sales':
+                query, params = _build_school_sales_query(filters)
+            elif table == 'event_sales':
+                query, params = _build_event_sales_query(filters)
+            elif table == 'member_rates':
+                query, params = _build_member_rates_query(filters)
+            else:
+                return jsonify({'status': 'error', 'message': '無効なテーブル名'}), 400
+
+            # 件数取得
+            count_query = f"SELECT COUNT(*) FROM ({query})"
+            cursor.execute(count_query, params)
+            total_count = cursor.fetchone()[0]
+
+            # データ取得（ページング）
+            data_query = f"{query} LIMIT ? OFFSET ?"
+            cursor.execute(data_query, params + [limit, offset])
+            columns = [description[0] for description in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+            conn.close()
+
+            return jsonify({
+                'status': 'success',
+                'data': rows,
+                'columns': columns,
+                'total_count': total_count,
+                'limit': limit,
+                'offset': offset
+            })
+
+        except Exception as e:
+            logger.error(f"データ検索エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/data/export', methods=['POST'])
+    def export_data():
+        """データCSVエクスポート"""
+        try:
+            import csv
+            import io
+            from database import get_connection
+
+            data = request.get_json()
+            table = data.get('table', 'monthly_summary')
+            filters = data.get('filters', {})
+
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            # テーブルごとにクエリを構築
+            if table == 'monthly_summary':
+                query, params = _build_monthly_summary_query(filters)
+            elif table == 'school_sales':
+                query, params = _build_school_sales_query(filters)
+            elif table == 'event_sales':
+                query, params = _build_event_sales_query(filters)
+            elif table == 'member_rates':
+                query, params = _build_member_rates_query(filters)
+            else:
+                return jsonify({'status': 'error', 'message': '無効なテーブル名'}), 400
+
+            cursor.execute(query, params)
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+
+            conn.close()
+
+            # CSV生成
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(columns)
+            writer.writerows(rows)
+
+            csv_content = output.getvalue()
+            output.close()
+
+            # BOMつきUTF-8でレスポンス
+            response = Response(
+                '\ufeff' + csv_content,
+                mimetype='text/csv; charset=utf-8',
+                headers={
+                    'Content-Disposition': f'attachment; filename=export_{table}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+                }
+            )
+
+            return response
+
+        except Exception as e:
+            logger.error(f"CSVエクスポートエラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    def _build_monthly_summary_query(filters):
+        """月別サマリークエリ構築"""
+        query = '''
+            SELECT
+                ms.fiscal_year AS 年度,
+                ms.month AS 月,
+                ms.total_sales AS 総売上,
+                ms.direct_sales AS 直取引売上,
+                ms.studio_school_sales AS 写真館学校売上,
+                ms.school_count AS 学校数,
+                ms.budget AS 予算,
+                ms.budget_rate AS 予算比,
+                ms.yoy_rate AS 昨年比
+            FROM monthly_summary ms
+            WHERE 1=1
+        '''
+        params = []
+
+        if filters.get('fiscal_year'):
+            query += ' AND ms.fiscal_year = ?'
+            params.append(filters['fiscal_year'])
+        if filters.get('month'):
+            query += ' AND ms.month = ?'
+            params.append(filters['month'])
+
+        query += ' ORDER BY ms.fiscal_year DESC, ms.month DESC'
+        return query, params
+
+    def _build_school_sales_query(filters):
+        """学校別売上クエリ構築"""
+        query = '''
+            SELECT
+                ss.fiscal_year AS 年度,
+                ss.month AS 月,
+                s.school_name AS 学校名,
+                s.attribute AS 属性,
+                s.region AS 事業所,
+                s.manager AS 担当者,
+                s.studio_name AS 写真館,
+                ss.sales AS 売上
+            FROM school_sales ss
+            JOIN schools s ON ss.school_id = s.id
+            WHERE 1=1
+        '''
+        params = []
+
+        if filters.get('fiscal_year'):
+            query += ' AND ss.fiscal_year = ?'
+            params.append(filters['fiscal_year'])
+        if filters.get('month'):
+            query += ' AND ss.month = ?'
+            params.append(filters['month'])
+        if filters.get('region'):
+            query += ' AND s.region = ?'
+            params.append(filters['region'])
+        if filters.get('manager'):
+            query += ' AND s.manager = ?'
+            params.append(filters['manager'])
+        if filters.get('school_name'):
+            query += ' AND s.school_name LIKE ?'
+            params.append(f'%{filters["school_name"]}%')
+
+        query += ' ORDER BY ss.fiscal_year DESC, ss.month DESC, ss.sales DESC'
+        return query, params
+
+    def _build_event_sales_query(filters):
+        """イベント別売上クエリ構築"""
+        query = '''
+            SELECT
+                es.fiscal_year AS 年度,
+                es.month AS 月,
+                s.school_name AS 学校名,
+                e.event_name AS イベント名,
+                e.start_date AS 開始日,
+                s.region AS 事業所,
+                s.manager AS 担当者,
+                es.sales AS 売上
+            FROM event_sales es
+            JOIN events e ON es.event_id = e.id
+            JOIN schools s ON e.school_id = s.id
+            WHERE 1=1
+        '''
+        params = []
+
+        if filters.get('fiscal_year'):
+            query += ' AND es.fiscal_year = ?'
+            params.append(filters['fiscal_year'])
+        if filters.get('month'):
+            query += ' AND es.month = ?'
+            params.append(filters['month'])
+        if filters.get('region'):
+            query += ' AND s.region = ?'
+            params.append(filters['region'])
+        if filters.get('manager'):
+            query += ' AND s.manager = ?'
+            params.append(filters['manager'])
+        if filters.get('school_name'):
+            query += ' AND s.school_name LIKE ?'
+            params.append(f'%{filters["school_name"]}%')
+        if filters.get('event_start_date'):
+            query += ' AND e.start_date = ?'
+            params.append(filters['event_start_date'])
+
+        query += ' ORDER BY es.fiscal_year DESC, es.month DESC, es.sales DESC'
+        return query, params
+
+    def _build_member_rates_query(filters):
+        """会員率クエリ構築"""
+        query = '''
+            SELECT
+                mr.fiscal_year AS 年度,
+                mr.snapshot_date AS スナップショット日,
+                s.school_name AS 学校名,
+                s.attribute AS 属性,
+                s.region AS 事業所,
+                s.manager AS 担当者,
+                mr.grade_category AS 学年カテゴリ,
+                mr.grade_name AS 学年名,
+                mr.student_count AS 生徒数,
+                mr.member_count AS 会員数,
+                mr.member_rate AS 会員率
+            FROM member_rates mr
+            JOIN schools s ON mr.school_id = s.id
+            WHERE 1=1
+        '''
+        params = []
+
+        if filters.get('fiscal_year'):
+            query += ' AND mr.fiscal_year = ?'
+            params.append(filters['fiscal_year'])
+        if filters.get('region'):
+            query += ' AND s.region = ?'
+            params.append(filters['region'])
+        if filters.get('manager'):
+            query += ' AND s.manager = ?'
+            params.append(filters['manager'])
+        if filters.get('school_name'):
+            query += ' AND s.school_name LIKE ?'
+            params.append(f'%{filters["school_name"]}%')
+
+        query += ' ORDER BY mr.fiscal_year DESC, mr.snapshot_date DESC, s.school_name'
+        return query, params
 
     # フロントエンド配信（ビルド済みの場合）
     @app.route('/')
