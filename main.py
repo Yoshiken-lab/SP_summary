@@ -51,6 +51,25 @@ def show_help():
     print("  sync-master <マスタファイル>            - 学校マスタ同期")
 
 
+def publish_dashboard():
+    """ダッシュボード生成＆ファイルサーバーに公開"""
+    print("ダッシュボードを生成中...")
+    local_path = generate_html_dashboard()
+    print(f"  ローカル: {local_path}")
+
+    # ファイルサーバーにコピー
+    if not PUBLISH_PATH.exists():
+        PUBLISH_PATH.mkdir(parents=True, exist_ok=True)
+        print(f"  フォルダを作成しました: {PUBLISH_PATH}")
+
+    dest_path = PUBLISH_PATH / PUBLISH_FILENAME
+    shutil.copy2(local_path, dest_path)
+    print(f"  公開先: {dest_path}")
+    print(f"\n公開完了！")
+    print(f"アクセスURL: {dest_path}")
+    return dest_path
+
+
 def show_status():
     """DBの状態を表示"""
     import sqlite3
@@ -107,25 +126,11 @@ def main():
 
     elif command == 'publish':
         # ダッシュボード生成＆ファイルサーバーに公開
-        print("ダッシュボードを生成中...")
-        local_path = generate_html_dashboard()
-        print(f"  ローカル: {local_path}")
-
-        # ファイルサーバーにコピー
         try:
-            if not PUBLISH_PATH.exists():
-                PUBLISH_PATH.mkdir(parents=True, exist_ok=True)
-                print(f"  フォルダを作成しました: {PUBLISH_PATH}")
-
-            dest_path = PUBLISH_PATH / PUBLISH_FILENAME
-            shutil.copy2(local_path, dest_path)
-            print(f"  公開先: {dest_path}")
-            print(f"\n公開完了！")
-            print(f"アクセスURL: {dest_path}")
+            publish_dashboard()
         except Exception as e:
             print(f"\nエラー: ファイルサーバーへのコピーに失敗しました")
             print(f"  {e}")
-            print(f"\nローカルファイルは生成されています: {local_path}")
 
     elif command == 'chart':
         output = sys.argv[2] if len(sys.argv) > 2 else None

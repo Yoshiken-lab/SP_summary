@@ -550,6 +550,21 @@
           🚀 ダッシュボードを公開
         </button>
       </div>
+
+      <!-- 公開URL表示 -->
+      <div v-if="dashboardStatus.publishUrl" class="publish-url-box">
+        <div class="publish-url-label">公開先URL:</div>
+        <div class="publish-url-value">
+          <input
+            type="text"
+            :value="dashboardStatus.publishUrl"
+            readonly
+            @click="$event.target.select()"
+            class="publish-url-input"
+          >
+          <button class="btn-copy" @click="copyPublishUrl">コピー</button>
+        </div>
+      </div>
     </div>
 
     </div><!-- 実績反映タブ終了 -->
@@ -779,7 +794,8 @@ export default {
       dashboardStatus: {
         lastGenerated: null,
         lastPublished: null,
-        hasUnpublishedChanges: false
+        hasUnpublishedChanges: false,
+        publishUrl: null
       },
 
       // === データ確認用 ===
@@ -1388,10 +1404,29 @@ export default {
           throw new Error(data.message)
         }
 
-        alert('ダッシュボードを公開しました')
+        // 公開URLを保存して画面に表示
+        this.dashboardStatus.publishUrl = data.publishUrl || ''
         await this.fetchDashboardStatus()
       } catch (err) {
         this.error = err.message || '公開中にエラーが発生しました'
+      }
+    },
+
+    copyPublishUrl() {
+      if (this.dashboardStatus.publishUrl) {
+        navigator.clipboard.writeText(this.dashboardStatus.publishUrl)
+          .then(() => {
+            alert('URLをコピーしました')
+          })
+          .catch(() => {
+            // フォールバック: 選択状態にする
+            const input = document.querySelector('.publish-url-input')
+            if (input) {
+              input.select()
+              document.execCommand('copy')
+              alert('URLをコピーしました')
+            }
+          })
       }
     },
 

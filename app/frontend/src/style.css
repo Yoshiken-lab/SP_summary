@@ -954,3 +954,56 @@ body {
 .export-section .btn-success {
   flex-shrink: 0;
 }
+
+/* 公開URL表示ボックス */
+.publish-url-box {
+  margin-top: 20px;
+  padding: 16px;
+  background-color: #ecfdf5;
+  border: 1px solid var(--success-color);
+  border-radius: 8px;
+}
+
+.publish-url-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--success-color);
+  margin-bottom: 8px;
+}
+
+.publish-url-value {
+  display: flex;
+  gap: 8px;
+}
+
+.publish-url-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+  background-color: white;
+  color: var(--text-primary);
+}
+
+.publish-url-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.btn-copy {
+  padding: 10px 16px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-copy:hover {
+  background-color: var(--primary-hover);
+}

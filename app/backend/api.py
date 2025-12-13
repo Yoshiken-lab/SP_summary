@@ -808,9 +808,12 @@ def create_app(config=None):
 
             if success:
                 app.config['DASHBOARD_LAST_PUBLISHED'] = datetime.now().isoformat()
+                # 公開先URLを構築
+                publish_url = str(Config.PUBLISH_PATH / "dashboard.html")
                 return jsonify({
                     'status': 'success',
-                    'message': 'ダッシュボードを公開しました'
+                    'message': 'ダッシュボードを公開しました',
+                    'publishUrl': publish_url
                 })
             else:
                 return jsonify({
