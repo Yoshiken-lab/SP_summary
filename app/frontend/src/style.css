@@ -1007,3 +1007,21 @@ body {
 .btn-copy:hover {
   background-color: var(--primary-hover);
 }
+
+.btn-open {
+  padding: 10px 16px;
+  background-color: var(--success-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.btn-open:hover {
+  background-color: #059669;
+}

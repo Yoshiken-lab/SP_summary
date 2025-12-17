@@ -825,6 +825,123 @@ def create_app(config=None):
             logger.error(f"ダッシュボード公開エラー: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
+    @app.route('/api/publish/github-pages', methods=['POST'])
+    def publish_to_github_pages():
+        """GitHub Pagesにダッシュボードを公開"""
+        import subprocess
+        import shutil
+
+        try:
+            from config import Config
+
+            # 最新のダッシュボードファイルを検索
+            dashboard_dir = APP_DIR.parent
+            dashboard_files = list(dashboard_dir.glob('dashboard_*.html'))
+
+            if not dashboard_files:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'ダッシュボードが生成されていません。先に実績反映を行ってください。'
+                }), 400
+
+            # 最新のファイルを取得
+            latest_dashboard = max(dashboard_files, key=lambda p: p.stat().st_mtime)
+            logger.info(f"最新ダッシュボード: {latest_dashboard}")
+
+            # GitHub Pagesリポジトリのパス
+            repo_path = Config.GITHUB_PAGES_REPO_PATH
+
+            # リポジトリフォルダが存在するか確認
+            if not repo_path.exists():
+                return jsonify({
+                    'status': 'error',
+                    'message': f'GitHub Pagesリポジトリフォルダが見つかりません: {repo_path}'
+                }), 400
+
+            # index.htmlとしてコピー
+            index_path = repo_path / 'index.html'
+            shutil.copy2(latest_dashboard, index_path)
+            logger.info(f"ダッシュボードをコピー: {latest_dashboard} -> {index_path}")
+
+            # Gitコマンドを実行
+            try:
+                # git add
+                subprocess.run(
+                    ['git', 'add', 'index.html'],
+                    cwd=str(repo_path),
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+
+                # git commit
+                commit_result = subprocess.run(
+                    ['git', 'commit', '-m', f'Update dashboard {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'],
+                    cwd=str(repo_path),
+                    capture_output=True,
+                    text=True
+                )
+
+                # 変更がない場合はスキップ
+                if commit_result.returncode != 0 and 'nothing to commit' in commit_result.stdout:
+                    logger.info("変更なし、コミットをスキップ")
+                elif commit_result.returncode != 0:
+                    raise subprocess.CalledProcessError(commit_result.returncode, 'git commit', commit_result.stderr)
+
+                # git push
+                push_result = subprocess.run(
+                    ['git', 'push'],
+                    cwd=str(repo_path),
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                logger.info(f"git push完了: {push_result.stdout}")
+
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Gitコマンドエラー: {e.stderr}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Git操作に失敗しました: {e.stderr}'
+                }), 500
+
+            # 公開完了
+            app.config['GITHUB_PAGES_LAST_PUBLISHED'] = datetime.now().isoformat()
+
+            return jsonify({
+                'status': 'success',
+                'message': 'GitHub Pagesに公開しました',
+                'publishUrl': Config.GITHUB_PAGES_URL
+            })
+
+        except Exception as e:
+            logger.error(f"GitHub Pages公開エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/publish/github-pages-status', methods=['GET'])
+    def github_pages_status():
+        """GitHub Pages公開状態を取得"""
+        try:
+            from config import Config
+
+            repo_path = Config.GITHUB_PAGES_REPO_PATH
+            repo_exists = repo_path.exists()
+            index_exists = (repo_path / 'index.html').exists() if repo_exists else False
+
+            return jsonify({
+                'status': 'success',
+                'githubPages': {
+                    'repoExists': repo_exists,
+                    'indexExists': index_exists,
+                    'lastPublished': app.config.get('GITHUB_PAGES_LAST_PUBLISHED'),
+                    'publishUrl': Config.GITHUB_PAGES_URL
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"GitHub Pages状態取得エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
     # ========== データ確認API ==========
 
     @app.route('/api/data/tables', methods=['GET'])

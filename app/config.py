@@ -20,9 +20,13 @@ class Config:
     OUTPUT_DIR = Path.home() / 'Downloads'
     UPLOAD_DIR = APP_DIR / 'uploads'
 
-    # ダッシュボード公開先
+    # ダッシュボード公開先（社内サーバー - 現在未使用）
     PUBLISH_PATH = Path(r'\\192.168.11.51\homes\dashboard')
     PUBLISH_FILENAME = 'dashboard.html'
+
+    # GitHub Pages公開設定
+    GITHUB_PAGES_REPO_PATH = BASE_DIR / 'sp-dashboard'  # sp-dashboardフォルダのパス
+    GITHUB_PAGES_URL = 'https://yoshiken-lab.github.io/sp-dashboard/'
 
     # ファイルエンコーディング
     CSV_ENCODING = 'cp932'
