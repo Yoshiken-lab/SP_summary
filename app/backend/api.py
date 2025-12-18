@@ -942,6 +942,83 @@ def create_app(config=None):
             logger.error(f"GitHub Pages状態取得エラー: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
+    # ========== 担当者名変換API ==========
+
+    @app.route('/api/salesman-aliases', methods=['GET'])
+    def get_salesman_aliases():
+        """担当者名変換マッピング一覧を取得"""
+        try:
+            from database import get_salesman_aliases as db_get_aliases
+            aliases = db_get_aliases()
+            return jsonify({
+                'status': 'success',
+                'aliases': aliases
+            })
+        except Exception as e:
+            logger.error(f"担当者名変換マッピング取得エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/salesman-aliases', methods=['POST'])
+    def add_salesman_alias():
+        """担当者名変換マッピングを追加（既存データも自動変換）"""
+        try:
+            from database import add_salesman_alias as db_add_alias
+            data = request.get_json()
+            from_name = data.get('from_name', '').strip()
+            to_name = data.get('to_name', '').strip()
+
+            if not from_name or not to_name:
+                return jsonify({
+                    'status': 'error',
+                    'message': '変換元と変換先の担当者名を入力してください'
+                }), 400
+
+            if from_name == to_name:
+                return jsonify({
+                    'status': 'error',
+                    'message': '変換元と変換先が同じです'
+                }), 400
+
+            result = db_add_alias(from_name, to_name)
+
+            if result['success']:
+                return jsonify({
+                    'status': 'success',
+                    'message': result['message'],
+                    'migrated_count': result['migrated_count']
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': result['message']
+                }), 400
+
+        except Exception as e:
+            logger.error(f"担当者名変換マッピング追加エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/salesman-aliases/<int:alias_id>', methods=['DELETE'])
+    def delete_salesman_alias(alias_id):
+        """担当者名変換マッピングを削除"""
+        try:
+            from database import delete_salesman_alias as db_delete_alias
+            result = db_delete_alias(alias_id)
+
+            if result['success']:
+                return jsonify({
+                    'status': 'success',
+                    'message': result['message']
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': result['message']
+                }), 400
+
+        except Exception as e:
+            logger.error(f"担当者名変換マッピング削除エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
     # ========== データ確認API ==========
 
     @app.route('/api/data/tables', methods=['GET'])

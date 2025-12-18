@@ -14,7 +14,8 @@ from pathlib import Path
 from datetime import datetime
 from database import (
     get_connection, init_database,
-    get_or_create_school, get_or_create_event
+    get_or_create_school, get_or_create_event,
+    apply_salesman_alias
 )
 
 
@@ -198,6 +199,10 @@ def import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):
         school_name = str(school_name).strip()
         manager = normalize_brackets(str(row[col_mapping.get('manager', 1)]).strip()) if pd.notna(row[col_mapping.get('manager', 1)]) else None
         studio = str(row[col_mapping.get('studio', 2)]).strip() if pd.notna(row[col_mapping.get('studio', 2)]) else None
+
+        # 担当者名変換マッピングを適用
+        if manager:
+            manager = apply_salesman_alias(manager)
 
         # 学校マスタに登録/更新
         school_id = get_or_create_school(cursor, school_name, manager=manager, studio_name=studio)
@@ -447,6 +452,10 @@ def import_school_comparison(xlsx, cursor, report_id):
         school_name = str(school_name).strip()
         manager = normalize_brackets(str(row[col_mapping.get('manager', 1)]).strip()) if pd.notna(row[col_mapping.get('manager', 1)]) else None
         studio = str(row[col_mapping.get('studio', 2)]).strip() if pd.notna(row[col_mapping.get('studio', 2)]) else None
+
+        # 担当者名変換マッピングを適用
+        if manager:
+            manager = apply_salesman_alias(manager)
 
         # 学校マスタに登録/更新
         school_id = get_or_create_school(cursor, school_name, manager=manager, studio_name=studio)
@@ -763,6 +772,8 @@ def _update_school_attrs(cursor, school_id, region, manager, studio):
         updates.append('region = ?')
         params.append(region)
     if manager:
+        # 担当者名変換マッピングを適用
+        manager = apply_salesman_alias(manager)
         updates.append('manager = ?')
         params.append(manager)
     if studio:

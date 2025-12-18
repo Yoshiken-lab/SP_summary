@@ -176,6 +176,19 @@ def init_database(db_path=None):
     ''')
 
     # ========================================
+    # 9. 担当者名変換マッピング
+    # ========================================
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS salesman_aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_name TEXT NOT NULL,              -- 変換元の担当者名
+            to_name TEXT NOT NULL,                -- 変換先の担当者名
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(from_name)
+        )
+    ''')
+
+    # ========================================
     # インデックス作成
     # ========================================
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_school_external_ids_school ON school_external_ids(school_id)')
@@ -341,6 +354,129 @@ def get_or_create_event(cursor, school_id, event_name, start_date=None, fiscal_y
             VALUES (?, ?, ?, ?)
         ''', (school_id, event_name, start_date, fiscal_year))
         return cursor.lastrowid
+
+
+# ========================================
+# 担当者名変換関連
+# ========================================
+
+def get_salesman_aliases(db_path=None):
+    """全ての担当者名変換マッピングを取得"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, from_name, to_name, created_at FROM salesman_aliases ORDER BY created_at DESC')
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_salesman_alias_map(db_path=None):
+    """担当者名変換マッピングを辞書形式で取得（from_name -> to_name）"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute('SELECT from_name, to_name FROM salesman_aliases')
+    rows = cursor.fetchall()
+    conn.close()
+    return {row['from_name']: row['to_name'] for row in rows}
+
+
+def add_salesman_alias(from_name, to_name, db_path=None):
+    """
+    担当者名変換マッピングを追加し、既存データも自動でマイグレーション
+
+    Args:
+        from_name: 変換元の担当者名
+        to_name: 変換先の担当者名
+        db_path: DBパス（省略時はデフォルト）
+
+    Returns:
+        dict: 処理結果 {success: bool, migrated_count: int, message: str}
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
+    try:
+        # マッピングを追加
+        cursor.execute('''
+            INSERT INTO salesman_aliases (from_name, to_name)
+            VALUES (?, ?)
+        ''', (from_name, to_name))
+
+        # 既存データをマイグレーション（schoolsテーブルのmanagerを更新）
+        cursor.execute('''
+            UPDATE schools SET manager = ? WHERE manager = ?
+        ''', (to_name, from_name))
+        migrated_count = cursor.rowcount
+
+        conn.commit()
+        return {
+            'success': True,
+            'migrated_count': migrated_count,
+            'message': f'マッピングを追加しました。{migrated_count}件の既存データを更新しました。'
+        }
+    except Exception as e:
+        conn.rollback()
+        return {
+            'success': False,
+            'migrated_count': 0,
+            'message': f'エラー: {str(e)}'
+        }
+    finally:
+        conn.close()
+
+
+def delete_salesman_alias(alias_id, db_path=None):
+    """
+    担当者名変換マッピングを削除
+
+    Args:
+        alias_id: 削除するマッピングのID
+        db_path: DBパス（省略時はデフォルト）
+
+    Returns:
+        dict: 処理結果 {success: bool, message: str}
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('DELETE FROM salesman_aliases WHERE id = ?', (alias_id,))
+        if cursor.rowcount == 0:
+            return {
+                'success': False,
+                'message': '指定されたマッピングが見つかりません'
+            }
+        conn.commit()
+        return {
+            'success': True,
+            'message': 'マッピングを削除しました'
+        }
+    except Exception as e:
+        conn.rollback()
+        return {
+            'success': False,
+            'message': f'エラー: {str(e)}'
+        }
+    finally:
+        conn.close()
+
+
+def apply_salesman_alias(manager_name, db_path=None):
+    """
+    担当者名に変換マッピングを適用
+
+    Args:
+        manager_name: 元の担当者名
+        db_path: DBパス（省略時はデフォルト）
+
+    Returns:
+        str: 変換後の担当者名（マッピングがなければ元の名前をそのまま返す）
+    """
+    if not manager_name:
+        return manager_name
+
+    alias_map = get_salesman_alias_map(db_path)
+    return alias_map.get(manager_name, manager_name)
 
 
 if __name__ == '__main__':

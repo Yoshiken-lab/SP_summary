@@ -513,10 +513,71 @@
       </button>
     </div>
 
-    <!-- セクション2: 社内サーバー公開 -->
+    <!-- セクション2: 担当者名変換設定 -->
     <div class="card" style="margin-top: 24px;">
       <h2 class="card-title">
         <span class="step">2</span>
+        担当者名変換設定
+      </h2>
+
+      <p class="section-description">
+        同一人物で担当者名が異なる場合（例: 「佐藤」→「佐藤（邦）」）、<br>
+        変換ルールを設定すると、今後の取り込み時に自動変換され、既存データも更新されます。
+      </p>
+
+      <!-- 新規追加フォーム -->
+      <div class="alias-add-form">
+        <div class="alias-input-group">
+          <div class="alias-input-item">
+            <label>変換元</label>
+            <input
+              type="text"
+              v-model="newAliasFrom"
+              placeholder="例: 佐藤"
+              class="alias-input"
+            >
+          </div>
+          <span class="alias-arrow">→</span>
+          <div class="alias-input-item">
+            <label>変換先</label>
+            <input
+              type="text"
+              v-model="newAliasTo"
+              placeholder="例: 佐藤（邦）"
+              class="alias-input"
+            >
+          </div>
+          <button
+            class="btn-add"
+            @click="addSalesmanAlias"
+            :disabled="!newAliasFrom || !newAliasTo || addingAlias"
+          >
+            {{ addingAlias ? '追加中...' : '追加' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 登録済みマッピング一覧 -->
+      <div v-if="salesmanAliases.length > 0" class="alias-list">
+        <h3 class="alias-list-title">登録済みの変換ルール</h3>
+        <div class="alias-list-items">
+          <div v-for="alias in salesmanAliases" :key="alias.id" class="alias-list-item">
+            <span class="alias-from">{{ alias.from_name }}</span>
+            <span class="alias-arrow">→</span>
+            <span class="alias-to">{{ alias.to_name }}</span>
+            <button class="alias-delete-btn" @click="deleteSalesmanAlias(alias.id)">削除</button>
+          </div>
+        </div>
+      </div>
+      <div v-else class="alias-empty">
+        登録済みの変換ルールはありません
+      </div>
+    </div>
+
+    <!-- セクション3: 社内サーバー公開 -->
+    <div class="card" style="margin-top: 24px;">
+      <h2 class="card-title">
+        <span class="step">3</span>
         社内サーバーに公開
       </h2>
 
@@ -728,6 +789,67 @@
 
     </div><!-- データ確認タブ終了 -->
 
+    <!-- ========== 実績反映モーダル ========== -->
+    <div v-if="publishModalVisible" class="modal-overlay" @click.self="closePublishModalIfComplete">
+      <div class="modal-container">
+        <!-- 処理中 -->
+        <div v-if="publishModalStep === 'processing'" class="modal-content">
+          <h2 class="modal-title">実績を反映中...</h2>
+
+          <div class="modal-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: publishProgress + '%' }"></div>
+            </div>
+            <div class="progress-text">{{ publishProgress }}%</div>
+          </div>
+
+          <div class="modal-logs">
+            <div
+              v-for="(log, index) in publishLogs"
+              :key="index"
+              :class="['modal-log-item', log.status]"
+            >
+              <span class="log-icon">{{ getLogIcon(log.status) }}</span>
+              <span class="log-message">{{ log.message }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 完了 -->
+        <div v-if="publishModalStep === 'complete'" class="modal-content">
+          <div class="modal-complete-icon">✅</div>
+          <h2 class="modal-title">実績反映完了！</h2>
+
+          <div class="modal-result">
+            <div class="modal-result-item">
+              <span class="result-label">反映ファイル数</span>
+              <span class="result-value">{{ publishResult?.fileCount || 0 }}件</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="result-label">ダッシュボード</span>
+              <span class="result-value highlight">生成済み</span>
+            </div>
+          </div>
+
+          <button class="btn-modal-close" @click="closePublishModal">
+            閉じる
+          </button>
+        </div>
+
+        <!-- エラー -->
+        <div v-if="publishModalStep === 'error'" class="modal-content">
+          <div class="modal-error-icon">❌</div>
+          <h2 class="modal-title">エラーが発生しました</h2>
+
+          <p class="modal-error-message">{{ publishModalError }}</p>
+
+          <button class="btn-modal-close" @click="closePublishModal">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -799,6 +921,17 @@ export default {
       },
       // 社内サーバー公開用
       publishingToServer: false,
+
+      // === 実績反映モーダル用 ===
+      publishModalVisible: false,
+      publishModalStep: 'processing', // processing, complete, error
+      publishModalError: '',
+
+      // === 担当者名変換用 ===
+      salesmanAliases: [],
+      newAliasFrom: '',
+      newAliasTo: '',
+      addingAlias: false,
 
       // === データ確認用 ===
       dataTables: [
@@ -1292,7 +1425,10 @@ export default {
     },
 
     async executePublish() {
-      this.publishStep = 'processing'
+      // モーダルを表示
+      this.publishModalVisible = true
+      this.publishModalStep = 'processing'
+      this.publishModalError = ''
       this.publishProgress = 0
       this.publishLogs = []
 
@@ -1316,14 +1452,17 @@ export default {
         this.publishProgress = 100
 
         this.publishResult = result
-        this.publishStep = 'result'
+
+        // モーダルを完了状態に
+        this.publishModalStep = 'complete'
 
         // ダッシュボード状態を更新
         await this.fetchDashboardStatus()
 
       } catch (err) {
-        this.error = err.message || '処理中にエラーが発生しました'
-        this.publishStep = 'upload'
+        // モーダルをエラー状態に
+        this.publishModalStep = 'error'
+        this.publishModalError = err.message || '処理中にエラーが発生しました'
       }
     },
 
@@ -1486,6 +1625,93 @@ export default {
       this.error = null
     },
 
+    // モーダルを閉じる
+    closePublishModal() {
+      this.publishModalVisible = false
+      // 完了した場合はフォームをリセット
+      if (this.publishModalStep === 'complete') {
+        this.resetPublishForm()
+      }
+    },
+
+    // 完了時のみ背景クリックで閉じる
+    closePublishModalIfComplete() {
+      if (this.publishModalStep === 'complete' || this.publishModalStep === 'error') {
+        this.closePublishModal()
+      }
+    },
+
+    // ========== 担当者名変換用メソッド ==========
+
+    async fetchSalesmanAliases() {
+      try {
+        const response = await fetch('/api/salesman-aliases')
+        const data = await response.json()
+        if (data.status === 'success') {
+          this.salesmanAliases = data.aliases
+        }
+      } catch (err) {
+        console.error('担当者名変換マッピング取得エラー:', err)
+      }
+    },
+
+    async addSalesmanAlias() {
+      if (!this.newAliasFrom || !this.newAliasTo) return
+
+      this.addingAlias = true
+      this.error = null
+
+      try {
+        const response = await fetch('/api/salesman-aliases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from_name: this.newAliasFrom,
+            to_name: this.newAliasTo
+          })
+        })
+
+        const data = await response.json()
+        if (data.status === 'success') {
+          // 成功メッセージ表示
+          alert(data.message)
+          // フォームをリセット
+          this.newAliasFrom = ''
+          this.newAliasTo = ''
+          // 一覧を更新
+          await this.fetchSalesmanAliases()
+        } else {
+          alert('エラー: ' + data.message)
+        }
+      } catch (err) {
+        alert('追加中にエラーが発生しました: ' + err.message)
+      } finally {
+        this.addingAlias = false
+      }
+    },
+
+    async deleteSalesmanAlias(aliasId) {
+      if (!confirm('この変換ルールを削除しますか？\n※既に変換済みのデータは元に戻りません')) {
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/salesman-aliases/${aliasId}`, {
+          method: 'DELETE'
+        })
+
+        const data = await response.json()
+        if (data.status === 'success') {
+          // 一覧を更新
+          await this.fetchSalesmanAliases()
+        } else {
+          alert('エラー: ' + data.message)
+        }
+      } catch (err) {
+        alert('削除中にエラーが発生しました: ' + err.message)
+      }
+    },
+
     // ========== データ確認用メソッド ==========
 
     selectDataTable(tableId) {
@@ -1616,6 +1842,8 @@ export default {
   mounted() {
     // 実績反映タブ用：ダッシュボード状態を取得
     this.fetchDashboardStatus()
+    // 担当者名変換マッピングを取得
+    this.fetchSalesmanAliases()
     // データ確認タブ用：フィルター選択肢を取得
     this.fetchDataFilterOptions()
   }
