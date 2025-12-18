@@ -34,7 +34,7 @@ from dashboard import generate_html_dashboard
 from member_rate_page import generate_member_rate_page
 
 # ファイルサーバーの公開先パス
-PUBLISH_PATH = Path(r"\\192.168.11.51\homes\dashboard")
+PUBLISH_PATH = Path(r"\\192.168.11.51\事業所間受け渡し\VPN(事業所別フォルダ)\dashboard")
 PUBLISH_FILENAME = "dashboard.html"
 
 

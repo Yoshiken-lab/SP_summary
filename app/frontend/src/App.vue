@@ -513,11 +513,11 @@
       </button>
     </div>
 
-    <!-- セクション2: GitHub Pages公開 -->
+    <!-- セクション2: 社内サーバー公開 -->
     <div class="card" style="margin-top: 24px;">
       <h2 class="card-title">
         <span class="step">2</span>
-        GitHub Pagesに公開
+        社内サーバーに公開
       </h2>
 
       <div class="dashboard-status">
@@ -527,9 +527,9 @@
         </div>
         <div class="status-item">
           <span class="status-label">最終公開日時</span>
-          <span class="status-value">{{ formatDateTime(githubPagesStatus.lastPublished) || '未公開' }}</span>
+          <span class="status-value">{{ formatDateTime(dashboardStatus.lastPublished) || '未公開' }}</span>
         </div>
-        <div v-if="dashboardStatus.lastGenerated && (!githubPagesStatus.lastPublished || dashboardStatus.lastGenerated > githubPagesStatus.lastPublished)" class="status-notice">
+        <div v-if="dashboardStatus.hasUnpublishedChanges" class="status-notice">
           ※未公開の更新があります
         </div>
       </div>
@@ -544,26 +544,25 @@
         </button>
         <button
           class="btn-primary"
-          @click="publishToGitHubPages"
-          :disabled="!dashboardStatus.lastGenerated || publishingToGitHub"
+          @click="publishToInternalServer"
+          :disabled="!dashboardStatus.lastGenerated || publishingToServer"
         >
-          {{ publishingToGitHub ? '公開中...' : '🚀 GitHub Pagesに公開' }}
+          {{ publishingToServer ? '公開中...' : '🚀 社内サーバーに公開' }}
         </button>
       </div>
 
       <!-- 公開URL表示 -->
-      <div v-if="githubPagesStatus.publishUrl" class="publish-url-box">
-        <div class="publish-url-label">公開URL:</div>
+      <div v-if="dashboardStatus.publishUrl" class="publish-url-box">
+        <div class="publish-url-label">公開先:</div>
         <div class="publish-url-value">
           <input
             type="text"
-            :value="githubPagesStatus.publishUrl"
+            :value="dashboardStatus.publishUrl"
             readonly
             @click="$event.target.select()"
             class="publish-url-input"
           >
-          <button class="btn-copy" @click="copyGitHubPagesUrl">コピー</button>
-          <a :href="githubPagesStatus.publishUrl" target="_blank" class="btn-open">開く</a>
+          <button class="btn-copy" @click="copyPublishUrl">コピー</button>
         </div>
       </div>
     </div>
@@ -798,14 +797,8 @@ export default {
         hasUnpublishedChanges: false,
         publishUrl: null
       },
-      // GitHub Pages用
-      githubPagesStatus: {
-        repoExists: false,
-        indexExists: false,
-        lastPublished: null,
-        publishUrl: null
-      },
-      publishingToGitHub: false,
+      // 社内サーバー公開用
+      publishingToServer: false,
 
       // === データ確認用 ===
       dataTables: [
@@ -1439,13 +1432,13 @@ export default {
       }
     },
 
-    // GitHub Pages公開
-    async publishToGitHubPages() {
-      this.publishingToGitHub = true
+    // 社内サーバー公開
+    async publishToInternalServer() {
+      this.publishingToServer = true
       this.error = null
 
       try {
-        const response = await fetch('/api/publish/github-pages', {
+        const response = await fetch('/api/publish/publish-dashboard', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         })
@@ -1456,45 +1449,17 @@ export default {
         }
 
         // 状態を更新
-        this.githubPagesStatus.lastPublished = new Date().toISOString()
-        this.githubPagesStatus.publishUrl = data.publishUrl
+        this.dashboardStatus.lastPublished = new Date().toISOString()
+        this.dashboardStatus.publishUrl = data.publishUrl
+        this.dashboardStatus.hasUnpublishedChanges = false
 
-        alert('GitHub Pagesへの公開が完了しました！\n\n' + data.publishUrl)
+        alert('社内サーバーへの公開が完了しました！\n\n公開先: ' + data.publishUrl)
 
       } catch (err) {
-        this.error = err.message || 'GitHub Pages公開中にエラーが発生しました'
+        this.error = err.message || '社内サーバー公開中にエラーが発生しました'
         alert('エラー: ' + this.error)
       } finally {
-        this.publishingToGitHub = false
-      }
-    },
-
-    async fetchGitHubPagesStatus() {
-      try {
-        const response = await fetch('/api/publish/github-pages-status')
-        const data = await response.json()
-        if (data.status === 'success') {
-          this.githubPagesStatus = data.githubPages
-        }
-      } catch (err) {
-        console.error('GitHub Pages状態取得エラー:', err)
-      }
-    },
-
-    copyGitHubPagesUrl() {
-      if (this.githubPagesStatus.publishUrl) {
-        navigator.clipboard.writeText(this.githubPagesStatus.publishUrl)
-          .then(() => {
-            alert('URLをコピーしました')
-          })
-          .catch(() => {
-            const input = document.querySelector('.publish-url-input')
-            if (input) {
-              input.select()
-              document.execCommand('copy')
-              alert('URLをコピーしました')
-            }
-          })
+        this.publishingToServer = false
       }
     },
 
@@ -1651,8 +1616,6 @@ export default {
   mounted() {
     // 実績反映タブ用：ダッシュボード状態を取得
     this.fetchDashboardStatus()
-    // GitHub Pages状態を取得
-    this.fetchGitHubPagesStatus()
     // データ確認タブ用：フィルター選択肢を取得
     this.fetchDataFilterOptions()
   }
