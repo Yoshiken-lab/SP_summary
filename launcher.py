@@ -25,8 +25,8 @@ else:
 
 # サーバー設定
 SERVER_HOST = '127.0.0.1'
-SERVER_PORT = 8089
-SERVER_URL = f'http://{SERVER_HOST}:{SERVER_PORT}'
+DEFAULT_PORT = 8089
+PORT_OPTIONS = [8080, 8089, 8888, 3000, 5000]
 
 
 class ServerLauncher:
@@ -35,7 +35,7 @@ class ServerLauncher:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title('スクールフォト 売上集計システム')
-        self.root.geometry('400x300')
+        self.root.geometry('400x380')
         self.root.resizable(False, False)
 
         # アイコン設定（あれば）
@@ -45,6 +45,7 @@ class ServerLauncher:
 
         self.server_process = None
         self.is_running = False
+        self.current_port = DEFAULT_PORT
 
         self._setup_ui()
         self._center_window()
@@ -85,13 +86,37 @@ class ServerLauncher:
         )
         self.status_label.pack(side=tk.LEFT)
 
+        # ポート選択
+        port_frame = ttk.Frame(main_frame)
+        port_frame.pack(fill=tk.X, pady=10)
+
+        port_label = ttk.Label(
+            port_frame,
+            text='ポート:',
+            font=('Meiryo', 10)
+        )
+        port_label.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.port_var = tk.StringVar(value=str(DEFAULT_PORT))
+        self.port_combo = ttk.Combobox(
+            port_frame,
+            textvariable=self.port_var,
+            values=[str(p) for p in PORT_OPTIONS],
+            width=8,
+            font=('Consolas', 10)
+        )
+        self.port_combo.pack(side=tk.LEFT)
+        self.port_combo.bind('<<ComboboxSelected>>', self._on_port_change)
+        self.port_combo.bind('<Return>', self._on_port_change)
+        self.port_combo.bind('<FocusOut>', self._on_port_change)
+
         # URL表示
         self.url_frame = ttk.Frame(main_frame)
         self.url_frame.pack(fill=tk.X, pady=5)
 
         self.url_label = ttk.Label(
             self.url_frame,
-            text=f'URL: {SERVER_URL}',
+            text=f'URL: http://{SERVER_HOST}:{self.current_port}',
             font=('Consolas', 9),
             foreground='gray'
         )
@@ -163,6 +188,25 @@ class ServerLauncher:
         color = '#10b981' if is_running else '#ef4444'
         self.status_indicator.create_oval(2, 2, 14, 14, fill=color, outline='')
 
+    def _on_port_change(self, event=None):
+        """ポート変更時の処理"""
+        try:
+            port = int(self.port_var.get())
+            if 1024 <= port <= 65535:
+                self.current_port = port
+                self._update_url_display()
+            else:
+                messagebox.showwarning('警告', 'ポートは1024〜65535の範囲で指定してください')
+                self.port_var.set(str(self.current_port))
+        except ValueError:
+            messagebox.showwarning('警告', 'ポートは数値で入力してください')
+            self.port_var.set(str(self.current_port))
+
+    def _update_url_display(self):
+        """URL表示を更新"""
+        url = f'http://{SERVER_HOST}:{self.current_port}'
+        self.url_label.config(text=f'URL: {url}')
+
     def _log(self, message):
         """ログを追加"""
         self.log_text.config(state=tk.NORMAL)
@@ -175,37 +219,39 @@ class ServerLauncher:
         if self.is_running:
             return
 
-        self._log('サーバーを起動中...')
+        # 起動中はポート変更を無効化
+        self.port_combo.config(state=tk.DISABLED)
+        self._log(f'サーバーを起動中... (ポート: {self.current_port})')
 
         def run_server():
             try:
                 # run_server.pyを実行
                 server_script = BASE_DIR / 'run_server.py'
+                port_arg = ['--port', str(self.current_port)]
 
                 # Python実行パスを決定
                 if getattr(sys, 'frozen', False):
-                    # exe実行時は同梱のPythonを使用するか、システムのPythonを使用
-                    python_exe = sys.executable
-                    # run_server.pyを直接インポートして実行
+                    # exe実行時
                     os.chdir(str(BASE_DIR))
                     sys.path.insert(0, str(BASE_DIR))
 
                     # サーバーを別プロセスで起動
                     self.server_process = subprocess.Popen(
-                        [sys.executable, str(server_script)],
+                        [sys.executable, str(server_script)] + port_arg,
                         cwd=str(BASE_DIR),
                         creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                     )
                 else:
                     # 開発時
                     self.server_process = subprocess.Popen(
-                        [sys.executable, str(server_script)],
+                        [sys.executable, str(server_script)] + port_arg,
                         cwd=str(BASE_DIR)
                     )
 
                 self.is_running = True
                 self.root.after(0, self._update_ui_running)
-                self._log(f'サーバー起動完了: {SERVER_URL}')
+                server_url = f'http://{SERVER_HOST}:{self.current_port}'
+                self._log(f'サーバー起動完了: {server_url}')
 
             except Exception as e:
                 self.root.after(0, lambda: self._log(f'エラー: {e}'))
@@ -253,10 +299,12 @@ class ServerLauncher:
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
         self.open_btn.config(state=tk.DISABLED)
+        self.port_combo.config(state='readonly')
 
     def _open_browser(self):
         """ブラウザでアプリを開く"""
-        webbrowser.open(SERVER_URL)
+        server_url = f'http://{SERVER_HOST}:{self.current_port}'
+        webbrowser.open(server_url)
 
     def _on_closing(self):
         """ウィンドウを閉じる時の処理"""
