@@ -565,6 +565,7 @@
             <span class="alias-from">{{ alias.from_name }}</span>
             <span class="alias-arrow">→</span>
             <span class="alias-to">{{ alias.to_name }}</span>
+            <span class="alias-date">{{ formatAliasDate(alias.created_at) }}</span>
             <button class="alias-delete-btn" @click="deleteSalesmanAlias(alias.id)">削除</button>
           </div>
         </div>
@@ -1710,6 +1711,14 @@ export default {
       } catch (err) {
         alert('削除中にエラーが発生しました: ' + err.message)
       }
+    },
+
+    formatAliasDate(dateStr) {
+      if (!dateStr) return ''
+      const date = new Date(dateStr)
+      const month = date.getMonth() + 1
+      const day = date.getDate()
+      return `${month}/${day}登録`
     },
 
     // ========== データ確認用メソッド ==========

@@ -1136,8 +1136,13 @@ body {
   border: 1px solid #bbf7d0;
 }
 
-.alias-delete-btn {
+.alias-date {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
   margin-left: auto;
+}
+
+.alias-delete-btn {
   padding: 6px 12px;
   background: transparent;
   color: var(--error-color);
