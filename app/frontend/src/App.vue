@@ -39,23 +39,6 @@
       {{ error }}
     </div>
 
-    <!-- マスタ不一致エラー表示 -->
-    <div v-if="masterMismatchError" class="card error-card">
-      <div class="error-icon">⚠️</div>
-      <h2 class="error-title">担当者マスタに未登録の学校があります</h2>
-      <p class="error-description">
-        以下の学校が担当者マスタ（XLSX）に登録されていません。<br>
-        マスタを更新してから、再度集計を実行してください。
-      </p>
-      <div class="unmatched-schools">
-        <div class="unmatched-school-item" v-for="school in masterMismatchError.schools" :key="school">
-          {{ school }}
-        </div>
-      </div>
-      <button class="btn-secondary" @click="closeMasterMismatchError">
-        ファイル選択に戻る
-      </button>
-    </div>
 
     <!-- ========== 月次集計タブ ========== -->
     <div v-if="activeTab === 'monthly'">
@@ -948,6 +931,35 @@
       </div>
     </div>
 
+    <!-- ========== マスタ不一致エラーモーダル ========== -->
+    <div v-if="masterMismatchError" class="modal-overlay" @click.self="closeMasterMismatchError">
+      <div class="modal-container modal-warning">
+        <div class="modal-content">
+          <div class="modal-warning-icon">⚠️</div>
+          <h2 class="modal-title">担当者マスタに未登録の学校があります</h2>
+
+          <p class="modal-description">
+            以下の学校が担当者マスタ（XLSX）に登録されていません。<br>
+            マスタを更新してから、再度集計を実行してください。
+          </p>
+
+          <div class="modal-school-list">
+            <div
+              v-for="school in masterMismatchError.schools"
+              :key="school"
+              class="modal-school-item"
+            >
+              {{ school }}
+            </div>
+          </div>
+
+          <button class="btn-modal-close" @click="closeMasterMismatchError">
+            ファイル選択に戻る
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -1578,6 +1590,9 @@ export default {
 
         // ダッシュボード状態を更新
         await this.fetchDashboardStatus()
+
+        // 担当者リストを再取得（新しい担当者がいる場合のため）
+        await this.fetchAvailableManagers()
 
       } catch (err) {
         // モーダルをエラー状態に

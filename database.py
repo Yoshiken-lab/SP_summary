@@ -204,12 +204,38 @@ def init_database(db_path=None):
             school_id INTEGER NOT NULL,
             fiscal_year INTEGER NOT NULL,
             start_month INTEGER NOT NULL,
-            end_month INTEGER NOT NULL,
+            end_month INTEGER,
             manager TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (school_id) REFERENCES schools(id)
         )
     ''')
+
+    # school_manager_overridesのend_monthをNULL許可に変更（マイグレーション）
+    cursor.execute("PRAGMA table_info(school_manager_overrides)")
+    columns_info = cursor.fetchall()
+    for col in columns_info:
+        if col[1] == 'end_month' and col[3] == 1:  # col[3]はnotnull flag
+            # テーブルを再作成してNULL制約を解除
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS school_manager_overrides_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    school_id INTEGER NOT NULL,
+                    fiscal_year INTEGER NOT NULL,
+                    start_month INTEGER NOT NULL,
+                    end_month INTEGER,
+                    manager TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (school_id) REFERENCES schools(id)
+                )
+            ''')
+            cursor.execute('''
+                INSERT INTO school_manager_overrides_new
+                SELECT * FROM school_manager_overrides
+            ''')
+            cursor.execute('DROP TABLE school_manager_overrides')
+            cursor.execute('ALTER TABLE school_manager_overrides_new RENAME TO school_manager_overrides')
+            break
 
     # ========================================
     # インデックス作成

@@ -1548,3 +1548,53 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
+
+/* ========== マスタ不一致エラーモーダル ========== */
+.modal-warning {
+  border-top: 4px solid var(--warning-color);
+}
+
+.modal-warning-icon {
+  font-size: 3.5rem;
+  margin-bottom: 16px;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+.modal-description {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  margin-bottom: 20px;
+}
+
+.modal-school-list {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 24px;
+}
+
+.modal-school-item {
+  padding: 8px 12px;
+  background: white;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  border-left: 3px solid var(--warning-color);
+}
+
+.modal-school-item:last-child {
+  margin-bottom: 0;
+}

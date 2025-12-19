@@ -1095,10 +1095,11 @@ def create_app(config=None):
 
     @app.route('/api/managers/list', methods=['GET'])
     def get_managers_list():
-        """担当者一覧を取得"""
+        """担当者一覧を取得（configから）"""
         try:
-            from database import get_managers_list as get_managers
-            managers = get_managers()
+            from config import get_config
+            config = get_config()
+            managers = getattr(config, 'MANAGERS', [])
             return jsonify({'status': 'success', 'managers': managers})
         except Exception as e:
             logger.error(f"担当者一覧取得エラー: {e}")
