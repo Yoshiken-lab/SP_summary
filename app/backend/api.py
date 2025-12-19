@@ -1118,7 +1118,7 @@ def create_app(config=None):
         ]
         return jsonify({'status': 'success', 'tables': tables})
 
-    @app.route('/api/data/filters', methods=['GET'])
+    @app.route('/api/data/filter-options', methods=['GET'])
     def get_filter_options():
         """フィルター選択肢を取得"""
         try:
