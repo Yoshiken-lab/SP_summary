@@ -146,68 +146,82 @@
       </button>
     </div>
 
-    <!-- 処理中画面 -->
-    <div v-if="currentStep === 'processing'" class="card">
-      <h2 class="card-title">処理状況</h2>
-
-      <div class="progress-container">
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: progress + '%' }"></div>
-        </div>
-        <div class="progress-text">{{ progress }}%</div>
-      </div>
-
-      <div class="log-container">
-        <div
-          v-for="(log, index) in logs"
-          :key="index"
-          :class="['log-item', log.status]"
-        >
-          <span class="icon">{{ getLogIcon(log.status) }}</span>
-          <span>{{ log.message }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 完了画面 -->
-    <div v-if="currentStep === 'result'" class="card result-card">
-      <div class="result-icon">✅</div>
-      <h2 class="result-title">集計完了</h2>
-
-      <div class="result-summary">
-        <div class="summary-item">
-          <span class="summary-label">総売上</span>
-          <span class="summary-value highlight">{{ formatCurrency(result.total_sales) }}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">├ 直取引</span>
-          <span class="summary-value">{{ formatCurrency(result.direct_sales) }}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">└ 写真館・学校</span>
-          <span class="summary-value">{{ formatCurrency(result.studio_sales) }}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">実施学校数</span>
-          <span class="summary-value">{{ result.school_count }}校</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">売上/学校</span>
-          <span class="summary-value">{{ formatCurrency(result.sales_per_school) }}</span>
-        </div>
-      </div>
-
-      <div class="action-buttons">
-        <button class="btn-success" @click="downloadExcel">
-          📥 Excelダウンロード
-        </button>
-        <button class="btn-secondary" @click="resetForm">
-          新規集計を開始
-        </button>
-      </div>
-    </div>
-
     </div><!-- 月次集計タブ終了 -->
+
+    <!-- 月次集計モーダル -->
+    <div v-if="monthlyModalVisible" class="modal-overlay" @click.self="closeMonthlyModalIfComplete">
+      <div class="modal-container">
+        <!-- 処理中 -->
+        <div v-if="monthlyModalStep === 'processing'" class="modal-content">
+          <h2 class="modal-title">月次集計中...</h2>
+
+          <div class="modal-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: progress + '%' }"></div>
+            </div>
+            <div class="progress-text">{{ progress }}%</div>
+          </div>
+
+          <div class="modal-logs">
+            <div
+              v-for="(log, index) in logs"
+              :key="index"
+              :class="['modal-log-item', log.status]"
+            >
+              <span class="icon">{{ getLogIcon(log.status) }}</span>
+              <span>{{ log.message }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 完了 -->
+        <div v-if="monthlyModalStep === 'complete'" class="modal-content">
+          <div class="modal-complete-icon">✅</div>
+          <h2 class="modal-title">月次集計完了！</h2>
+
+          <div class="modal-result">
+            <div class="modal-result-item">
+              <span class="label">総売上</span>
+              <span class="value highlight">{{ formatCurrency(result.total_sales) }}</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="label">├ 直取引</span>
+              <span class="value">{{ formatCurrency(result.direct_sales) }}</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="label">└ 写真館・学校</span>
+              <span class="value">{{ formatCurrency(result.studio_sales) }}</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="label">実施学校数</span>
+              <span class="value">{{ result.school_count }}校</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="label">売上/学校</span>
+              <span class="value">{{ formatCurrency(result.sales_per_school) }}</span>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-modal-close" @click="closeMonthlyModal">
+              閉じる
+            </button>
+          </div>
+        </div>
+
+        <!-- エラー -->
+        <div v-if="monthlyModalStep === 'error'" class="modal-content">
+          <div class="modal-error-icon">❌</div>
+          <h2 class="modal-title">エラーが発生しました</h2>
+
+          <p class="modal-error-message">{{ monthlyModalError }}</p>
+
+          <button class="btn-modal-close" @click="closeMonthlyModal">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- ========== 累積集計タブ ========== -->
     <div v-if="activeTab === 'cumulative'">
@@ -314,69 +328,84 @@
       </button>
     </div>
 
-    <!-- 処理中画面 -->
-    <div v-if="cumulativeStep === 'processing'" class="card">
-      <h2 class="card-title">処理状況</h2>
-
-      <div class="progress-container">
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: cumulativeProgress + '%' }"></div>
-        </div>
-        <div class="progress-text">{{ cumulativeProgress }}%</div>
-      </div>
-
-      <div class="log-container">
-        <div
-          v-for="(log, index) in cumulativeLogs"
-          :key="index"
-          :class="['log-item', log.status]"
-        >
-          <span class="icon">{{ getLogIcon(log.status) }}</span>
-          <span>{{ log.message }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 完了画面 -->
-    <div v-if="cumulativeStep === 'result'" class="card result-card">
-      <div class="result-icon">✅</div>
-      <h2 class="result-title">累積集計完了</h2>
-
-      <div class="result-summary">
-        <div class="summary-item">
-          <span class="summary-label">対象年度</span>
-          <span class="summary-value">{{ cumulativeResult.fiscalYear }}年度</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">処理ファイル数</span>
-          <span class="summary-value">{{ cumulativeResult.processedCount }}件</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">追記月</span>
-          <span class="summary-value">{{ cumulativeResult.processedMonths }}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">学校別データ</span>
-          <span class="summary-value">{{ cumulativeResult.schoolCount }}件</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">イベント別データ</span>
-          <span class="summary-value">{{ cumulativeResult.eventCount }}件</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">保存先</span>
-          <span class="summary-value output-path">{{ cumulativeResult.outputPath }}</span>
-        </div>
-      </div>
-
-      <div class="action-buttons" style="justify-content: center;">
-        <button class="btn-secondary" @click="resetCumulativeForm">
-          新規累積集計を開始
-        </button>
-      </div>
-    </div>
-
     </div><!-- 累積集計タブ終了 -->
+
+    <!-- 累積集計モーダル -->
+    <div v-if="cumulativeModalVisible" class="modal-overlay" @click.self="closeCumulativeModalIfComplete">
+      <div class="modal-container">
+        <!-- 処理中 -->
+        <div v-if="cumulativeModalStep === 'processing'" class="modal-content">
+          <h2 class="modal-title">累積集計中...</h2>
+
+          <div class="modal-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: cumulativeProgress + '%' }"></div>
+            </div>
+            <div class="progress-text">{{ cumulativeProgress }}%</div>
+          </div>
+
+          <div class="modal-logs">
+            <div
+              v-for="(log, index) in cumulativeLogs"
+              :key="index"
+              :class="['modal-log-item', log.status]"
+            >
+              <span class="icon">{{ getLogIcon(log.status) }}</span>
+              <span>{{ log.message }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 完了 -->
+        <div v-if="cumulativeModalStep === 'complete'" class="modal-content">
+          <div class="modal-complete-icon">✅</div>
+          <h2 class="modal-title">累積集計完了！</h2>
+
+          <div class="modal-result">
+            <div class="modal-result-item">
+              <span class="label">対象年度</span>
+              <span class="value">{{ cumulativeResult.fiscalYear }}年度</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="label">処理ファイル数</span>
+              <span class="value">{{ cumulativeResult.processedCount }}件</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="label">追記月</span>
+              <span class="value">{{ cumulativeResult.processedMonths }}</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="label">学校別データ</span>
+              <span class="value">{{ cumulativeResult.schoolCount }}件</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="label">イベント別データ</span>
+              <span class="value">{{ cumulativeResult.eventCount }}件</span>
+            </div>
+            <div class="modal-result-item">
+              <span class="label">保存先</span>
+              <span class="value output-path">{{ cumulativeResult.outputPath }}</span>
+            </div>
+          </div>
+
+          <button class="btn-modal-close" @click="closeCumulativeModal">
+            閉じる
+          </button>
+        </div>
+
+        <!-- エラー -->
+        <div v-if="cumulativeModalStep === 'error'" class="modal-content">
+          <div class="modal-error-icon">❌</div>
+          <h2 class="modal-title">エラーが発生しました</h2>
+
+          <p class="modal-error-message">{{ cumulativeModalError }}</p>
+
+          <button class="btn-modal-close" @click="closeCumulativeModal">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- ========== 実績反映タブ ========== -->
     <div v-if="activeTab === 'publish'">
@@ -496,163 +525,190 @@
       </button>
     </div>
 
-    <!-- セクション2: 担当者名変換設定 -->
+    <!-- セクション2: 担当者設定（タブ切り替え） -->
     <div class="card" style="margin-top: 24px;">
       <h2 class="card-title">
         <span class="step">2</span>
-        担当者名変換設定
+        担当者設定
       </h2>
 
-      <p class="section-description">
-        同一人物で担当者名が異なる場合（例: 「佐藤」→「佐藤（邦）」）、<br>
-        変換ルールを設定すると、今後の取り込み時に自動変換され、既存データも更新されます。
-      </p>
-
-      <!-- 新規追加フォーム -->
-      <div class="alias-add-form">
-        <div class="alias-input-group">
-          <div class="alias-input-item">
-            <label>変換元</label>
-            <input
-              type="text"
-              v-model="newAliasFrom"
-              placeholder="例: 佐藤"
-              class="alias-input"
-            >
-          </div>
-          <span class="alias-arrow">→</span>
-          <div class="alias-input-item">
-            <label>変換先</label>
-            <input
-              type="text"
-              v-model="newAliasTo"
-              placeholder="例: 佐藤（邦）"
-              class="alias-input"
-            >
-          </div>
-          <button
-            class="btn-add"
-            @click="addSalesmanAlias"
-            :disabled="!newAliasFrom || !newAliasTo || addingAlias"
-          >
-            {{ addingAlias ? '追加中...' : '追加' }}
-          </button>
-        </div>
+      <!-- タブヘッダー -->
+      <div class="settings-tabs">
+        <button
+          class="settings-tab"
+          :class="{ active: settingsTab === 'alias' }"
+          @click="settingsTab = 'alias'"
+        >
+          名前変換
+          <span class="tab-badge" v-if="salesmanAliases.length > 0">{{ salesmanAliases.length }}</span>
+        </button>
+        <button
+          class="settings-tab"
+          :class="{ active: settingsTab === 'override' }"
+          @click="settingsTab = 'override'"
+        >
+          学校担当者
+          <span class="tab-badge" v-if="schoolManagerOverrides.length > 0">{{ schoolManagerOverrides.length }}</span>
+        </button>
       </div>
 
-      <!-- 登録済みマッピング一覧 -->
-      <div v-if="salesmanAliases.length > 0" class="alias-list">
-        <h3 class="alias-list-title">登録済みの変換ルール</h3>
-        <div class="alias-list-items">
-          <div v-for="alias in salesmanAliases" :key="alias.id" class="alias-list-item">
-            <span class="alias-from">{{ alias.from_name }}</span>
-            <span class="alias-arrow">→</span>
-            <span class="alias-to">{{ alias.to_name }}</span>
-            <span class="alias-date">{{ formatAliasDate(alias.created_at) }}</span>
-            <button class="alias-delete-btn" @click="deleteSalesmanAlias(alias.id)">削除</button>
-          </div>
-        </div>
-      </div>
-      <div v-else class="alias-empty">
-        登録済みの変換ルールはありません
-      </div>
-    </div>
+      <!-- タブコンテンツ: 名前変換 -->
+      <div v-show="settingsTab === 'alias'" class="settings-tab-content">
+        <p class="section-description">
+          同一人物で担当者名が異なる場合（例: 「佐藤」→「佐藤（邦）」）、変換ルールを設定します。
+        </p>
 
-    <!-- セクション2.5: 学校担当者設定 -->
-    <div class="card" style="margin-top: 24px;">
-      <h2 class="card-title">
-        <span class="step">2.5</span>
-        学校担当者設定
-      </h2>
-      <p class="section-description">
-        特定の学校の特定期間について、担当者を変更します。<br>
-        設定を追加すると、既存の売上データの担当者も自動的に更新されます。
-      </p>
-
-      <!-- 学校担当者設定フォーム -->
-      <div class="override-form">
-        <div class="override-form-row">
-          <div class="override-input-item">
-            <label>学校名</label>
-            <input
-              type="text"
-              v-model="overrideSchoolSearch"
-              placeholder="学校名で検索..."
-              class="override-input"
-              @input="searchSchools"
-              @focus="showSchoolDropdown = true"
-            >
-            <div v-if="showSchoolDropdown && filteredSchools.length > 0" class="school-dropdown">
-              <div
-                v-for="school in filteredSchools"
-                :key="school.id"
-                class="school-dropdown-item"
-                @click="selectSchool(school)"
+        <!-- 新規追加フォーム -->
+        <div class="alias-add-form">
+          <div class="alias-input-group">
+            <div class="alias-input-item">
+              <label>変換元</label>
+              <input
+                type="text"
+                v-model="newAliasFrom"
+                placeholder="例: 佐藤"
+                class="alias-input"
               >
-                {{ school.school_name }}
-                <span class="school-manager-hint" v-if="school.manager">（現担当: {{ school.manager }}）</span>
+            </div>
+            <span class="alias-arrow">→</span>
+            <div class="alias-input-item">
+              <label>変換先</label>
+              <input
+                type="text"
+                v-model="newAliasTo"
+                placeholder="例: 佐藤（邦）"
+                class="alias-input"
+              >
+            </div>
+            <button
+              class="btn-add"
+              @click="addSalesmanAlias"
+              :disabled="!newAliasFrom || !newAliasTo || addingAlias"
+            >
+              {{ addingAlias ? '追加中...' : '追加' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 登録済みマッピング一覧（折りたたみ） -->
+        <div v-if="salesmanAliases.length > 0" class="collapsible-section">
+          <div class="collapsible-header" @click="aliasListExpanded = !aliasListExpanded">
+            <span class="collapsible-icon">{{ aliasListExpanded ? '▼' : '▶' }}</span>
+            <span class="collapsible-title">登録済み（{{ salesmanAliases.length }}件）</span>
+          </div>
+          <div v-show="aliasListExpanded" class="collapsible-content">
+            <div class="alias-list-items">
+              <div v-for="alias in salesmanAliases" :key="alias.id" class="alias-list-item">
+                <span class="alias-from">{{ alias.from_name }}</span>
+                <span class="alias-arrow">→</span>
+                <span class="alias-to">{{ alias.to_name }}</span>
+                <span class="alias-date">{{ formatAliasDate(alias.created_at) }}</span>
+                <button class="alias-delete-btn" @click="deleteSalesmanAlias(alias.id)">削除</button>
               </div>
             </div>
           </div>
         </div>
-        <div class="override-form-row" v-if="selectedSchool">
-          <div class="override-input-item">
-            <label>年度</label>
-            <select v-model="overrideFiscalYear" class="override-select">
-              <option v-for="year in availableFiscalYears" :key="year" :value="year">{{ year }}年度</option>
-            </select>
-          </div>
-          <div class="override-input-item">
-            <label>開始月</label>
-            <select v-model="overrideStartMonth" class="override-select">
-              <option v-for="month in 12" :key="month" :value="month">{{ month }}月</option>
-            </select>
-          </div>
-          <div class="override-input-item">
-            <label>終了月</label>
-            <select v-model="overrideEndMonth" class="override-select">
-              <option :value="null">指定なし（継続中）</option>
-              <option v-for="month in 12" :key="month" :value="month">{{ month }}月</option>
-            </select>
-          </div>
-          <div class="override-input-item">
-            <label>担当者</label>
-            <select v-model="overrideManager" class="override-select">
-              <option value="">選択してください</option>
-              <option v-for="manager in availableManagers" :key="manager" :value="manager">{{ manager }}</option>
-            </select>
-          </div>
-          <button
-            class="btn-add"
-            @click="addSchoolManagerOverride"
-            :disabled="!canAddOverride || addingOverride"
-          >
-            {{ addingOverride ? '追加中...' : '追加' }}
-          </button>
-        </div>
-        <div v-if="selectedSchool" class="selected-school-info">
-          選択中: {{ selectedSchool.school_name }}
-          <button class="btn-clear-school" @click="clearSelectedSchool">×</button>
+        <div v-else class="alias-empty">
+          登録済みの変換ルールはありません
         </div>
       </div>
 
-      <!-- 登録済み設定一覧 -->
-      <div v-if="schoolManagerOverrides.length > 0" class="override-list">
-        <h3 class="override-list-title">登録済みの担当者設定</h3>
-        <div class="override-list-items">
-          <div v-for="override in schoolManagerOverrides" :key="override.id" class="override-list-item">
-            <span class="override-school">{{ override.school_name }}</span>
-            <span class="override-period">{{ override.fiscal_year }}年度 {{ override.start_month }}月〜{{ override.end_month ? override.end_month + '月' : '継続中' }}</span>
-            <span class="override-original-manager">{{ override.original_manager || '(不明)' }}</span>
-            <span class="override-arrow">→</span>
-            <span class="override-manager">{{ override.manager }}</span>
-            <span class="override-date">{{ formatFullDate(override.created_at) }}</span>
-            <button class="override-delete-btn" @click="deleteSchoolManagerOverride(override.id)">削除</button>
+      <!-- タブコンテンツ: 学校担当者 -->
+      <div v-show="settingsTab === 'override'" class="settings-tab-content">
+        <p class="section-description">
+          特定の学校・期間の担当者を変更します。既存の売上データも自動更新されます。
+        </p>
+
+        <!-- 学校担当者設定フォーム -->
+        <div class="override-form">
+          <div class="override-form-row">
+            <div class="override-input-item">
+              <label>学校名</label>
+              <input
+                type="text"
+                v-model="overrideSchoolSearch"
+                placeholder="学校名で検索..."
+                class="override-input"
+                @input="searchSchools"
+                @focus="showSchoolDropdown = true"
+              >
+              <div v-if="showSchoolDropdown && filteredSchools.length > 0" class="school-dropdown">
+                <div
+                  v-for="school in filteredSchools"
+                  :key="school.id"
+                  class="school-dropdown-item"
+                  @click="selectSchool(school)"
+                >
+                  {{ school.school_name }}
+                  <span class="school-manager-hint" v-if="school.manager">（現担当: {{ school.manager }}）</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="override-form-row" v-if="selectedSchool">
+            <div class="override-input-item">
+              <label>年度</label>
+              <select v-model="overrideFiscalYear" class="override-select">
+                <option v-for="year in availableFiscalYears" :key="year" :value="year">{{ year }}年度</option>
+              </select>
+            </div>
+            <div class="override-input-item">
+              <label>開始月</label>
+              <select v-model="overrideStartMonth" class="override-select">
+                <option v-for="month in 12" :key="month" :value="month">{{ month }}月</option>
+              </select>
+            </div>
+            <div class="override-input-item">
+              <label>終了月</label>
+              <select v-model="overrideEndMonth" class="override-select">
+                <option :value="null">指定なし（継続中）</option>
+                <option v-for="month in 12" :key="month" :value="month">{{ month }}月</option>
+              </select>
+            </div>
+            <div class="override-input-item">
+              <label>担当者</label>
+              <select v-model="overrideManager" class="override-select">
+                <option value="">選択してください</option>
+                <option v-for="manager in availableManagers" :key="manager" :value="manager">{{ manager }}</option>
+              </select>
+            </div>
+            <button
+              class="btn-add"
+              @click="addSchoolManagerOverride"
+              :disabled="!canAddOverride || addingOverride"
+            >
+              {{ addingOverride ? '追加中...' : '追加' }}
+            </button>
+          </div>
+          <div v-if="selectedSchool" class="selected-school-info">
+            選択中: {{ selectedSchool.school_name }}
+            <button class="btn-clear-school" @click="clearSelectedSchool">×</button>
           </div>
         </div>
-      </div>
-      <div v-else class="override-empty">
-        登録済みの担当者設定はありません
+
+        <!-- 登録済み設定一覧（折りたたみ） -->
+        <div v-if="schoolManagerOverrides.length > 0" class="collapsible-section">
+          <div class="collapsible-header" @click="overrideListExpanded = !overrideListExpanded">
+            <span class="collapsible-icon">{{ overrideListExpanded ? '▼' : '▶' }}</span>
+            <span class="collapsible-title">登録済み（{{ schoolManagerOverrides.length }}件）</span>
+          </div>
+          <div v-show="overrideListExpanded" class="collapsible-content">
+            <div class="override-list-items">
+              <div v-for="override in schoolManagerOverrides" :key="override.id" class="override-list-item">
+                <span class="override-school">{{ override.school_name }}</span>
+                <span class="override-period">{{ override.fiscal_year }}年度 {{ override.start_month }}月〜{{ override.end_month ? override.end_month + '月' : '継続中' }}</span>
+                <span class="override-original-manager">{{ override.original_manager || '(不明)' }}</span>
+                <span class="override-arrow">→</span>
+                <span class="override-manager">{{ override.manager }}</span>
+                <span class="override-date">{{ formatFullDate(override.created_at) }}</span>
+                <button class="override-delete-btn" @click="deleteSchoolManagerOverride(override.id)">削除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="override-empty">
+          登録済みの担当者設定はありません
+        </div>
       </div>
     </div>
 
@@ -999,6 +1055,11 @@ export default {
       error: null,
       masterMismatchError: null,
 
+      // === 月次集計モーダル用 ===
+      monthlyModalVisible: false,
+      monthlyModalStep: 'processing', // processing, complete, error
+      monthlyModalError: '',
+
       // === 累積集計用 ===
       cumulativeStep: 'upload', // upload, processing, result
       existingFilePath: '', // 既存ファイルのパス（テキスト入力）
@@ -1014,6 +1075,11 @@ export default {
       cumulativeLogs: [],
       cumulativeResult: null,
       cumulativeSessionId: null,
+
+      // === 累積集計モーダル用 ===
+      cumulativeModalVisible: false,
+      cumulativeModalStep: 'processing', // processing, complete, error
+      cumulativeModalError: '',
 
       // === 実績反映用 ===
       publishStep: 'upload', // upload, processing, result
@@ -1037,6 +1103,11 @@ export default {
       publishModalVisible: false,
       publishModalStep: 'processing', // processing, complete, error
       publishModalError: '',
+
+      // === 担当者設定タブ用 ===
+      settingsTab: 'alias', // alias, override
+      aliasListExpanded: false,
+      overrideListExpanded: false,
 
       // === 担当者名変換用 ===
       salesmanAliases: [],
@@ -1153,9 +1224,13 @@ export default {
 
     async startAggregation() {
       this.error = null
-      this.currentStep = 'processing'
       this.progress = 0
       this.logs = []
+
+      // モーダルを表示
+      this.monthlyModalVisible = true
+      this.monthlyModalStep = 'processing'
+      this.monthlyModalError = ''
 
       try {
         // Step 1: ファイルアップロード
@@ -1199,16 +1274,16 @@ export default {
 
         this.progress = 100
         this.result = result.summary
-        this.currentStep = 'result'
+        this.monthlyModalStep = 'complete'
 
       } catch (err) {
         // マスタ不一致エラーの場合は専用画面を表示
         if (err.message === 'MASTER_MISMATCH') {
-          this.currentStep = 'upload'
+          this.monthlyModalVisible = false
           return
         }
-        this.error = err.message || '処理中にエラーが発生しました'
-        this.currentStep = 'upload'
+        this.monthlyModalStep = 'error'
+        this.monthlyModalError = err.message || '処理中にエラーが発生しました'
       }
     },
 
@@ -1322,6 +1397,21 @@ export default {
       this.sessionId = null
       this.error = null
       this.masterMismatchError = null
+      this.monthlyModalVisible = false
+    },
+
+    // 月次集計モーダルを閉じる
+    closeMonthlyModal() {
+      this.monthlyModalVisible = false
+      if (this.monthlyModalStep === 'complete') {
+        this.resetForm()
+      }
+    },
+
+    closeMonthlyModalIfComplete() {
+      if (this.monthlyModalStep === 'complete' || this.monthlyModalStep === 'error') {
+        this.closeMonthlyModal()
+      }
     },
 
     closeMasterMismatchError() {
@@ -1377,9 +1467,13 @@ export default {
 
     async startCumulativeAggregation() {
       this.error = null
-      this.cumulativeStep = 'processing'
       this.cumulativeProgress = 0
       this.cumulativeLogs = []
+
+      // モーダルを表示
+      this.cumulativeModalVisible = true
+      this.cumulativeModalStep = 'processing'
+      this.cumulativeModalError = ''
 
       try {
         // Step 1: ファイルアップロード
@@ -1398,11 +1492,11 @@ export default {
         this.cumulativeProgress = 100
 
         this.cumulativeResult = result
-        this.cumulativeStep = 'result'
+        this.cumulativeModalStep = 'complete'
 
       } catch (err) {
-        this.error = err.message || '処理中にエラーが発生しました'
-        this.cumulativeStep = 'upload'
+        this.cumulativeModalStep = 'error'
+        this.cumulativeModalError = err.message || '処理中にエラーが発生しました'
       }
     },
 
@@ -1492,6 +1586,21 @@ export default {
       this.cumulativeResult = null
       this.cumulativeSessionId = null
       this.error = null
+      this.cumulativeModalVisible = false
+    },
+
+    // 累積集計モーダルを閉じる
+    closeCumulativeModal() {
+      this.cumulativeModalVisible = false
+      if (this.cumulativeModalStep === 'complete') {
+        this.resetCumulativeForm()
+      }
+    },
+
+    closeCumulativeModalIfComplete() {
+      if (this.cumulativeModalStep === 'complete' || this.cumulativeModalStep === 'error') {
+        this.closeCumulativeModal()
+      }
     },
 
     // ========== 実績反映用メソッド ==========
