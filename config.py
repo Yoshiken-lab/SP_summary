@@ -34,8 +34,8 @@ class Config:
     # 許可するファイル拡張子
     ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'}
 
-    # 最大ファイルサイズ（16MB）
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+    # 最大ファイルサイズ（100MB）
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
     @classmethod
     def init_app(cls):

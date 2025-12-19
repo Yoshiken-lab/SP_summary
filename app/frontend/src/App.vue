@@ -575,6 +575,103 @@
       </div>
     </div>
 
+    <!-- セクション2.5: 学校担当者設定 -->
+    <div class="card" style="margin-top: 24px;">
+      <h2 class="card-title">
+        <span class="step">2.5</span>
+        学校担当者設定
+      </h2>
+      <p class="section-description">
+        特定の学校の特定期間について、担当者を変更します。<br>
+        設定を追加すると、既存の売上データの担当者も自動的に更新されます。
+      </p>
+
+      <!-- 学校担当者設定フォーム -->
+      <div class="override-form">
+        <div class="override-form-row">
+          <div class="override-input-item">
+            <label>学校名</label>
+            <input
+              type="text"
+              v-model="overrideSchoolSearch"
+              placeholder="学校名で検索..."
+              class="override-input"
+              @input="searchSchools"
+              @focus="showSchoolDropdown = true"
+            >
+            <div v-if="showSchoolDropdown && filteredSchools.length > 0" class="school-dropdown">
+              <div
+                v-for="school in filteredSchools"
+                :key="school.id"
+                class="school-dropdown-item"
+                @click="selectSchool(school)"
+              >
+                {{ school.school_name }}
+                <span class="school-manager-hint" v-if="school.manager">（現担当: {{ school.manager }}）</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="override-form-row" v-if="selectedSchool">
+          <div class="override-input-item">
+            <label>年度</label>
+            <select v-model="overrideFiscalYear" class="override-select">
+              <option v-for="year in availableFiscalYears" :key="year" :value="year">{{ year }}年度</option>
+            </select>
+          </div>
+          <div class="override-input-item">
+            <label>開始月</label>
+            <select v-model="overrideStartMonth" class="override-select">
+              <option v-for="month in 12" :key="month" :value="month">{{ month }}月</option>
+            </select>
+          </div>
+          <div class="override-input-item">
+            <label>終了月</label>
+            <select v-model="overrideEndMonth" class="override-select">
+              <option :value="null">指定なし（継続中）</option>
+              <option v-for="month in 12" :key="month" :value="month">{{ month }}月</option>
+            </select>
+          </div>
+          <div class="override-input-item">
+            <label>担当者</label>
+            <select v-model="overrideManager" class="override-select">
+              <option value="">選択してください</option>
+              <option v-for="manager in availableManagers" :key="manager" :value="manager">{{ manager }}</option>
+            </select>
+          </div>
+          <button
+            class="btn-add"
+            @click="addSchoolManagerOverride"
+            :disabled="!canAddOverride || addingOverride"
+          >
+            {{ addingOverride ? '追加中...' : '追加' }}
+          </button>
+        </div>
+        <div v-if="selectedSchool" class="selected-school-info">
+          選択中: {{ selectedSchool.school_name }}
+          <button class="btn-clear-school" @click="clearSelectedSchool">×</button>
+        </div>
+      </div>
+
+      <!-- 登録済み設定一覧 -->
+      <div v-if="schoolManagerOverrides.length > 0" class="override-list">
+        <h3 class="override-list-title">登録済みの担当者設定</h3>
+        <div class="override-list-items">
+          <div v-for="override in schoolManagerOverrides" :key="override.id" class="override-list-item">
+            <span class="override-school">{{ override.school_name }}</span>
+            <span class="override-period">{{ override.fiscal_year }}年度 {{ override.start_month }}月〜{{ override.end_month ? override.end_month + '月' : '継続中' }}</span>
+            <span class="override-arrow">→</span>
+            <span class="override-manager">{{ override.manager }}</span>
+            <span class="override-date">{{ formatAliasDate(override.created_at) }}</span>
+            <button class="override-delete-btn" @click="deleteSchoolManagerOverride(override.id)">削除</button>
+          </div>
+        </div>
+      </div>
+      <div v-else class="override-empty">
+        登録済みの担当者設定はありません
+      </div>
+    </div>
+
     <!-- セクション3: 社内サーバー公開 -->
     <div class="card" style="margin-top: 24px;">
       <h2 class="card-title">
@@ -934,6 +1031,20 @@ export default {
       newAliasTo: '',
       addingAlias: false,
 
+      // === 学校担当者オーバーライド用 ===
+      schoolManagerOverrides: [],
+      allSchools: [],
+      filteredSchools: [],
+      selectedSchool: null,
+      overrideSchoolSearch: '',
+      showSchoolDropdown: false,
+      overrideFiscalYear: new Date().getFullYear(),
+      overrideStartMonth: 4,
+      overrideEndMonth: null,
+      overrideManager: '',
+      availableManagers: [],
+      addingOverride: false,
+
       // === データ確認用 ===
       dataTables: [
         { id: 'monthly_summary', name: '月別サマリー', description: '月ごとの売上概要' },
@@ -992,6 +1103,14 @@ export default {
     dataTotalPages() {
       if (!this.dataSearchResult) return 1
       return Math.ceil(this.dataSearchResult.total_count / this.dataPageSize)
+    },
+    // 学校担当者オーバーライド用
+    availableFiscalYears() {
+      const currentYear = new Date().getFullYear()
+      return Array.from({ length: 6 }, (_, i) => currentYear - 4 + i)
+    },
+    canAddOverride() {
+      return this.selectedSchool && this.overrideFiscalYear && this.overrideManager
     }
   },
   methods: {
@@ -1721,6 +1840,129 @@ export default {
       return `${month}/${day}登録`
     },
 
+    // ========== 学校担当者オーバーライド用メソッド ==========
+
+    async fetchSchoolManagerOverrides() {
+      try {
+        const response = await fetch('/api/school-manager-overrides')
+        const data = await response.json()
+        if (data.status === 'success') {
+          this.schoolManagerOverrides = data.overrides
+        }
+      } catch (err) {
+        console.error('学校担当者オーバーライド取得エラー:', err)
+      }
+    },
+
+    async fetchAllSchools() {
+      try {
+        const response = await fetch('/api/schools/list')
+        const data = await response.json()
+        if (data.status === 'success') {
+          this.allSchools = data.schools
+        }
+      } catch (err) {
+        console.error('学校一覧取得エラー:', err)
+      }
+    },
+
+    async fetchAvailableManagers() {
+      try {
+        const response = await fetch('/api/managers/list')
+        const data = await response.json()
+        if (data.status === 'success') {
+          this.availableManagers = data.managers
+        }
+      } catch (err) {
+        console.error('担当者一覧取得エラー:', err)
+      }
+    },
+
+    searchSchools() {
+      if (!this.overrideSchoolSearch) {
+        this.filteredSchools = []
+        return
+      }
+      const searchTerm = this.overrideSchoolSearch.toLowerCase()
+      this.filteredSchools = this.allSchools
+        .filter(s => s.school_name.toLowerCase().includes(searchTerm))
+        .slice(0, 10)
+    },
+
+    selectSchool(school) {
+      this.selectedSchool = school
+      this.overrideSchoolSearch = school.school_name
+      this.showSchoolDropdown = false
+      this.filteredSchools = []
+    },
+
+    clearSelectedSchool() {
+      this.selectedSchool = null
+      this.overrideSchoolSearch = ''
+      this.filteredSchools = []
+    },
+
+    handleClickOutside(event) {
+      const dropdown = event.target.closest('.school-dropdown')
+      const input = event.target.closest('.override-input')
+      if (!dropdown && !input) {
+        this.showSchoolDropdown = false
+      }
+    },
+
+    async addSchoolManagerOverride() {
+      if (!this.canAddOverride) return
+      this.addingOverride = true
+
+      try {
+        // 終了月がnullの場合は「継続中」として扱う
+        const requestBody = {
+          school_id: this.selectedSchool.id,
+          fiscal_year: this.overrideFiscalYear,
+          start_month: this.overrideStartMonth,
+          end_month: this.overrideEndMonth,  // nullの場合はそのまま送信
+          manager: this.overrideManager
+        }
+        const response = await fetch('/api/school-manager-overrides', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        })
+        const data = await response.json()
+        if (data.status === 'success') {
+          alert(data.message)
+          await this.fetchSchoolManagerOverrides()
+          // フォームリセット
+          this.clearSelectedSchool()
+          this.overrideManager = ''
+        } else {
+          alert('エラー: ' + data.message)
+        }
+      } catch (err) {
+        alert('追加中にエラーが発生しました: ' + err.message)
+      } finally {
+        this.addingOverride = false
+      }
+    },
+
+    async deleteSchoolManagerOverride(overrideId) {
+      if (!confirm('この設定を削除しますか？\n※既に更新された売上データは元に戻りません')) return
+
+      try {
+        const response = await fetch(`/api/school-manager-overrides/${overrideId}`, {
+          method: 'DELETE'
+        })
+        const data = await response.json()
+        if (data.status === 'success') {
+          await this.fetchSchoolManagerOverrides()
+        } else {
+          alert('エラー: ' + data.message)
+        }
+      } catch (err) {
+        alert('削除中にエラーが発生しました: ' + err.message)
+      }
+    },
+
     // ========== データ確認用メソッド ==========
 
     selectDataTable(tableId) {
@@ -1853,8 +2095,17 @@ export default {
     this.fetchDashboardStatus()
     // 担当者名変換マッピングを取得
     this.fetchSalesmanAliases()
+    // 学校担当者オーバーライド設定を取得
+    this.fetchSchoolManagerOverrides()
+    this.fetchAllSchools()
+    this.fetchAvailableManagers()
     // データ確認タブ用：フィルター選択肢を取得
     this.fetchDataFilterOptions()
+    // ドロップダウン外クリックで閉じる
+    document.addEventListener('click', this.handleClickOutside)
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleClickOutside)
   }
 }
 </script>

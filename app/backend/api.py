@@ -61,7 +61,7 @@ def create_app(config=None):
     # ディレクトリ設定
     app.config.setdefault('UPLOAD_DIR', Path(__file__).parent.parent / 'uploads')
     app.config.setdefault('OUTPUT_DIR', Path.home() / 'Downloads')
-    app.config.setdefault('MAX_CONTENT_LENGTH', 16 * 1024 * 1024)
+    app.config.setdefault('MAX_CONTENT_LENGTH', 100 * 1024 * 1024)  # 100MB
 
     # ディレクトリ作成
     Path(app.config['UPLOAD_DIR']).mkdir(parents=True, exist_ok=True)
@@ -1017,6 +1017,91 @@ def create_app(config=None):
 
         except Exception as e:
             logger.error(f"担当者名変換マッピング削除エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    # ========== 学校担当者オーバーライドAPI ==========
+
+    @app.route('/api/school-manager-overrides', methods=['GET'])
+    def get_school_manager_overrides():
+        """学校担当者オーバーライド設定一覧を取得"""
+        try:
+            from database import get_school_manager_overrides as get_overrides
+            overrides = get_overrides()
+            return jsonify({'status': 'success', 'overrides': overrides})
+        except Exception as e:
+            logger.error(f"学校担当者オーバーライド取得エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/school-manager-overrides', methods=['POST'])
+    def add_school_manager_override():
+        """学校担当者オーバーライド設定を追加"""
+        try:
+            from database import add_school_manager_override as add_override
+            data = request.get_json()
+            school_id = data.get('school_id')
+            fiscal_year = data.get('fiscal_year')
+            start_month = data.get('start_month')
+            end_month = data.get('end_month')
+            manager = data.get('manager')
+
+            # end_monthはnull（継続中）を許可
+            if not all([school_id, fiscal_year, start_month, manager]):
+                return jsonify({
+                    'status': 'error',
+                    'message': '必須パラメータが不足しています'
+                }), 400
+
+            result = add_override(school_id, fiscal_year, start_month, end_month, manager)
+            if result['success']:
+                return jsonify({
+                    'status': 'success',
+                    'message': result['message'],
+                    'updated_count': result['updated_count']
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': result['message']
+                }), 400
+
+        except Exception as e:
+            logger.error(f"学校担当者オーバーライド追加エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/school-manager-overrides/<int:override_id>', methods=['DELETE'])
+    def delete_school_manager_override(override_id):
+        """学校担当者オーバーライド設定を削除"""
+        try:
+            from database import delete_school_manager_override as delete_override
+            result = delete_override(override_id)
+            if result['success']:
+                return jsonify({'status': 'success', 'message': result['message']})
+            else:
+                return jsonify({'status': 'error', 'message': result['message']}), 400
+        except Exception as e:
+            logger.error(f"学校担当者オーバーライド削除エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/schools/list', methods=['GET'])
+    def get_schools_list():
+        """学校一覧を取得（検索用）"""
+        try:
+            from database import get_schools_list as get_schools
+            schools = get_schools()
+            return jsonify({'status': 'success', 'schools': schools})
+        except Exception as e:
+            logger.error(f"学校一覧取得エラー: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    @app.route('/api/managers/list', methods=['GET'])
+    def get_managers_list():
+        """担当者一覧を取得"""
+        try:
+            from database import get_managers_list as get_managers
+            managers = get_managers()
+            return jsonify({'status': 'success', 'managers': managers})
+        except Exception as e:
+            logger.error(f"担当者一覧取得エラー: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
     # ========== データ確認API ==========

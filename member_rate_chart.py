@@ -460,10 +460,13 @@ def get_sales_filter_options(db_path=None):
     ''')
     studios = [row[0] for row in cursor.fetchall()]
 
-    # 担当者一覧（managerカラム）
+    # 担当者一覧（schoolsテーブルとschool_salesテーブルの両方から取得）
     cursor.execute('''
-        SELECT DISTINCT manager FROM schools
-        WHERE manager IS NOT NULL AND manager != ''
+        SELECT DISTINCT manager FROM (
+            SELECT manager FROM schools WHERE manager IS NOT NULL AND manager != ''
+            UNION
+            SELECT manager FROM school_sales WHERE manager IS NOT NULL AND manager != ''
+        )
         ORDER BY manager
     ''')
     persons = [row[0] for row in cursor.fetchall()]
@@ -892,20 +895,27 @@ def get_monthly_sales_by_person(db_path=None, target_years=None):
     if target_years is None:
         target_years = [current_fy]
 
-    # 担当者一覧（事業所情報も取得）
+    # 担当者一覧（school_salesテーブルから取得し、事業所情報も紐付け）
     cursor.execute('''
+        SELECT DISTINCT ss.manager, s.region
+        FROM school_sales ss
+        JOIN schools s ON ss.school_id = s.id
+        WHERE ss.manager IS NOT NULL AND ss.manager != ''
+        UNION
         SELECT DISTINCT manager, region FROM schools
         WHERE manager IS NOT NULL AND manager != ''
-        ORDER BY manager
+        ORDER BY 1
     ''')
     rows = cursor.fetchall()
-    persons = list(set(row[0] for row in rows))
+    persons = list(set(row[0] for row in rows if row[0]))
     persons.sort()
 
     # 担当者と事業所の紐付け（マッピング適用）
     person_branches = {}
     for row in rows:
         person, region = row
+        if not person:
+            continue
         if person not in person_branches:
             person_branches[person] = []
         normalized_region = normalize_branch(region)
@@ -920,14 +930,13 @@ def get_monthly_sales_by_person(db_path=None, target_years=None):
         prev_fy = year - 1
 
         for person in persons:
-            # 対象年度の月別売上
+            # 対象年度の月別売上（school_salesテーブルのmanagerカラムを使用）
             cursor.execute('''
                 SELECT
                     ss.month,
                     SUM(ss.sales) as total_sales
                 FROM school_sales ss
-                JOIN schools s ON ss.school_id = s.id
-                WHERE s.manager = ? AND ss.fiscal_year = ?
+                WHERE ss.manager = ? AND ss.fiscal_year = ?
                 GROUP BY ss.month
                 ORDER BY CASE WHEN ss.month >= 4 THEN ss.month - 4 ELSE ss.month + 8 END
             ''', (person, year))
@@ -940,8 +949,7 @@ def get_monthly_sales_by_person(db_path=None, target_years=None):
                     ss.month,
                     SUM(ss.sales) as total_sales
                 FROM school_sales ss
-                JOIN schools s ON ss.school_id = s.id
-                WHERE s.manager = ? AND ss.fiscal_year = ?
+                WHERE ss.manager = ? AND ss.fiscal_year = ?
                 GROUP BY ss.month
                 ORDER BY CASE WHEN ss.month >= 4 THEN ss.month - 4 ELSE ss.month + 8 END
             ''', (person, prev_fy))

@@ -207,15 +207,15 @@ def import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):
         # 学校マスタに登録/更新
         school_id = get_or_create_school(cursor, school_name, manager=manager, studio_name=studio)
 
-        # 月別売上を登録
+        # 月別売上を登録（担当者情報も保存）
         for col_idx, fy, month in month_cols:
             sales = row[col_idx]
             if pd.notna(sales) and float(sales) != 0:
                 cursor.execute('''
                     INSERT OR REPLACE INTO school_sales
-                    (report_id, school_id, fiscal_year, month, sales)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (report_id, school_id, fy, month, float(sales)))
+                    (report_id, school_id, fiscal_year, month, sales, manager)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (report_id, school_id, fy, month, float(sales), manager))
 
 
 def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):

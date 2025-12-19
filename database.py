@@ -101,11 +101,18 @@ def init_database(db_path=None):
             fiscal_year INTEGER NOT NULL,
             month INTEGER NOT NULL,
             sales REAL NOT NULL,
+            manager TEXT,
             FOREIGN KEY (report_id) REFERENCES reports(id),
             FOREIGN KEY (school_id) REFERENCES schools(id),
             UNIQUE(school_id, fiscal_year, month)
         )
     ''')
+
+    # managerカラムが存在しない場合は追加（マイグレーション）
+    cursor.execute("PRAGMA table_info(school_sales)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'manager' not in columns:
+        cursor.execute('ALTER TABLE school_sales ADD COLUMN manager TEXT')
 
     # ========================================
     # 5. イベント情報
@@ -185,6 +192,22 @@ def init_database(db_path=None):
             to_name TEXT NOT NULL,                -- 変換先の担当者名
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(from_name)
+        )
+    ''')
+
+    # ========================================
+    # 10. 学校担当者オーバーライド設定
+    # ========================================
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS school_manager_overrides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER NOT NULL,
+            fiscal_year INTEGER NOT NULL,
+            start_month INTEGER NOT NULL,
+            end_month INTEGER NOT NULL,
+            manager TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (school_id) REFERENCES schools(id)
         )
     ''')
 
@@ -477,6 +500,149 @@ def apply_salesman_alias(manager_name, db_path=None):
 
     alias_map = get_salesman_alias_map(db_path)
     return alias_map.get(manager_name, manager_name)
+
+
+# ========================================
+# 学校担当者オーバーライド関連
+# ========================================
+
+def get_school_manager_overrides(db_path=None):
+    """全ての学校担当者オーバーライド設定を取得"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT o.id, o.school_id, s.school_name, o.fiscal_year,
+               o.start_month, o.end_month, o.manager, o.created_at
+        FROM school_manager_overrides o
+        JOIN schools s ON o.school_id = s.id
+        ORDER BY o.created_at DESC
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def add_school_manager_override(school_id, fiscal_year, start_month, end_month, manager, db_path=None):
+    """
+    学校担当者オーバーライド設定を追加し、既存売上データも更新
+
+    Args:
+        school_id: 学校ID
+        fiscal_year: 年度
+        start_month: 開始月
+        end_month: 終了月（Noneの場合は継続中として扱う）
+        manager: 担当者名
+
+    Returns:
+        dict: 処理結果
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
+    try:
+        # オーバーライド設定を追加
+        cursor.execute('''
+            INSERT INTO school_manager_overrides
+            (school_id, fiscal_year, start_month, end_month, manager)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (school_id, fiscal_year, start_month, end_month, manager))
+
+        # 既存の売上データを更新
+        # 年度の月範囲を考慮（4月〜3月）
+        if end_month is None:
+            # 終了月が未指定（継続中）の場合は開始月以降すべてを更新
+            # 年度内の月は4月〜3月なので、開始月から3月まで（または4月以降）を対象
+            if start_month >= 4:
+                # 4月以降開始: start_month以降（4〜12）と1〜3月
+                cursor.execute('''
+                    UPDATE school_sales
+                    SET manager = ?
+                    WHERE school_id = ? AND fiscal_year = ? AND (month >= ? OR month <= 3)
+                ''', (manager, school_id, fiscal_year, start_month))
+            else:
+                # 1〜3月開始: start_month以降（1〜3月）
+                cursor.execute('''
+                    UPDATE school_sales
+                    SET manager = ?
+                    WHERE school_id = ? AND fiscal_year = ? AND month >= ? AND month <= 3
+                ''', (manager, school_id, fiscal_year, start_month))
+        elif start_month <= end_month:
+            # 同じ年度内（例：4月〜9月）
+            cursor.execute('''
+                UPDATE school_sales
+                SET manager = ?
+                WHERE school_id = ? AND fiscal_year = ? AND month >= ? AND month <= ?
+            ''', (manager, school_id, fiscal_year, start_month, end_month))
+        else:
+            # 年度をまたぐ（例：10月〜3月）
+            cursor.execute('''
+                UPDATE school_sales
+                SET manager = ?
+                WHERE school_id = ? AND fiscal_year = ? AND (month >= ? OR month <= ?)
+            ''', (manager, school_id, fiscal_year, start_month, end_month))
+
+        updated_count = cursor.rowcount
+
+        conn.commit()
+        return {
+            'success': True,
+            'updated_count': updated_count,
+            'message': f'設定を追加しました。{updated_count}件の売上データを更新しました。'
+        }
+    except Exception as e:
+        conn.rollback()
+        return {
+            'success': False,
+            'updated_count': 0,
+            'message': f'エラー: {str(e)}'
+        }
+    finally:
+        conn.close()
+
+
+def delete_school_manager_override(override_id, db_path=None):
+    """学校担当者オーバーライド設定を削除"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('DELETE FROM school_manager_overrides WHERE id = ?', (override_id,))
+        if cursor.rowcount == 0:
+            return {'success': False, 'message': '指定された設定が見つかりません'}
+        conn.commit()
+        return {'success': True, 'message': '設定を削除しました'}
+    except Exception as e:
+        conn.rollback()
+        return {'success': False, 'message': f'エラー: {str(e)}'}
+    finally:
+        conn.close()
+
+
+def get_schools_list(db_path=None):
+    """学校一覧を取得（検索用）"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, school_name, manager FROM schools ORDER BY school_name')
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_managers_list(db_path=None):
+    """担当者一覧を取得（schoolsとschool_salesの両方から）"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT DISTINCT manager FROM (
+            SELECT manager FROM schools WHERE manager IS NOT NULL AND manager != ''
+            UNION
+            SELECT manager FROM school_sales WHERE manager IS NOT NULL AND manager != ''
+        )
+        ORDER BY manager
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+    return [row['manager'] for row in rows]
 
 
 if __name__ == '__main__':
