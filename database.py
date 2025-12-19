@@ -211,31 +211,12 @@ def init_database(db_path=None):
         )
     ''')
 
-    # school_manager_overridesのend_monthをNULL許可に変更（マイグレーション）
+    # school_manager_overridesにoriginal_managerカラムを追加（マイグレーション）
     cursor.execute("PRAGMA table_info(school_manager_overrides)")
     columns_info = cursor.fetchall()
-    for col in columns_info:
-        if col[1] == 'end_month' and col[3] == 1:  # col[3]はnotnull flag
-            # テーブルを再作成してNULL制約を解除
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS school_manager_overrides_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    school_id INTEGER NOT NULL,
-                    fiscal_year INTEGER NOT NULL,
-                    start_month INTEGER NOT NULL,
-                    end_month INTEGER,
-                    manager TEXT NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (school_id) REFERENCES schools(id)
-                )
-            ''')
-            cursor.execute('''
-                INSERT INTO school_manager_overrides_new
-                SELECT * FROM school_manager_overrides
-            ''')
-            cursor.execute('DROP TABLE school_manager_overrides')
-            cursor.execute('ALTER TABLE school_manager_overrides_new RENAME TO school_manager_overrides')
-            break
+    column_names = [col[1] for col in columns_info]
+    if 'original_manager' not in column_names:
+        cursor.execute('ALTER TABLE school_manager_overrides ADD COLUMN original_manager TEXT')
 
     # ========================================
     # インデックス作成
@@ -538,7 +519,7 @@ def get_school_manager_overrides(db_path=None):
     cursor = conn.cursor()
     cursor.execute('''
         SELECT o.id, o.school_id, s.school_name, o.fiscal_year,
-               o.start_month, o.end_month, o.manager, o.created_at
+               o.start_month, o.end_month, o.manager, o.original_manager, o.created_at
         FROM school_manager_overrides o
         JOIN schools s ON o.school_id = s.id
         ORDER BY o.created_at DESC
@@ -566,12 +547,17 @@ def add_school_manager_override(school_id, fiscal_year, start_month, end_month, 
     cursor = conn.cursor()
 
     try:
-        # オーバーライド設定を追加
+        # 変更前の担当者を取得（schoolsテーブルから）
+        cursor.execute('SELECT manager FROM schools WHERE id = ?', (school_id,))
+        row = cursor.fetchone()
+        original_manager = row['manager'] if row else None
+
+        # オーバーライド設定を追加（変更前の担当者も記録）
         cursor.execute('''
             INSERT INTO school_manager_overrides
-            (school_id, fiscal_year, start_month, end_month, manager)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (school_id, fiscal_year, start_month, end_month, manager))
+            (school_id, fiscal_year, start_month, end_month, manager, original_manager)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (school_id, fiscal_year, start_month, end_month, manager, original_manager))
 
         # 既存の売上データを更新
         # 年度の月範囲を考慮（4月〜3月）

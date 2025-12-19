@@ -643,9 +643,10 @@
           <div v-for="override in schoolManagerOverrides" :key="override.id" class="override-list-item">
             <span class="override-school">{{ override.school_name }}</span>
             <span class="override-period">{{ override.fiscal_year }}年度 {{ override.start_month }}月〜{{ override.end_month ? override.end_month + '月' : '継続中' }}</span>
+            <span class="override-original-manager">{{ override.original_manager || '(不明)' }}</span>
             <span class="override-arrow">→</span>
             <span class="override-manager">{{ override.manager }}</span>
-            <span class="override-date">{{ formatAliasDate(override.created_at) }}</span>
+            <span class="override-date">{{ formatFullDate(override.created_at) }}</span>
             <button class="override-delete-btn" @click="deleteSchoolManagerOverride(override.id)">削除</button>
           </div>
         </div>
@@ -1853,6 +1854,15 @@ export default {
       const month = date.getMonth() + 1
       const day = date.getDate()
       return `${month}/${day}登録`
+    },
+
+    formatFullDate(dateStr) {
+      if (!dateStr) return ''
+      const date = new Date(dateStr)
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      const day = date.getDate()
+      return `${year}/${month}/${day}登録`
     },
 
     // ========== 学校担当者オーバーライド用メソッド ==========

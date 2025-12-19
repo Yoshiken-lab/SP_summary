@@ -1312,8 +1312,17 @@ body {
   border-radius: 4px;
 }
 
+.override-original-manager {
+  font-weight: 500;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
 .override-arrow {
   color: var(--text-secondary);
+  font-weight: bold;
 }
 
 .override-manager {
