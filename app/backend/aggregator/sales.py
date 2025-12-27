@@ -121,6 +121,10 @@ class SalesAggregator:
         self._filter_data()
         self._notify_progress("データフィルタリング完了", 10)
 
+        # Step 1.5: schools_master更新（V2 DBに保存）
+        self._update_schools_master()
+        self._notify_progress("学校マスタ更新完了", 12)
+
         # Step 2: 学校マスタチェック
         self._check_school_master()
         self._notify_progress("学校マスタチェック完了", 15)
@@ -167,6 +171,95 @@ class SalesAggregator:
             ]
 
         logger.info(f"フィルタリング後データ: {len(self.filtered_df)}件")
+
+    def _update_schools_master(self) -> None:
+        """
+        担当者マスタからschools_masterテーブルを更新
+
+        担当者マスタの情報をもとに、V2データベースのschools_masterテーブルを更新する。
+        学校名末尾の「(YYYY年度)」表記を検出し、logical_school_idで統合する。
+        """
+        try:
+            import sys
+            from pathlib import Path
+            # database_v2モジュールをインポート
+            sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+            from database_v2 import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            logger.info("schools_master更新を開始")
+            
+            # logical_school_idの割り当て用カウンター
+            next_logical_id = 1
+            cursor.execute('SELECT MAX(logical_school_id) FROM schools_master')
+            row = cursor.fetchone()
+            if row[0]:
+                next_logical_id = row[0] + 1
+            
+            # 学校名とlogical_school_idのマッピング
+            base_name_to_logical_id = {}
+            
+            updated_count = 0
+            inserted_count = 0
+            
+            for _, row in self.master_df.iterrows():
+                school_id = row.get('学校ID')
+                school_name = row.get('学校名', '')
+                region = row.get('事業所', '')
+                manager = row.get('担当', '')
+                studio = row.get('写真館', '')
+                attribute = row.get('属性', '')
+                
+                if pd.isna(school_id) or pd.isna(school_name):
+                    continue
+                
+                school_id = int(school_id)
+                school_name = str(school_name).strip()
+                
+                # 基本学校名と年度を抽出
+                import re
+                match = re.search(r'(.+?)(?:[(](\d{4})年度[)])?$', school_name)
+                if match:
+                    base_school_name = match.group(1).strip()
+                    fiscal_year = int(match.group(2)) if match.group(2) else None
+                else:
+                    base_school_name = school_name
+                    fiscal_year = None
+                
+                # logical_school_idを決定
+                if base_school_name in base_name_to_logical_id:
+                    logical_school_id = base_name_to_logical_id[base_school_name]
+                else:
+                    logical_school_id = next_logical_id
+                    base_name_to_logical_id[base_school_name] = logical_school_id
+                    next_logical_id += 1
+                
+                # schools_masterテーブルに保存（INSERT OR REPLACE）
+                cursor.execute('''
+                    INSERT OR REPLACE INTO schools_master 
+                    (school_id, logical_school_id, school_name, base_school_name, 
+                     fiscal_year, region, attribute, studio, manager, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (school_id, logical_school_id, school_name, base_school_name,
+                      fiscal_year, region, attribute, studio, manager))
+                
+                # 既存レコードかどうかで判定
+                if cursor.rowcount > 0:
+                    inserted_count += 1
+                else:
+                    updated_count += 1
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"schools_master更新完了: 新規{inserted_count}件, 更新{updated_count}件")
+            
+        except Exception as e:
+            logger.error(f"schools_master更新エラー: {e}")
+            # エラーが発生しても集計は続行する
+            logger.warning("schools_master更新をスキップして集計を続行します")
 
     def _check_school_master(self) -> None:
         """
