@@ -91,6 +91,7 @@ def import_sales_summary(xlsx, cursor, report_id):
             current_fiscal_year = int(re.search(r'(\d{4})', cell).group(1))
             continue
 
+        # ===== 全体サマリーの読み取り =====
         # 月ヘッダー行の次に総売上額などがある
         if current_fiscal_year and '総売上額' in cell:
             # この行のデータを取得
@@ -142,12 +143,60 @@ def import_sales_summary(xlsx, cursor, report_id):
                     if total_sales:
                         cursor.execute('''
                             INSERT OR REPLACE INTO monthly_summary
-                            (report_id, fiscal_year, month, total_sales, direct_sales,
+                            (report_id, fiscal_year, month, manager, total_sales, direct_sales,
                              studio_school_sales, school_count, budget, budget_rate, yoy_rate)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
                         ''', (report_id, current_fiscal_year, month, total_sales,
                               direct_sales, studio_sales, school_count, budget,
                               budget_rate, yoy_rate))
+
+        # ===== 担当者別売上の読み取り =====
+        if current_fiscal_year and '売上　担当者別' in cell:
+            # 次の行から担当者別データを読み取る
+            # 月ヘッダー行を探す
+            header_row_idx = i + 1
+            header_row = df.iloc[header_row_idx]
+            
+            # 月カラムのマッピングを作成
+            month_cols = []
+            for col_idx, header_val in enumerate(header_row):
+                if pd.isna(header_val):
+                    continue
+                month = None
+                if '月' in str(header_val):
+                    match = re.search(r'(\d{1,2})', str(header_val))
+                    if match:
+                        month = int(match.group(1))
+                elif isinstance(header_val, (int, float)):
+                    month = excel_serial_to_month(header_val)
+                
+                if month:
+                    month_cols.append((col_idx, month))
+            
+            # データ行を読み取る（担当者名は1列目）
+            for data_row_idx in range(header_row_idx + 1, len(df)):
+                manager_name = df.iloc[data_row_idx, 1]
+                if pd.isna(manager_name) or str(manager_name).strip() == '':
+                    continue
+                
+                # 次のセクションヘッダーが来たら終了
+                if '■' in str(manager_name):
+                    break
+                    
+                manager_name = normalize_brackets(str(manager_name).strip())
+                # 担当者名変換マッピングを適用
+                manager_name = apply_salesman_alias(manager_name)
+                
+                # 各月の売上を取得
+                for col_idx, month in month_cols:
+                    sales = df.iloc[data_row_idx, col_idx]
+                    if pd.notna(sales) and float(sales) != 0:
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO monthly_summary
+                            (report_id, fiscal_year, month, manager, total_sales, direct_sales,
+                             studio_school_sales, school_count, budget, budget_rate, yoy_rate)
+                            VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL)
+                        ''', (report_id, current_fiscal_year, month, manager_name, float(sales)))
 
 
 def import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):

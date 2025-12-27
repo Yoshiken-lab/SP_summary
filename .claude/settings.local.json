@@ -68,7 +68,8 @@
       "Bash(powershell -Command \"Copy-Item -Path ''C:\\Users\\admin\\Documents\\06-Python\\SP_summary\\dashboard_optimized\\*'' -Destination ''\\192.168.11.51\\homes\\dashboard\\'' -Recurse -Force\")",
       "Bash(powershell -Command \"Get-ChildItem -Recurse ''\\192.168.11.51\\homes\\dashboard\\'' | Select-Object FullName, Length | Format-Table -AutoSize\")",
       "Bash(powershell -Command \"\n# まずdataフォルダ内のjsファイルを削除（直接コピーされてしまったもの）\nRemove-Item ''\\192.168.11.51\\homes\\dashboard\\*.js'' -Force\n\n# dataフォルダを作成\nNew-Item -ItemType Directory -Path ''\\192.168.11.51\\homes\\dashboard\\data'' -Force\n\n# 正しくコピーし直す\nCopy-Item -Path ''C:\\Users\\admin\\Documents\\06-Python\\SP_summary\\dashboard_optimized\\dashboard.html'' -Destination ''\\192.168.11.51\\homes\\dashboard\\'' -Force\nCopy-Item -Path ''C:\\Users\\admin\\Documents\\06-Python\\SP_summary\\dashboard_optimized\\data\\*'' -Destination ''\\192.168.11.51\\homes\\dashboard\\data\\'' -Force\n\")",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: UIリファクタリングとインポーター機能追加\n\n- フロントエンドのコンポーネント整理と最適化\n- APIエンドポイントの改善\n- importer.pyを追加\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ],
     "deny": [],
     "ask": []

@@ -57,6 +57,7 @@ def init_database(db_path=None):
             report_id INTEGER NOT NULL,
             fiscal_year INTEGER NOT NULL,        -- 年度（2024, 2025など）
             month INTEGER NOT NULL,              -- 月（1-12）
+            manager TEXT,                        -- 担当者名
             total_sales REAL,                    -- 総売上額
             direct_sales REAL,                   -- 直取引売上
             studio_school_sales REAL,            -- 写真館・学校売上
@@ -65,9 +66,16 @@ def init_database(db_path=None):
             budget_rate REAL,                    -- 予算比
             yoy_rate REAL,                       -- 昨年比
             FOREIGN KEY (report_id) REFERENCES reports(id),
-            UNIQUE(report_id, fiscal_year, month)
+            UNIQUE(report_id, fiscal_year, month, manager)
         )
     ''')
+    
+    # managerカラムが存在しない場合は追加（マイグレーション）
+    cursor.execute("PRAGMA table_info(monthly_summary)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'manager' not in columns:
+        cursor.execute('ALTER TABLE monthly_summary ADD COLUMN manager TEXT')
+
 
     # ========================================
     # 3. 学校マスタ
