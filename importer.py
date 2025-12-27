@@ -825,8 +825,7 @@ def import_excel_with_stats(file_path, db_path=None):
     file_path = Path(file_path)
     print(f"取り込み開始: {file_path.name}")
 
-    # DB初期化
-    init_database(db_path)
+    # DB接続（init_databaseは最初の1回のみ実行されるため、ここでは不要）
     conn = get_connection(db_path)
     cursor = conn.cursor()
 

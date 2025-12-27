@@ -18,8 +18,14 @@ def get_connection(db_path=None):
     """データベース接続を取得"""
     if db_path is None:
         db_path = DEFAULT_DB_PATH
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30.0)  # タイムアウトを30秒に設定
     conn.row_factory = sqlite3.Row  # 辞書形式でアクセス可能に
+    
+    # WALモードを有効化（複数の読み取りと1つの書き込みが同時に実行可能）
+    conn.execute('PRAGMA journal_mode=WAL')
+    # 同期モードを最適化
+    conn.execute('PRAGMA synchronous=NORMAL')
+    
     return conn
 
 
