@@ -1,468 +1,397 @@
 <template>
   <div class="page-container">
-    <header class="page-header">
-      <h1>累積集計</h1>
-      <p>複数の月次集計ファイルを元に、年度の累積報告書を作成します</p>
-    </header>
-
-    <div v-if="error" class="error-message">
-      {{ error }}
-    </div>
-
-    <!-- Step 1: 月次集計ファイルを追加 -->
-    <div v-if="cumulativeStep === 'upload'" class="card">
-      <h2 class="card-title">
-        <span class="step">1</span>
-        月次集計ファイルを追加
-      </h2>
-
-      <div class="file-add-section">
-        <div class="file-add-row">
-          <div class="file-input-wrapper" style="flex: 2;">
-            <div :class="['file-input-display', { 'has-file': newFileToAdd }]">
-              {{ newFileToAdd ? newFileToAdd.name : 'ファイルが選択されていません' }}
-            </div>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              @change="onNewFileSelect"
-              ref="newFileInput"
-              style="display: none"
-            >
-            <button class="file-input-btn" @click="$refs.newFileInput.click()">
-              選択...
-            </button>
-          </div>
-          <div class="select-item" style="min-width: 100px;">
-            <select v-model="newFileYear">
-              <option v-for="year in availableYears" :key="year" :value="year">
-                {{ year }}年
-              </option>
-            </select>
-          </div>
-          <div class="select-item" style="min-width: 80px;">
-            <select v-model="newFileMonth">
-              <option v-for="month in 12" :key="month" :value="month">
-                {{ month }}月
-              </option>
-            </select>
-          </div>
-          <button class="btn-add" @click="addInputFile" :disabled="!newFileToAdd">
-            追加
-          </button>
+    <el-card shadow="never">
+      <template #header>
+        <div class="card-header">
+          <h1>累積集計</h1>
+          <p>複数の月次集計ファイルを元に、年度の累積報告書を作成します</p>
         </div>
-        <p class="file-hint">※月次集計で出力されたExcelファイルを選択し、対象年月を指定して追加してください</p>
-      </div>
+      </template>
 
-      <div v-if="cumulativeInputFiles.length > 0" class="file-list">
-        <h3 class="file-list-title">追加済みファイル（{{ cumulativeInputFiles.length }}件）</h3>
-        <div class="file-list-items">
-          <div v-for="(item, index) in cumulativeInputFiles" :key="index" class="file-list-item">
-            <span class="file-name">{{ item.file.name }}</span>
-            <span class="file-period">{{ item.year }}年{{ item.month }}月分</span>
-            <button class="file-remove-btn" @click="removeInputFile(index)">削除</button>
-          </div>
-        </div>
-      </div>
+      <el-row :gutter="20">
+        <el-col :span="14">
+          <el-form label-position="top">
+            <el-form-item>
+              <template #label>
+                <span class="step-label">1</span> 月次集計ファイルを追加
+              </template>
+              <el-upload
+                drag
+                multiple
+                action="#"
+                :auto-upload="false"
+                :on-change="handleFilesChange"
+                :show-file-list="false"
+                class="upload-area"
+              >
+                <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+                <div class="el-upload__text">
+                  ここにファイルをドラッグ＆ドロップ
+                  <br>または<em>クリックしてアップロード</em>
+                </div>
+              </el-upload>
+            </el-form-item>
 
-      <div v-if="cumulativeInputFiles.length > 0" class="fiscal-year-info">
-        対象年度: <strong>{{ calculatedFiscalYear }}年度</strong>
-        （出力ファイル: SP_年度累計_{{ calculatedFiscalYear }}.xlsx）
-      </div>
-    </div>
+            <el-form-item v-if="cumulativeInputFiles.length > 0">
+               <template #label>
+                <span class="step-label">2</span> 追加されたファイルを確認
+              </template>
+              <el-table :data="cumulativeInputFiles" style="width: 100%">
+                <el-table-column prop="file.name" label="ファイル名" />
+                <el-table-column label="対象年月" width="220">
+                  <template #default="scope">
+                    <el-date-picker
+                      v-model="scope.row.period"
+                      type="month"
+                      placeholder="年月を選択"
+                      format="YYYY年M月"
+                      value-format="YYYY-M"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="80" align="center">
+                   <template #default="scope">
+                    <el-button type="danger" :icon="Delete" circle @click="removeInputFile(scope.$index)" />
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-if="calculatedFiscalYear" class="fiscal-year-info">
+                対象年度: <strong>{{ calculatedFiscalYear }}年度</strong>
+                （出力ファイル: SP_年度累計_{{ calculatedFiscalYear }}.xlsx）
+              </div>
+            </el-form-item>
+          </el-form>
+        </el-col>
 
-    <!-- Step 2: 既存累積ファイル（オプション） -->
-    <div v-if="cumulativeStep === 'upload'" class="card">
-      <h2 class="card-title">
-        <span class="step">2</span>
-        既存の累積ファイル（オプション）
-      </h2>
+        <el-col :span="10">
+           <div class="options-action-panel">
+            <el-form label-position="top">
+              <el-form-item>
+                 <template #label>
+                  <span class="step-label">3</span> 既存の累積ファイル (オプション)
+                </template>
+                <el-upload
+                  ref="uploadExistingRef"
+                  action="#"
+                  :limit="1"
+                  :auto-upload="false"
+                  :on-change="handleExistingFileChange"
+                  :on-remove="handleExistingFileRemove"
+                >
+                  <el-button><el-icon><FolderOpened /></el-icon> ファイルを選択</el-button>
+                   <template #tip>
+                    <div class="el-upload__tip">
+                      既存のファイルに追記・上書きする場合に選択
+                    </div>
+                  </template>
+                </el-upload>
+              </el-form-item>
+               <el-form-item>
+                  <div class="action-box">
+                    <el-button
+                      type="primary"
+                      size="large"
+                      @click="startCumulativeAggregation"
+                      :disabled="!canStartCumulative"
+                      :loading="isLoading"
+                    >
+                      <el-icon><Histogram /></el-icon>
+                      <span>累積集計を実行 ({{ cumulativeInputFiles.length }}件)</span>
+                    </el-button>
+                  </div>
+               </el-form-item>
+            </el-form>
+           </div>
+        </el-col>
+      </el-row>
+    </el-card>
 
-      <div class="file-input-group">
-        <label>既存の年度累計ファイルのパス</label>
-        <div class="file-input-wrapper">
-          <input
-            type="text"
-            v-model="existingFilePath"
-            class="path-input"
-            placeholder="例: C:\Users\username\Downloads\SP_年度累計_2024.xlsx"
-          >
-          <button v-if="existingFilePath" class="file-clear-btn" @click="existingFilePath = ''">
-            クリア
-          </button>
-        </div>
-        <p class="file-hint">
-          ※既存ファイルのパスを入力すると、そのファイルに月別データを追記・上書き保存します<br>
-          ※空欄の場合は、ダウンロードフォルダに新規ファイルを作成します
-        </p>
-      </div>
-    </div>
-
-    <!-- 実行ボタン -->
-    <div v-if="cumulativeStep === 'upload'">
-      <button
-        class="btn-primary"
-        @click="startCumulativeAggregation"
-        :disabled="!canStartCumulative"
-      >
-        📊 累積集計を実行（{{ cumulativeInputFiles.length }}ファイル）
-      </button>
-    </div>
-
-    <!-- 累積集計モーダル -->
-    <div v-if="cumulativeModalVisible" class="modal-overlay" @click.self="closeCumulativeModalIfComplete">
-      <div class="modal-container">
-        <!-- 処理中 -->
-        <div v-if="cumulativeModalStep === 'processing'" class="modal-content">
-          <h2 class="modal-title">累積集計中...</h2>
-          <div class="modal-progress">
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: cumulativeProgress + '%' }"></div>
-            </div>
-            <div class="progress-text">{{ cumulativeProgress }}%</div>
-          </div>
+     <!-- 処理中ダイアログ -->
+    <el-dialog v-model="cumulativeModalVisible" title="累積集計" :close-on-click-modal="false" :show-close="!isLoading">
+       <div v-if="isLoading">
+          <h3 class="dialog-title">累積集計中...</h3>
+          <el-progress :percentage="cumulativeProgress" :stroke-width="15" striped />
           <div class="modal-logs">
-            <div
-              v-for="(log, index) in cumulativeLogs"
-              :key="index"
-              :class="['modal-log-item', log.status]"
-            >
-              <span class="icon">{{ getLogIcon(log.status) }}</span>
+            <div v-for="(log, index) in cumulativeLogs" :key="index" :class="['modal-log-item', log.status]">
+               <el-icon><component :is="getLogIcon(log.status)" /></el-icon>
               <span>{{ log.message }}</span>
             </div>
           </div>
-        </div>
-
-        <!-- 完了 -->
-        <div v-if="cumulativeModalStep === 'complete'" class="modal-content">
-          <div class="modal-complete-icon">✅</div>
-          <h2 class="modal-title">累積集計完了！</h2>
-          <div class="modal-result">
-            <div class="modal-result-item">
-              <span class="label">対象年度</span>
-              <span class="value">{{ cumulativeResult.fiscalYear }}年度</span>
-            </div>
-            <div class="modal-result-item">
-              <span class="label">処理ファイル数</span>
-              <span class="value">{{ cumulativeResult.processedCount }}件</span>
-            </div>
-            <div class="modal-result-item">
-              <span class="label">追記月</span>
-              <span class="value">{{ cumulativeResult.processedMonths }}</span>
-            </div>
-            <div class="modal-result-item">
-              <span class="label">学校別データ</span>
-              <span class="value">{{ cumulativeResult.schoolCount }}件</span>
-            </div>
-            <div class="modal-result-item">
-              <span class="label">イベント別データ</span>
-              <span class="value">{{ cumulativeResult.eventCount }}件</span>
-            </div>
-            <div class="modal-result-item">
-              <span class="label">保存先</span>
-              <span class="value output-path">{{ cumulativeResult.outputPath }}</span>
-            </div>
-          </div>
-          <button class="btn-modal-close" @click="closeCumulativeModal">
-            閉じる
-          </button>
-        </div>
-
-        <!-- エラー -->
-        <div v-if="cumulativeModalStep === 'error'" class="modal-content">
-          <div class="modal-error-icon">❌</div>
-          <h2 class="modal-title">エラーが発生しました</h2>
-          <p class="modal-error-message">{{ cumulativeModalError }}</p>
-          <button class="btn-modal-close" @click="closeCumulativeModal">
-            閉じる
-          </button>
-        </div>
-      </div>
-    </div>
+       </div>
+        <div v-else>
+         <el-result
+            icon="success"
+            title="累積集計完了！"
+            :sub-title="`対象年度: ${cumulativeResult?.fiscalYear}年度`"
+          >
+            <template #info>
+                <div class="result-info">
+                    <p>処理ファイル数: {{ cumulativeResult?.processedCount }}件</p>
+                    <p>追記月: {{ cumulativeResult?.processedMonths }}</p>
+                    <p>保存先: <el-tag type="info">{{ cumulativeResult?.outputPath }}</el-tag></p>
+                </div>
+            </template>
+            <template #extra>
+              <el-button type="primary" @click="closeCumulativeModal">閉じる</el-button>
+            </template>
+          </el-result>
+       </div>
+    </el-dialog>
   </div>
 </template>
 
-<script>
-export default {
-  name: 'CumulativeAggregation',
-  data() {
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth() + 1;
+<script setup>
+import { ref, computed } from 'vue';
+import { ElNotification, ElLoading } from 'element-plus';
+import { UploadFilled, Delete, FolderOpened, Histogram, Check, Close, Loading } from '@element-plus/icons-vue';
 
-    return {
-      error: null,
-      cumulativeStep: 'upload', // upload, processing, result
-      existingFilePath: '', // 既存ファイルのパス（テキスト入力）
-      cumulativeInputFiles: [], // [{file: File, year: number, month: number}, ...]
-      newFileToAdd: null,
-      newFileYear: currentDate.getFullYear(),
-      newFileMonth: currentMonth,
-      cumulativeProgress: 0,
-      cumulativeLogs: [],
-      cumulativeResult: null,
-      cumulativeSessionId: null,
-      cumulativeModalVisible: false,
-      cumulativeModalStep: 'processing', // processing, complete, error
-      cumulativeModalError: '',
-    };
-  },
-  computed: {
-    availableYears() {
-      const currentYear = new Date().getFullYear();
-      return Array.from({ length: 6 }, (_, i) => currentYear - 4 + i);
-    },
-    calculatedFiscalYear() {
-      if (this.cumulativeInputFiles.length > 0) {
-        const firstFile = this.cumulativeInputFiles[0];
-        return firstFile.month >= 4 ? firstFile.year : firstFile.year - 1;
-      }
-      const currentDate = new Date();
-      const currentMonth = currentDate.getMonth() + 1;
-      return currentMonth >= 4 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
-    },
-    canStartCumulative() {
-      return this.cumulativeInputFiles.length > 0;
-    },
-  },
-  methods: {
-    getLogIcon(status) {
-      switch (status) {
-        case 'success': return '✅';
-        case 'processing': return '🔄';
-        case 'pending': return '⏳';
-        case 'error': return '❌';
-        default: return '•';
-      }
-    },
-    onNewFileSelect(event) {
-      const file = event.target.files[0];
-      if (file) {
-        this.newFileToAdd = file;
-        this.error = null;
-      }
-    },
-    addInputFile() {
-      if (!this.newFileToAdd) return;
-      this.cumulativeInputFiles.push({
-        file: this.newFileToAdd,
-        year: this.newFileYear,
-        month: this.newFileMonth,
-      });
-      this.newFileToAdd = null;
-      if (this.$refs.newFileInput) {
-        this.$refs.newFileInput.value = '';
-      }
-    },
-    removeInputFile(index) {
-      this.cumulativeInputFiles.splice(index, 1);
-    },
-    async startCumulativeAggregation() {
-      this.error = null;
-      this.cumulativeProgress = 0;
-      this.cumulativeLogs = [];
-      this.cumulativeModalVisible = true;
-      this.cumulativeModalStep = 'processing';
-      this.cumulativeModalError = '';
+// --- State ---
+const isLoading = ref(false);
+const cumulativeInputFiles = ref([]);
+const existingFile = ref(null);
+const uploadExistingRef = ref();
 
-      try {
-        this.addCumulativeLog(`${this.cumulativeInputFiles.length}件のファイルをアップロード中...`, 'processing');
-        await this.uploadCumulativeFiles();
-        this.updateCumulativeLog(0, `${this.cumulativeInputFiles.length}件のファイルアップロード完了`, 'success');
-        this.cumulativeProgress = 30;
+const cumulativeProgress = ref(0);
+const cumulativeLogs = ref([]);
+const cumulativeResult = ref(null);
+const cumulativeSessionId = ref(null);
+const cumulativeModalVisible = ref(false);
 
-        this.addCumulativeLog('累積集計を実行中...', 'processing');
-        const result = await this.runCumulativeAggregation();
-        this.updateCumulativeLog(1, '累積集計完了', 'success');
-        this.cumulativeProgress = 100;
 
-        this.cumulativeResult = result;
-        this.cumulativeModalStep = 'complete';
-      } catch (err) {
-        this.cumulativeModalStep = 'error';
-        this.cumulativeModalError = err.message || '処理中にエラーが発生しました';
-      }
-    },
-    async uploadCumulativeFiles() {
-      const formData = new FormData();
-      const filesInfo = [];
-      this.cumulativeInputFiles.forEach((item, index) => {
-        formData.append(`input_file_${index}`, item.file);
-        filesInfo.push({
-          index: index,
-          year: item.year,
-          month: item.month,
+// --- Computed ---
+const calculatedFiscalYear = computed(() => {
+  if (cumulativeInputFiles.value.length === 0) return null;
+  const firstFileWithPeriod = cumulativeInputFiles.value.find(f => f.period);
+  if (!firstFileWithPeriod) return null;
+
+  const [year, month] = firstFileWithPeriod.period.split('-').map(Number);
+  return month >= 4 ? year : year - 1;
+});
+
+const canStartCumulative = computed(() => {
+  return cumulativeInputFiles.value.length > 0 && cumulativeInputFiles.value.every(f => f.period) && !isLoading.value;
+});
+
+// --- Methods ---
+const handleFilesChange = (file, fileList) => {
+    // 既存のファイルリストにない新しいファイルのみを追加
+    const newFiles = fileList.filter(f => !cumulativeInputFiles.value.some(existing => existing.uid === f.uid));
+    newFiles.forEach(f => {
+        cumulativeInputFiles.value.push({
+            uid: f.uid,
+            file: f.raw,
+            period: ''
         });
-      });
-      formData.append('files_info', JSON.stringify(filesInfo));
-      if (this.existingFilePath) {
-        formData.append('existing_file_path', this.existingFilePath);
-      }
-      formData.append('fiscal_year', this.calculatedFiscalYear);
+    });
+};
 
-      const response = await fetch('/api/cumulative/upload-multiple', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await response.json();
-      if (data.status !== 'success') {
-        throw new Error(data.message);
-      }
-      this.cumulativeSessionId = data.session_id;
-    },
-    async runCumulativeAggregation() {
-      const response = await fetch('/api/cumulative/aggregate-multiple', {
+const removeInputFile = (index) => {
+  cumulativeInputFiles.value.splice(index, 1);
+};
+
+const handleExistingFileChange = (file) => {
+  existingFile.value = file.raw;
+};
+
+const handleExistingFileRemove = () => {
+  existingFile.value = null;
+};
+
+const getLogIcon = (status) => {
+  switch (status) {
+    case 'success': return Check;
+    case 'processing': return Loading;
+    default: return Close;
+  }
+};
+
+const addCumulativeLog = (message, status) => {
+  cumulativeLogs.value.push({ message, status });
+};
+
+const updateCumulativeLog = (index, message, status) => {
+  if (cumulativeLogs.value[index]) {
+    cumulativeLogs.value[index].message = message;
+    cumulativeLogs.value[index].status = status;
+  }
+};
+
+const resetForm = () => {
+  isLoading.value = false;
+  cumulativeInputFiles.value = [];
+  existingFile.value = null;
+  uploadExistingRef.value?.clearFiles();
+  cumulativeProgress.value = 0;
+  cumulativeLogs.value = [];
+  cumulativeResult.value = null;
+  cumulativeSessionId.value = null;
+  cumulativeModalVisible.value = false;
+};
+
+const startCumulativeAggregation = async () => {
+  if (!canStartCumulative.value) return;
+
+  const loadingInstance = ElLoading.service({
+    lock: true,
+    text: '累積集計処理を実行中...',
+    background: 'rgba(0, 0, 0, 0.7)',
+  });
+
+  isLoading.value = true;
+  cumulativeLogs.value = [];
+  cumulativeProgress.value = 0;
+  cumulativeModalVisible.value = true;
+
+  try {
+    addCumulativeLog('ファイルをアップロード中...', 'processing');
+    const formData = new FormData();
+    const filesInfo = cumulativeInputFiles.value.map((item, index) => {
+      formData.append(`input_file_${index}`, item.file);
+      const [year, month] = item.period.split('-').map(Number);
+      return { index, year, month };
+    });
+
+    formData.append('files_info', JSON.stringify(filesInfo));
+    formData.append('fiscal_year', calculatedFiscalYear.value);
+
+    if (existingFile.value) {
+      formData.append('existing_file', existingFile.value);
+    }
+    
+    const uploadResponse = await fetch('/api/cumulative/upload-multiple', {
+      method: 'POST',
+      body: formData,
+    });
+    const uploadData = await uploadResponse.json();
+    if (uploadData.status !== 'success') throw new Error(uploadData.message);
+    cumulativeSessionId.value = uploadData.session_id;
+    updateCumulativeLog(0, 'ファイルアップロード完了', 'success');
+    cumulativeProgress.value = 30;
+
+    addCumulativeLog('累積集計を実行中...', 'processing');
+    const aggResponse = await fetch('/api/cumulative/aggregate-multiple', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: this.cumulativeSessionId,
-        }),
-      });
-      const data = await response.json();
-      if (data.status !== 'success') {
-        throw new Error(data.message);
-      }
-      return data;
-    },
-    addCumulativeLog(message, status) {
-      this.cumulativeLogs.push({ message, status });
-    },
-    updateCumulativeLog(index, message, status) {
-      if (this.cumulativeLogs[index]) {
-        this.cumulativeLogs[index].message = message;
-        this.cumulativeLogs[index].status = status;
-      }
-    },
-    resetCumulativeForm() {
-      this.cumulativeStep = 'upload';
-      this.existingFilePath = '';
-      this.cumulativeInputFiles = [];
-      this.newFileToAdd = null;
-      this.cumulativeProgress = 0;
-      this.cumulativeLogs = [];
-      this.cumulativeResult = null;
-      this.cumulativeSessionId = null;
-      this.error = null;
-      this.cumulativeModalVisible = false;
-    },
-    closeCumulativeModal() {
-      this.cumulativeModalVisible = false;
-      if (this.cumulativeModalStep === 'complete') {
-        this.resetCumulativeForm();
-      }
-    },
-    closeCumulativeModalIfComplete() {
-      if (this.cumulativeModalStep === 'complete' || this.cumulativeModalStep === 'error') {
-        this.closeCumulativeModal();
-      }
-    },
-  },
+        body: JSON.stringify({ session_id: cumulativeSessionId.value }),
+    });
+    const aggData = await aggResponse.json();
+    if (aggData.status !== 'success') throw new Error(aggData.message);
+    
+    cumulativeResult.value = aggData;
+    updateCumulativeLog(1, '累積集計完了', 'success');
+    cumulativeProgress.value = 100;
+    isLoading.value = false;
+
+     ElNotification({
+      title: '成功',
+      message: '累積集計が完了しました。',
+      type: 'success',
+    });
+
+  } catch (error) {
+    isLoading.value = false;
+    cumulativeModalVisible.value = false;
+    ElNotification({
+        title: 'エラー',
+        message: error.message || '処理中に予期せぬエラーが発生しました。',
+        type: 'error',
+    });
+  } finally {
+    loadingInstance.close();
+  }
 };
+
+const closeCumulativeModal = () => {
+    if(!isLoading.value) {
+        resetForm();
+        cumulativeModalVisible.value = false;
+    }
+};
+
 </script>
 
 <style scoped>
-/* Common styles from App.vue can be used or extended here */
-.file-add-section {
-  background-color: #fdfdfd;
-  border: 1px solid #eee;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1.5rem;
+.page-container {
+  padding: 20px;
 }
-.file-add-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+.card-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
 }
-.file-hint {
-  font-size: 0.85rem;
-  color: #777;
-  margin: 0.75rem 0 0 0;
-}
-.btn-add {
-  background-color: #27ae60;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.btn-add:disabled {
-  background-color: #bdc3c7;
-  cursor: not-allowed;
-}
-.file-list {
-  margin-top: 1.5rem;
-}
-.file-list-title {
-  font-size: 1rem;
-  font-weight: bold;
-  color: #555;
-  margin-bottom: 0.5rem;
-}
-.file-list-items {
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  padding: 0.5rem;
-}
-.file-list-item {
-  display: flex;
-  align-items: center;
-  padding: 0.5rem;
-  background-color: #f9f9f9;
-  border-radius: 4px;
-  margin-bottom: 0.5rem;
-}
-.file-list-item:last-child {
-  margin-bottom: 0;
-}
-.file-name {
-  flex-grow: 1;
+.card-header p {
+  margin: 5px 0 0 0;
+  color: var(--el-text-color-secondary);
   font-size: 0.9rem;
 }
-.file-period {
-  font-size: 0.85rem;
-  color: #34495e;
-  background-color: #ecf0f1;
-  padding: 2px 6px;
-  border-radius: 10px;
-  margin: 0 1rem;
+.step-label {
+    font-size: 1.1rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
 }
-.file-remove-btn {
-  background: none;
-  border: none;
-  color: #c0392b;
-  cursor: pointer;
-  font-weight: bold;
+.step-label::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 1.2rem;
+    background-color: var(--el-color-primary);
+    margin-right: 8px;
+    border-radius: 3px;
+}
+.options-action-panel, .action-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+.options-action-panel {
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  padding: 20px;
+}
+.el-upload__tip {
+    margin-top: 5px;
+    font-size: 0.8rem;
 }
 .fiscal-year-info {
   margin-top: 1rem;
-  background-color: #e8f4fd;
-  border: 1px solid #bde0fe;
-  color: #0d6efd;
+  background-color: #ecf5ff;
+  border: 1px solid #d9ecff;
+  color: #409eff;
   padding: 0.75rem;
   border-radius: 4px;
 }
-.path-input {
-  flex-grow: 1;
-  border: 1px solid #ccc;
-  padding: 0.5rem 0.75rem;
+.dialog-content, .result-info {
+  padding: 10px;
+}
+.dialog-title {
+  text-align: center;
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+  color: var(--el-text-color-primary);
+}
+.modal-logs {
+  margin-top: 1.5rem;
+  padding: 10px;
+  background-color: #f9fafb;
   border-radius: 4px;
-  margin-right: 0.5rem;
-}
-.file-clear-btn {
-  background: none;
-  border: none;
-  color: #7f8c8d;
-  cursor: pointer;
-}
-.output-path {
+  max-height: 150px;
+  overflow-y: auto;
   font-size: 0.9rem;
-  font-family: monospace;
-  background-color: #e9ecef;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-  word-break: break-all;
+}
+.modal-log-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  color: var(--el-text-color-regular);
+}
+.result-info p {
+    margin: 5px 0;
+    color: var(--el-text-color-regular);
+}
+:deep(.el-result__subtitle) {
+  color: var(--el-text-color-regular);
 }
 </style>

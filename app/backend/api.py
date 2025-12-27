@@ -502,15 +502,25 @@ def create_app(config=None):
                 'fiscal_year': fiscal_year
             }
 
-            # 既存累積ファイルのパスがある場合（テキスト入力からの直接パス）
-            existing_file_path = form_data.get('existing_file_path')
-            if existing_file_path:
-                existing_path = Path(existing_file_path)
-                if existing_path.exists():
-                    app.session_data[session_id]['existing_file'] = str(existing_path)
-                    logger.info(f"既存ファイルパス指定: {existing_path}")
-                else:
-                    logger.warning(f"指定された既存ファイルが存在しません: {existing_file_path}")
+            # 既存累積ファイルのアップロードがある場合
+            if 'existing_file' in files:
+                existing_file = files['existing_file']
+                if existing_file and existing_file.filename:
+                    existing_filepath = file_handler.save_uploaded_file(
+                        existing_file, f"existing_cumulative_{existing_file.filename}"
+                    )
+                    app.session_data[session_id]['existing_file'] = str(existing_filepath)
+                    logger.info(f"既存の累積ファイルをアップロード: {existing_file.filename}")
+            else:
+                # フロントエンドからテキストパスが送られてくる古いロジックも一応残す
+                existing_file_path = form_data.get('existing_file_path')
+                if existing_file_path:
+                    existing_path = Path(existing_file_path)
+                    if existing_path.exists():
+                        app.session_data[session_id]['existing_file'] = str(existing_path)
+                        logger.info(f"既存ファイルパス指定: {existing_path}")
+                    else:
+                        logger.warning(f"指定された既存ファイルが存在しません: {existing_file_path}")
 
             return jsonify({
                 'status': 'success',
@@ -691,7 +701,7 @@ def create_app(config=None):
 
     @app.route('/api/publish/import', methods=['POST'])
     def publish_import():
-        """実績反映（DBインポート）実行"""
+        """実績反映(DBインポート)実行"""
         try:
             data = request.get_json()
             session_id = data.get('session_id')
@@ -705,23 +715,65 @@ def create_app(config=None):
             session = app.session_data[session_id]
             files = session['files']
 
+            # 統計情報を格納
+            total_stats = {
+                'school_sales_count': 0,
+                'monthly_summary_count': 0,
+                'event_sales_count': 0
+            }
+            
             # 各ファイルをインポート
             imported_count = 0
-            for file_info in files:
-                filepath = Path(file_info['path'])
-                if filepath.exists():
-                    try:
+            report_ids = []  # ロールバック用にreport_idを保持
+            
+            try:
+                for file_info in files:
+                    filepath = Path(file_info['path'])
+                    if filepath.exists():
                         # 既存のimporterを使用
-                        from importer import import_excel
-                        import_excel(str(filepath))
-                        imported_count += 1
-                        logger.info(f"インポート完了: {file_info['filename']}")
-                    except Exception as e:
-                        logger.error(f"インポートエラー ({file_info['filename']}): {e}")
+                        from importer import import_excel_with_stats
+                        result = import_excel_with_stats(str(filepath))
+                        
+                        if result and result.get('success'):
+                            imported_count += 1
+                            report_ids.append(result['report_id'])
+                            
+                            # 統計情報を集計
+                            stats = result.get('stats', {})
+                            total_stats['school_sales_count'] += stats.get('school_sales', 0)
+                            total_stats['monthly_summary_count'] += stats.get('monthly_summary', 0)
+                            total_stats['event_sales_count'] += stats.get('event_sales', 0)
+                            
+                            logger.info(f"インポート完了: {file_info['filename']}")
+                        else:
+                            # エラー発生時はロールバック
+                            error_msg = result.get('error', '不明なエラー')
+                            logger.error(f"インポートエラー ({file_info['filename']}): {error_msg}")
+                            
+                            # これまでインポートしたデータを削除
+                            if report_ids:
+                                from importer import rollback_reports
+                                rollback_reports(report_ids)
+                                logger.info(f"ロールバック完了: {len(report_ids)}件削除")
+                            
+                            return jsonify({
+                                'status': 'error',
+                                'message': f'インポート中にエラーが発生しました: {error_msg}'
+                            }), 500
+
+            except Exception as e:
+                # 例外発生時もロールバック
+                logger.error(f"インポート中の例外: {e}")
+                if report_ids:
+                    from importer import rollback_reports
+                    rollback_reports(report_ids)
+                    logger.info(f"ロールバック完了: {len(report_ids)}件削除")
+                raise
 
             return jsonify({
                 'status': 'success',
-                'fileCount': imported_count
+                'fileCount': imported_count,
+                'stats': total_stats
             })
 
         except Exception as e:

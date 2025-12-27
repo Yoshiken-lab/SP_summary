@@ -806,6 +806,180 @@ def import_all_from_directory(directory_path, db_path=None):
     return imported_count
 
 
+def import_excel_with_stats(file_path, db_path=None):
+    """
+    Excelファイルを取り込み、統計情報とreport_idを返す
+    
+    Returns:
+        dict: {
+            'success': bool,
+            'report_id': int,
+            'stats': {
+                'school_sales': int,
+                'monthly_summary': int,
+                'event_sales': int
+            },
+            'error': str (エラー時のみ)
+        }
+    """
+    file_path = Path(file_path)
+    print(f"取り込み開始: {file_path.name}")
+
+    # DB初期化
+    init_database(db_path)
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
+    try:
+        # 報告書情報を登録
+        report_date = extract_report_date(file_path.name)
+
+        # 既に取り込み済みかチェック
+        cursor.execute('SELECT id FROM reports WHERE file_name = ?', (file_path.name,))
+        existing = cursor.fetchone()
+        if existing:
+            print(f"  既に取り込み済みです。スキップします。")
+            conn.close()
+            return {
+                'success': False,
+                'error': f'ファイル「{file_path.name}」は既に取り込み済みです'
+            }
+
+        cursor.execute('''
+            INSERT INTO reports (file_name, file_path, report_date)
+            VALUES (?, ?, ?)
+        ''', (file_path.name, str(file_path), report_date))
+        report_id = cursor.lastrowid
+        print(f"  報告書ID: {report_id}, 日付: {report_date}")
+
+        # Excelファイルを開く
+        xlsx = pd.ExcelFile(file_path, engine='openpyxl')
+        sheet_names = xlsx.sheet_names
+
+        # パスから年度を推測
+        default_fiscal_year = detect_fiscal_year_from_path(file_path)
+        print(f"  デフォルト年度: {default_fiscal_year}")
+
+        # 統計情報を初期化
+        stats = {
+            'school_sales': 0,
+            'monthly_summary': 0,
+            'event_sales': 0
+        }
+
+        # 各シートを取り込み
+        if '売上' in sheet_names:
+            print("  売上サマリーを取り込み中...")
+            import_sales_summary(xlsx, cursor, report_id)
+            # 月別サマリー件数を取得
+            cursor.execute('SELECT COUNT(*) FROM monthly_summary WHERE report_id = ?', (report_id,))
+            stats['monthly_summary'] = cursor.fetchone()[0]
+
+        for sheet_name in sheet_names:
+            if '学校別' in sheet_name and '比較' not in sheet_name:
+                fiscal_year = extract_fiscal_year_from_sheet_name(sheet_name)
+                if fiscal_year is None:
+                    fiscal_year = default_fiscal_year
+                print(f"  {sheet_name}を取り込み中({fiscal_year}年度)...")
+                import_school_sales(xlsx, cursor, report_id, sheet_name, fiscal_year)
+
+            elif 'イベント別' in sheet_name:
+                fiscal_year = extract_fiscal_year_from_sheet_name(sheet_name)
+                if fiscal_year is None:
+                    fiscal_year = default_fiscal_year
+                print(f"  {sheet_name}を取り込み中({fiscal_year}年度)...")
+                import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year)
+
+        # 学校別売上件数を取得
+        cursor.execute('SELECT COUNT(*) FROM school_sales WHERE report_id = ?', (report_id,))
+        stats['school_sales'] = cursor.fetchone()[0]
+
+        # イベント別売上件数を取得
+        cursor.execute('SELECT COUNT(*) FROM event_sales WHERE report_id = ?', (report_id,))
+        stats['event_sales'] = cursor.fetchone()[0]
+
+        # 会員率シートを探す
+        member_rate_sheet = None
+        for sheet_name in sheet_names:
+            if '会員率' in sheet_name:
+                member_rate_sheet = sheet_name
+                break
+
+        if member_rate_sheet:
+            print(f"  {member_rate_sheet}を取り込み中...")
+            import_member_rates(xlsx, cursor, report_id, report_date, member_rate_sheet)
+
+        if '学校別売り上げ比較' in sheet_names:
+            print("  学校別売り上げ比較を取り込み中...")
+            import_school_comparison(xlsx, cursor, report_id)
+
+        # データが1件も取り込まれていない場合はエラー
+        if stats['school_sales'] == 0 and stats['monthly_summary'] == 0 and stats['event_sales'] == 0:
+            conn.rollback()
+            print(f"  エラー: 想定されたシート形式ではありません")
+            return {
+                'success': False,
+                'error': f'想定されたエクセル形式ではありません。「売上」「学校別」「イベント別」シートが見つかりませんでした'
+            }
+
+        conn.commit()
+        print(f"取り込み完了: {file_path.name}")
+        print(f"  学校別売上: {stats['school_sales']}件, 月別サマリー: {stats['monthly_summary']}件, イベント別売上: {stats['event_sales']}件")
+        
+        return {
+            'success': True,
+            'report_id': report_id,
+            'stats': stats
+        }
+
+    except Exception as e:
+        conn.rollback()
+        print(f"取り込みエラー: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+    finally:
+        conn.close()
+
+
+def rollback_reports(report_ids, db_path=None):
+    """
+    指定したreport_idのデータを全て削除(ロールバック)
+    
+    Args:
+        report_ids: list of int, 削除するreport_idのリスト
+        db_path: DBパス(省略時はデフォルト)
+    """
+    if not report_ids:
+        return
+
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
+    try:
+        placeholders = ','.join(['?' for _ in report_ids])
+        
+        # 関連データを削除
+        cursor.execute(f'DELETE FROM monthly_summary WHERE report_id IN ({placeholders})', report_ids)
+        cursor.execute(f'DELETE FROM school_sales WHERE report_id IN ({placeholders})', report_ids)
+        cursor.execute(f'DELETE FROM event_sales WHERE report_id IN ({placeholders})', report_ids)
+        cursor.execute(f'DELETE FROM member_rates WHERE report_id IN ({placeholders})', report_ids)
+        cursor.execute(f'DELETE FROM school_yearly_sales WHERE report_id IN ({placeholders})', report_ids)
+        
+        # 最後にreportsテーブルから削除
+        cursor.execute(f'DELETE FROM reports WHERE id IN ({placeholders})', report_ids)
+        
+        conn.commit()
+        print(f"ロールバック完了: report_ids={report_ids}")
+    except Exception as e:
+        conn.rollback()
+        print(f"ロールバックエラー: {e}")
+        raise
+    finally:
+        conn.close()
+
+
 if __name__ == '__main__':
     import sys
 
