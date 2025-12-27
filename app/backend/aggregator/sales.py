@@ -205,7 +205,7 @@ class SalesAggregator:
             inserted_count = 0
             
             for _, row in self.master_df.iterrows():
-                school_id = row.get('学校ID')
+                school_id = row.get('ID')  # マスタファイルのカラム名は'ID'
                 school_name = row.get('学校名', '')
                 region = row.get('事業所', '')
                 manager = row.get('担当', '')
