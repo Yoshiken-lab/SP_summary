@@ -13,6 +13,9 @@ dashboard_*.html
 member_rate_chart.html
 dashboard/
 
+# Samples
+samples/
+
 # Debug/test files
 check_*.py
 debug_*.py
