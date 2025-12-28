@@ -60,9 +60,57 @@ def excel_serial_to_month(serial_value):
         return None
 
 
+def normalize_school_name(school_name):
+    """
+    学校名を正規化(表記揺れ対策)
+    
+    以下を除去:
+    - 接頭辞: 「認定こども園　」「学校法人」「社会福祉法人」など
+    - 年度表記: 「(YYYY年度)」「YYYY年度」
+    - 補足情報: 「(〇〇カメラ)」など
+    
+    Args:
+        school_name: 元の学校名
+    
+    Returns:
+        str: 正規化された学校名
+    """
+    normalized = school_name.strip()
+    
+    # 接頭辞を除去
+    prefixes = [
+        '認定こども園　',
+        '認定こども園',
+        '学校法人　',
+        '学校法人',
+        '社会福祉法人　',
+        '社会福祉法人',
+        '学校法人ひまわり学園　',
+        '学校法人成田学園　',
+        '学校法人顕真学園　',
+        '学校法人　宮ヶ谷学園　'
+    ]
+    for prefix in prefixes:
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix):]
+            break
+    
+    # 年度表記を除去(末尾)
+    normalized = re.sub(r'[(（]\d{4}年度[)）]$', '', normalized).strip()
+    normalized = re.sub(r'\d{4}年度\s*', '', normalized).strip()
+    
+    # 補足情報を除去
+    normalized = re.sub(r'[(（][^)）]+[)）]', '', normalized).strip()
+    
+    # 連続スペースを1つに
+    normalized = re.sub(r'\s+', '', normalized)
+    
+    return normalized
+
+
 def get_school_id_by_name(cursor, school_name):
     """
-    学校名からschool_idを取得
+    学校名からschool_idを取得(完全一致→部分一致の順で検索)
     
     Args:
         cursor: DBカーソル
@@ -71,6 +119,7 @@ def get_school_id_by_name(cursor, school_name):
     Returns:
         int: school_id (見つからない場合はNone)
     """
+    # 1. 完全一致検索
     cursor.execute('''
         SELECT school_id FROM schools_master 
         WHERE school_name = ?
@@ -78,7 +127,33 @@ def get_school_id_by_name(cursor, school_name):
         LIMIT 1
     ''', (school_name,))
     row = cursor.fetchone()
-    return row[0] if row else None
+    if row:
+        return row[0]
+    
+    # 2. 部分一致検索(正規化名で)
+    normalized_input = normalize_school_name(school_name)
+    
+    # schools_master全件を取得して正規化名で比較
+    cursor.execute('''
+        SELECT school_id, school_name FROM schools_master
+        ORDER BY updated_at DESC
+    ''')
+    
+    for school_id, master_name in cursor.fetchall():
+        normalized_master = normalize_school_name(master_name)
+        
+        # 完全一致
+        if normalized_input == normalized_master:
+            return school_id
+        
+        # どちらかが片方に含まれる場合もマッチ(より短い方がより長い方に含まれる)
+        if normalized_input in normalized_master or normalized_master in normalized_input:
+            # ただし、長さの差が大きすぎる場合は除外(誤マッチ防止)
+            len_diff = abs(len(normalized_input) - len(normalized_master))
+            if len_diff <= 10:  # 10文字以内の差なら許容
+                return school_id
+    
+    return None
 
 
 def import_monthly_totals(xlsx, cursor, report_id):

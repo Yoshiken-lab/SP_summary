@@ -203,61 +203,72 @@ class SalesAggregator:
             
             updated_count = 0
             inserted_count = 0
+            skipped_count = 0
             
             for _, row in self.master_df.iterrows():
-                school_id = row.get('ID')  # マスタファイルのカラム名は'ID'
-                school_name = row.get('学校名', '')
-                region = row.get('事業所', '')
-                manager = row.get('担当', '')
-                studio = row.get('写真館', '')
-                attribute = row.get('属性', '')
-                
-                if pd.isna(school_id) or pd.isna(school_name):
+                try:
+                    school_id = row.get('ID')  # マスタファイルのカラム名は'ID'
+                    school_name = str(row.get('学校名', '')).strip()  # 先頭・末尾スペース削除
+                    region = str(row.get('事業所', '')).strip() if pd.notna(row.get('事業所')) else ''
+                    manager = str(row.get('担当', '')).strip() if pd.notna(row.get('担当')) else ''
+                    studio = str(row.get('写真館', '')).strip() if pd.notna(row.get('写真館')) else ''
+                    attribute = str(row.get('属性', '')).strip() if pd.notna(row.get('属性')) else ''
+                    
+                    if pd.isna(school_id) or pd.isna(school_name) or school_name == '':
+                        logger.debug(f"スキップ(NaN/空): school_id={school_id}, name={school_name}")
+                        skipped_count += 1
+                        continue
+                    
+                    school_id = int(school_id)
+                    school_name = str(school_name).strip()  # 念のため再度strip
+                    
+                    # 基本学校名と年度を抽出
+                    import re
+                    match = re.search(r'(.+?)(?:[(](\d{4})年度[)])?$', school_name)
+                    if match:
+                        base_school_name = match.group(1).strip()
+                        fiscal_year = int(match.group(2)) if match.group(2) else None
+                    else:
+                        base_school_name = school_name
+                        fiscal_year = None
+                    
+                    # logical_school_idを決定
+                    if base_school_name in base_name_to_logical_id:
+                        logical_school_id = base_name_to_logical_id[base_school_name]
+                    else:
+                        logical_school_id = next_logical_id
+                        base_name_to_logical_id[base_school_name] = logical_school_id
+                        next_logical_id += 1
+                    
+                    # schools_masterテーブルに保存（INSERT OR REPLACE）
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO schools_master 
+                        (school_id, logical_school_id, school_name, base_school_name, 
+                         fiscal_year, region, attribute, studio, manager, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ''', (school_id, logical_school_id, school_name, base_school_name,
+                          fiscal_year, region, attribute, studio, manager))
+                    
+                    # 既存レコードかどうかで判定
+                    if cursor.rowcount > 0:
+                        inserted_count += 1
+                    else:
+                        updated_count += 1
+                        
+                except Exception as row_error:
+                    logger.warning(f"学校登録エラー(スキップ): {school_name if 'school_name' in locals() else 'Unknown'} - {row_error}")
+                    skipped_count += 1
                     continue
-                
-                school_id = int(school_id)
-                school_name = str(school_name).strip()
-                
-                # 基本学校名と年度を抽出
-                import re
-                match = re.search(r'(.+?)(?:[(](\d{4})年度[)])?$', school_name)
-                if match:
-                    base_school_name = match.group(1).strip()
-                    fiscal_year = int(match.group(2)) if match.group(2) else None
-                else:
-                    base_school_name = school_name
-                    fiscal_year = None
-                
-                # logical_school_idを決定
-                if base_school_name in base_name_to_logical_id:
-                    logical_school_id = base_name_to_logical_id[base_school_name]
-                else:
-                    logical_school_id = next_logical_id
-                    base_name_to_logical_id[base_school_name] = logical_school_id
-                    next_logical_id += 1
-                
-                # schools_masterテーブルに保存（INSERT OR REPLACE）
-                cursor.execute('''
-                    INSERT OR REPLACE INTO schools_master 
-                    (school_id, logical_school_id, school_name, base_school_name, 
-                     fiscal_year, region, attribute, studio, manager, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ''', (school_id, logical_school_id, school_name, base_school_name,
-                      fiscal_year, region, attribute, studio, manager))
-                
-                # 既存レコードかどうかで判定
-                if cursor.rowcount > 0:
-                    inserted_count += 1
-                else:
-                    updated_count += 1
             
             conn.commit()
             conn.close()
             
-            logger.info(f"schools_master更新完了: 新規{inserted_count}件, 更新{updated_count}件")
+            logger.info(f"schools_master更新完了: 新規{inserted_count}件, 更新{updated_count}件, スキップ{skipped_count}件")
             
         except Exception as e:
             logger.error(f"schools_master更新エラー: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             # エラーが発生しても集計は続行する
             logger.warning("schools_master更新をスキップして集計を続行します")
 
