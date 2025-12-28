@@ -13,6 +13,19 @@ from datetime import datetime
 from database_v2 import get_connection, normalize_manager_name
 
 
+# 学校名マッピング (報告書Excel → 担当者マスタ)
+# 学校名変更や表記揺れに対応するための変換テーブル
+SCHOOL_NAME_MAPPINGS = {
+    # 名称変更
+    '日光市立東中学校': '日光市立日光中学校',
+    '社会福祉法人 みどり会 野沢保育園': '社会福祉法人 河内福祉会 のざわ保育園',
+    
+    # 表記揺れ
+    '新宿区落合第二中学校': '新宿区立落合第二中学校',
+   '栃木県立白楊高等学校': '栃木県立宇都宮白楊高等学校',
+    '認定こども園 常磐大学幼稚園': '常磐大学こども園',
+}
+
 class SchoolNotFoundError(Exception):
     """学校がschools_masterに存在しない場合のエラー"""
     def __init__(self, school_names):
@@ -119,6 +132,9 @@ def get_school_id_by_name(cursor, school_name):
     Returns:
         int: school_id (見つからない場合はNone)
     """
+    # 0. 学校名マッピングを適用(旧名称→新名称への自動変換)
+    school_name = SCHOOL_NAME_MAPPINGS.get(school_name, school_name)
+    
     # 1. 完全一致検索
     cursor.execute('''
         SELECT school_id FROM schools_master 
