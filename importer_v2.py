@@ -331,16 +331,30 @@ def import_manager_monthly_sales(xlsx, cursor, report_id):
                 if year_match and '担当者別' in year_cell:
                     fiscal_year = int(year_match.group(1))
                     
-                    # ヘッダー行は年度ヘッダーの次の行 (空行があってもその次)
+                    # ヘッダー行は年度ヘッダーの次の行
+                    # B列が空でも、他の列(C列以降)にデータ(月のシリアル値など)があればヘッダー行
                     header_row_idx = j + 1
-                    # 空行をスキップ
                     while header_row_idx < len(df):
-                        header_cell = str(df.iloc[header_row_idx, 1]) if pd.notna(df.iloc[header_row_idx, 1]) else ''
-                        # "年度"や"担当者別"を含む行もスキップ
-                        if header_cell.strip() == '' or ('年度' in header_cell and '担当者別' in header_cell):
+                        # B列をチェック
+                        header_cell_b = str(df.iloc[header_row_idx, 1]) if pd.notna(df.iloc[header_row_idx, 1]) else ''
+                        
+                        # B列に年度や担当者別が含まれていたらスキップ
+                        if header_cell_b.strip() != '' and ('年度' in header_cell_b or '担当者別' in header_cell_b):
                             header_row_idx += 1
-                        else:
+                            continue
+                        
+                        # B列が空でも、C列以降にデータがあるかチェック
+                        has_data_in_other_cols = False
+                        for col_idx in range(2, min(len(df.columns), 15)):  # C列からN列まで
+                            if pd.notna(df.iloc[header_row_idx, col_idx]):
+                                has_data_in_other_cols = True
+                                break
+                        
+                        # B列にデータがあるか、他の列にデータがあればヘッダー行
+                        if header_cell_b.strip() != '' or has_data_in_other_cols:
                             break
+                        
+                        header_row_idx += 1
 
                     
                     if header_row_idx >= len(df):

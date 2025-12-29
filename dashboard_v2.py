@@ -210,7 +210,7 @@ def get_top_schools(db_path=None, fiscal_year=None, limit=10):
 
 
 def get_branch_monthly_sales(db_path=None, fiscal_year=None):
-    """事業所別の月次売上データを取得"""
+    """事業所別の月次売上データを取得(当年度と前年度)"""
     conn = get_connection(db_path)
     cursor = conn.cursor()
     
@@ -221,6 +221,7 @@ def get_branch_monthly_sales(db_path=None, fiscal_year=None):
     cursor.execute('SELECT MAX(id) FROM reports')
     latest_report_id = cursor.fetchone()[0]
     
+    # 当年度データ
     cursor.execute('''
         SELECT branch_name, month, SUM(sales) as total
         FROM branch_monthly_sales
@@ -229,22 +230,40 @@ def get_branch_monthly_sales(db_path=None, fiscal_year=None):
         ORDER BY branch_name, CASE WHEN month >= 4 THEN month - 4 ELSE month + 8 END
     ''', (fiscal_year, latest_report_id))
     
-    results = cursor.fetchall()
+    current_results = cursor.fetchall()
+    
+    # 前年度データ
+    prev_fiscal_year = fiscal_year - 1
+    cursor.execute('''
+        SELECT branch_name, month, SUM(sales) as total
+        FROM branch_monthly_sales
+        WHERE fiscal_year = ? AND report_id = ?
+        GROUP BY branch_name, month
+        ORDER BY branch_name, CASE WHEN month >= 4 THEN month - 4 ELSE month + 8 END
+    ''', (prev_fiscal_year, latest_report_id))
+    
+    prev_results = cursor.fetchall()
     conn.close()
     
-    # データを整形: {branch: [{month, sales}, ...]}
+    # データを整形: {branch: {'current': [{month, sales}, ...], 'prev': [...]}}
     data = {}
-    for row in results:
+    for row in current_results:
         branch, month, sales = row
         if branch not in data:
-            data[branch] = []
-        data[branch].append({'month': month, 'sales': sales})
+            data[branch] = {'current': [], 'prev': []}
+        data[branch]['current'].append({'month': month, 'sales': sales})
+    
+    for row in prev_results:
+        branch, month, sales = row
+        if branch not in data:
+            data[branch] = {'current': [], 'prev': []}
+        data[branch]['prev'].append({'month': month, 'sales': sales})
     
     return data
 
 
 def get_manager_monthly_sales(db_path=None, fiscal_year=None):
-    """担当者別の月次売上データを取得"""
+    """担当者別の月次売上データを取得(当年度と前年度)"""
     conn = get_connection(db_path)
     cursor = conn.cursor()
     
@@ -255,6 +274,7 @@ def get_manager_monthly_sales(db_path=None, fiscal_year=None):
     cursor.execute('SELECT MAX(id) FROM reports')
     latest_report_id = cursor.fetchone()[0]
     
+    # 当年度データ
     cursor.execute('''
         SELECT manager, month, SUM(sales) as total
         FROM manager_monthly_sales
@@ -263,16 +283,34 @@ def get_manager_monthly_sales(db_path=None, fiscal_year=None):
         ORDER BY manager, CASE WHEN month >= 4 THEN month - 4 ELSE month + 8 END
     ''', (fiscal_year, latest_report_id))
     
-    results = cursor.fetchall()
+    current_results = cursor.fetchall()
+    
+    # 前年度データ
+    prev_fiscal_year = fiscal_year - 1
+    cursor.execute('''
+        SELECT manager, month, SUM(sales) as total
+        FROM manager_monthly_sales
+        WHERE fiscal_year = ? AND report_id = ?
+        GROUP BY manager, month
+        ORDER BY manager, CASE WHEN month >= 4 THEN month - 4 ELSE month + 8 END
+    ''', (prev_fiscal_year, latest_report_id))
+    
+    prev_results = cursor.fetchall()
     conn.close()
     
-    # データを整形: {manager: [{month, sales}, ...]}
+    # データを整形: {manager: {'current': [{month, sales}, ...], 'prev': [...]}}
     data = {}
-    for row in results:
+    for row in current_results:
         manager, month, sales = row
         if manager not in data:
-            data[manager] = []
-        data[manager].append({'month': month, 'sales': sales})
+            data[manager] = {'current': [], 'prev': []}
+        data[manager]['current'].append({'month': month, 'sales': sales})
+    
+    for row in prev_results:
+        manager, month, sales = row
+        if manager not in data:
+            data[manager] = {'current': [], 'prev': []}
+        data[manager]['prev'].append({'month': month, 'sales': sales})
     
     return data
 
@@ -647,24 +685,39 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return;
             }}
             
-            const data = yearData.branch_monthly[selectedBranch];
-            const labels = data.map(d => `${{d.month}}月`);
-            const sales = data.map(d => d.sales);
+            const branchData = yearData.branch_monthly[selectedBranch];
+            const currentData = branchData.current || [];
+            const prevData = branchData.prev || [];
+            
+            // 月ラベルとデータの準備
+            const labels = currentData.map(d => `${{d.month}}月`);
+            const currentSales = currentData.map(d => d.sales);
+            
+            // 前年度データを月でマッピング
+            const prevSalesMap = {{}};
+            prevData.forEach(d => {{
+                prevSalesMap[d.month] = d.sales;
+            }});
+            const prevSales = currentData.map(d => prevSalesMap[d.month] || 0);
             
             if (branchMonthlyChart) branchMonthlyChart.destroy();
             
             branchMonthlyChart = new Chart(canvas, {{
-                type: 'line',
+                type: 'bar',
                 data: {{
                     labels: labels,
-                    datasets: [{{
-                        label: `${{selectedBranch}} 売上`,
-                        data: sales,
-                        borderColor: 'rgb(59, 130, 246)',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }}]
+                    datasets: [
+                        {{
+                            label: `${{selectedBranch}} ${{currentMonthlySalesYear}}年度`,
+                            data: currentSales,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)'
+                        }},
+                        {{
+                            label: `${{selectedBranch}} ${{currentMonthlySalesYear - 1}}年度`,
+                            data: prevSales,
+                            backgroundColor: 'rgba(156, 163, 175, 0.6)'
+                        }}
+                    ]
                 }},
                 options: {{
                     responsive: true,
@@ -732,9 +785,20 @@ def generate_dashboard(db_path=None, output_dir=None):
             canvas.style.display = 'block';
             message.style.display = 'none';
             
-            const data = yearData.manager_monthly[selectedManager];
-            const labels = data.map(d => `${{d.month}}月`);
-            const sales = data.map(d => d.sales);
+            const managerData = yearData.manager_monthly[selectedManager];
+            const currentData = managerData.current || [];
+            const prevData = managerData.prev || [];
+            
+            // 月ラベルとデータの準備
+            const labels = currentData.map(d => `${{d.month}}月`);
+            const currentSales = currentData.map(d => d.sales);
+            
+            // 前年度データを月でマッピング
+            const prevSalesMap = {{}};
+            prevData.forEach(d => {{
+                prevSalesMap[d.month] = d.sales;
+            }});
+            const prevSales = currentData.map(d => prevSalesMap[d.month] || 0);
             
             if (managerChart) managerChart.destroy();
             
@@ -742,16 +806,23 @@ def generate_dashboard(db_path=None, output_dir=None):
                 type: 'bar',
                 data: {{
                     labels: labels,
-                    datasets: [{{
-                        label: `${{selectedManager}} 売上`,
-                        data: sales,
-                        backgroundColor: 'rgba(59, 130, 246, 0.8)'
-                    }}]
+                    datasets: [
+                        {{
+                            label: `${{selectedManager}} ${{currentMonthlySalesYear}}年度`,
+                            data: currentSales,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)'
+                        }},
+                        {{
+                            label: `${{selectedManager}} ${{currentMonthlySalesYear - 1}}年度`,
+                            data: prevSales,
+                            backgroundColor: 'rgba(156, 163, 175, 0.6)'
+                        }}
+                    ]
                 }},
                 options: {{
                     responsive: true,
                     maintainAspectRatio: true,
-                    plugins: {{ legend: {{ display: false }} }},
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
                     scales: {{
                         y: {{
                             beginAtZero: true,
