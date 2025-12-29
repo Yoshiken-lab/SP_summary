@@ -2048,9 +2048,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         function showAlert(alertType) {{
             // 全タブコンテンツを非表示
             document.querySelectorAll('.alert-content').forEach(el => el.style.display = 'none');
-            // 全タブボタンを非アクテ
-
-ィブ化
+            // 全タブボタンを非アクティブ化
             document.querySelectorAll('.alert-tab').forEach(el => {{
                 el.classList.remove('active');
                 el.style.background = '#e5e7eb';
