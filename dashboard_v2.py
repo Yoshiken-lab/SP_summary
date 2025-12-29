@@ -732,7 +732,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                     <label style="font-size: 14px; cursor: pointer;">
                         <input type="radio" name="gradeDisplay" value="grade"> 学年ごと
                     </label>
-                    <button onclick="searchMemberRate()" style="padding: 8px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-left: auto;">検索</button>
+                    <button onclick="searchMemberRate()" style="padding: 8px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-left: auto;">検索</button>
                     <button onclick="resetMemberRate()" style="padding: 8px 24px; background: #94a3b8; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">リセット</button>
                 </div>        <button onclick="downloadMemberRateCSV()" style="padding: 8px 24px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">CSVダウンロード</button>
                 <canvas id="memberRateTrendChart"></canvas>
@@ -1126,7 +1126,8 @@ def generate_dashboard(db_path=None, output_dir=None):
                             borderColor: 'rgb(239, 68, 68)',
                             borderDash: [10, 5],
                             borderWidth: 2,
-                            pointRadius: 0,
+                            pointRadius: 4,
+                            pointBackgroundColor: 'rgb(239, 68, 68)',
                             tension: 0.4
                         }}
                     ]
