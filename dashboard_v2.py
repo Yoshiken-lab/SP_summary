@@ -209,6 +209,138 @@ def get_top_schools(db_path=None, fiscal_year=None, limit=10):
     return [{'school': row[0], 'sales': row[1]} for row in results]
 
 
+def get_branch_monthly_sales(db_path=None, fiscal_year=None):
+    """事業所別の月次売上データを取得"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    if fiscal_year is None:
+        cursor.execute('SELECT MAX(fiscal_year) FROM branch_monthly_sales')
+        fiscal_year = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT MAX(id) FROM reports')
+    latest_report_id = cursor.fetchone()[0]
+    
+    cursor.execute('''
+        SELECT branch_name, month, SUM(sales) as total
+        FROM branch_monthly_sales
+        WHERE fiscal_year = ? AND report_id = ?
+        GROUP BY branch_name, month
+        ORDER BY branch_name, CASE WHEN month >= 4 THEN month - 4 ELSE month + 8 END
+    ''', (fiscal_year, latest_report_id))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    # データを整形: {branch: [{month, sales}, ...]}
+    data = {}
+    for row in results:
+        branch, month, sales = row
+        if branch not in data:
+            data[branch] = []
+        data[branch].append({'month': month, 'sales': sales})
+    
+    return data
+
+
+def get_manager_monthly_sales(db_path=None, fiscal_year=None):
+    """担当者別の月次売上データを取得"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    if fiscal_year is None:
+        cursor.execute('SELECT MAX(fiscal_year) FROM manager_monthly_sales')
+        fiscal_year = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT MAX(id) FROM reports')
+    latest_report_id = cursor.fetchone()[0]
+    
+    cursor.execute('''
+        SELECT manager, month, SUM(sales) as total
+        FROM manager_monthly_sales
+        WHERE fiscal_year = ? AND report_id = ?
+        GROUP BY manager, month
+        ORDER BY manager, CASE WHEN month >= 4 THEN month - 4 ELSE month + 8 END
+    ''', (fiscal_year, latest_report_id))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    # データを整形: {manager: [{month, sales}, ...]}
+    data = {}
+    for row in results:
+        manager, month, sales = row
+        if manager not in data:
+            data[manager] = []
+        data[manager].append({'month': month, 'sales': sales})
+    
+    return data
+
+
+def get_schools_list(db_path=None):
+    """学校一覧を取得（会員率・売上推移グラフ用）"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT DISTINCT school_id, school_name, region, studio
+        FROM schools_master
+        WHERE school_id IN (
+            SELECT DISTINCT school_id FROM member_rates
+            UNION
+            SELECT DISTINCT school_id FROM school_monthly_sales
+        )
+        ORDER BY school_name
+    ''')
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    return [{'id': row[0], 'name': row[1], 'region': row[2], 'studio': row[3]} for row in results]
+
+
+def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
+    """特定学校の会員率推移を取得"""
+    if school_id is None:
+        return []
+    
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    if fiscal_year is None:
+        cursor.execute('SELECT MAX(fiscal_year) FROM member_rates')
+        fiscal_year = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT MAX(id) FROM reports')
+    latest_report_id = cursor.fetchone()[0]
+    
+    # 学年別データ
+    cursor.execute('''
+        SELECT snapshot_date, grade, member_rate, total_students, member_count
+        FROM member_rates
+        WHERE school_id = ? AND report_id = ?
+        ORDER BY snapshot_date, grade
+    ''', (school_id, latest_report_id))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    # データを整形
+    data = {}
+    for row in results:
+        snapshot_date, grade, rate, total_students, member_count = row
+        if snapshot_date not in data:
+            data[snapshot_date] = []
+        data[snapshot_date].append({
+            'grade': grade,
+            'rate': rate,
+            'total_students': total_students,
+            'member_count': member_count
+        })
+    
+    return data
+
+
 def generate_dashboard(db_path=None, output_dir=None):
     """ダッシュボードHTMLを生成"""
     
@@ -227,8 +359,13 @@ def generate_dashboard(db_path=None, output_dir=None):
             'stats': get_summary_stats(db_path, year),
             'monthly': get_monthly_data(db_path, year),
             'branch': get_branch_sales(db_path, year),
+            'branch_monthly': get_branch_monthly_sales(db_path, year),
+            'manager_monthly': get_manager_monthly_sales(db_path, year),
             'top_schools': get_top_schools(db_path, year)
         }
+    
+    # 学校一覧を取得（全年度共通）
+    schools_list = get_schools_list(db_path)
     
     # デフォルトは最新年度
     default_year =available_years[0] if available_years else datetime.now().year
@@ -360,9 +497,50 @@ def generate_dashboard(db_path=None, output_dir=None):
             </div>
         </div>
         
+        <!-- 月別売上推移セクション -->
         <div class="chart-card">
-            <h3>📈 月別売上推移</h3>
-            <canvas id="monthlyChart"></canvas>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; border: none; padding: 0;">📈 月別売上推移</h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-size: 14px; color: #666; font-weight: 600;">年度:</label>
+                    <select id="monthlySalesYearSelect" onchange="changeMonthlySalesYear()" style="padding: 8px 14px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; cursor: pointer; background: white;">
+                        {chr(10).join([f'<option value="{y}" {"selected" if y == default_year else ""}>{y}年度</option>' for y in available_years])}
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
+                <button id="tabMonthly" onclick="switchMonthlySalesTab('monthly')" class="monthly-tab active" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">月ごと</button>
+                <button id="tabBranch" onclick="switchMonthlySalesTab('branch')" class="monthly-tab" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">事業所ごと</button>
+                <button id="tabManager" onclick="switchMonthlySalesTab('manager')" class="monthly-tab" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">担当者ごと</button>
+            </div>
+            
+            <!-- 月ごとパネル -->
+            <div id="monthlyPanel" class="monthly-panel">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+            
+            <!-- 事業所ごとパネル -->
+            <div id="branchMonthlyPanel" class="monthly-panel" style="display: none;">
+                <div style="margin-bottom: 16px;">
+                    <label style="font-size: 12px; color: #666; font-weight: 600; margin-right: 8px;">事業所:</label>
+                    <select id="branchFilter" onchange="renderBranchMonthlyChart()" style="padding: 8px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 150px;">
+                        <option value="">-- 全事業所 --</option>
+                    </select>
+                </div>
+                <canvas id="branchMonthlyChart"></canvas>
+            </div>
+            
+            <!-- 担当者ごとパネル -->
+            <div id="managerPanel" class="monthly-panel" style="display: none;">
+                <div style="margin-bottom: 16px;">
+                    <label style="font-size: 12px; color: #666; font-weight: 600; margin-right: 8px;">担当者:</label>
+                    <select id="managerFilter" onchange="renderManagerChart()" style="padding: 8px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 200px;">
+                        <option value="">-- 選択してください --</option>
+                    </select>
+                </div>
+                <div id="managerChartMessage" style="text-align: center; padding: 60px 20px; color: #888; font-size: 14px;">担当者を選択してください</div>
+                <canvas id="managerChart" style="display: none;"></canvas>
+            </div>
         </div>
         
         <div class="chart-card">
@@ -380,7 +558,209 @@ def generate_dashboard(db_path=None, output_dir=None):
         // 全年度のデータ
         const allYearsData = {json.dumps(all_years_data, ensure_ascii=False, indent=2)};
         
-        let monthlyChart, branchChart, schoolChart;
+        let monthlyChart, branchChart, schoolChart, branchMonthlyChart, managerChart;
+        let currentMonthlySalesYear = {default_year};
+        let currentTab = 'monthly';
+        
+        // 月別売上推移セクションのタブ切り替え
+        function switchMonthlySalesTab(tab) {{
+            currentTab = tab;
+            
+            // タブのスタイル更新
+            document.querySelectorAll('.monthly-tab').forEach(btn => {{
+                btn.style.color = '#666';
+                btn.style.borderBottomColor = 'transparent';
+                btn.classList.remove('active');
+            }});
+            
+            const activeTab = document.getElementById(tab === 'monthly' ? 'tabMonthly' : tab === 'branch' ? 'tabBranch' : 'tabManager');
+            activeTab.style.color = '#3b82f6';
+            activeTab.style.borderBottomColor = '#3b82f6';
+            activeTab.classList.add('active');
+            
+            // パネルの表示切り替え
+            document.getElementById('monthlyPanel').style.display = tab === 'monthly' ? 'block' : 'none';
+            document.getElementById('branchMonthlyPanel').style.display = tab === 'branch' ? 'block' : 'none';
+            document.getElementById('managerPanel').style.display = tab === 'manager' ? 'block' : 'none';
+            
+            // データ更新
+            const yearData = allYearsData[currentMonthlySalesYear];
+            if (tab === 'branch') {{
+                updateBranchMonthlySelectors(yearData.branch_monthly);
+                renderBranchMonthlyChart();
+            }} else if (tab === 'manager') {{
+                updateManagerSelectors(yearData.manager_monthly);
+                renderManagerChart();
+            }}
+        }}
+        
+        // 月別売上推移セクション専用の年度切り替え
+        function changeMonthlySalesYear() {{
+            currentMonthlySalesYear = parseInt(document.getElementById('monthlySalesYearSelect').value);
+            const yearData = allYearsData[currentMonthlySalesYear];
+            
+            // 現在のタブに応じてグラフ更新
+            if (currentTab === 'monthly') {{
+                updateMonthlyChart(yearData.monthly);
+            }} else if (currentTab === 'branch') {{
+                updateBranchMonthlySelectors(yearData.branch_monthly);
+                renderBranchMonthlyChart();
+            }} else if (currentTab === 'manager') {{
+                updateManagerSelectors(yearData.manager_monthly);
+                renderManagerChart();
+            }}
+        }}
+        
+        // 事業所別月次売上のセレクター更新
+        function updateBranchMonthlySelectors(branchMonthlyData) {{
+            const branchFilter = document.getElementById('branchFilter');
+            branchFilter.innerHTML = '<option value="">-- 全事業所 --</option>';
+            
+            if (!branchMonthlyData || Object.keys(branchMonthlyData).length === 0) {{
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'この年度はデータがありません';
+                option.disabled = true;
+                branchFilter.appendChild(option);
+                return;
+            }}
+            
+            Object.keys(branchMonthlyData).forEach(branch => {{
+                const option = document.createElement('option');
+                option.value = branch;
+                option.textContent = branch;
+                branchFilter.appendChild(option);
+            }});
+        }}
+        
+        // 事業所別月次売上グラフ描画
+        function renderBranchMonthlyChart() {{
+            const yearData = allYearsData[currentMonthlySalesYear];
+            const branchFilter = document.getElementById('branchFilter');
+            const selectedBranch = branchFilter.value;
+            
+            const canvas = document.getElementById('branchMonthlyChart');
+            
+            if (!selectedBranch || !yearData.branch_monthly[selectedBranch]) {{
+                // 全事業所の場合、または選択なしの場合
+                if (branchMonthlyChart) branchMonthlyChart.destroy();
+                return;
+            }}
+            
+            const data = yearData.branch_monthly[selectedBranch];
+            const labels = data.map(d => `${{d.month}}月`);
+            const sales = data.map(d => d.sales);
+            
+            if (branchMonthlyChart) branchMonthlyChart.destroy();
+            
+            branchMonthlyChart = new Chart(canvas, {{
+                type: 'line',
+                data: {{
+                    labels: labels,
+                    datasets: [{{
+                        label: `${{selectedBranch}} 売上`,
+                        data: sales,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            ticks: {{ callback: function(value) {{ return '¥' + value.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // 担当者セレクター更新
+        function updateManagerSelectors(managerMonthlyData) {{
+            const managerFilter = document.getElementById('managerFilter');
+            managerFilter.innerHTML = '<option value="">-- 選択してください --</option>';
+            
+            if (!managerMonthlyData || Object.keys(managerMonthlyData).length === 0) {{
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'この年度はデータがありません';
+                option.disabled = true;
+                managerFilter.appendChild(option);
+                
+                // メッセージを表示
+                const canvas = document.getElementById('managerChart');
+                const message = document.getElementById('managerChartMessage');
+                canvas.style.display = 'none';
+                message.style.display = 'block';
+                message.textContent = 'この年度は担当者別データがありません';
+                return;
+            }}
+            
+            Object.keys(managerMonthlyData).forEach(manager => {{
+                const option = document.createElement('option');
+                option.value = manager;
+                option.textContent = manager;
+                managerFilter.appendChild(option);
+            }});
+            
+            // デフォルトメッセージに戻す
+            const message = document.getElementById('managerChartMessage');
+            message.textContent = '担当者を選択してください';
+        }}
+        
+        // 担当者別月次売上グラフ描画
+        function renderManagerChart() {{
+            const yearData = allYearsData[currentMonthlySalesYear];
+            const managerFilter = document.getElementById('managerFilter');
+            const selectedManager = managerFilter.value;
+            
+            const canvas = document.getElementById('managerChart');
+            const message = document.getElementById('managerChartMessage');
+            
+            if (!selectedManager || !yearData.manager_monthly[selectedManager]) {{
+                if (managerChart) managerChart.destroy();
+                canvas.style.display = 'none';
+                message.style.display = 'block';
+                return;
+            }}
+            
+            canvas.style.display = 'block';
+            message.style.display = 'none';
+            
+            const data = yearData.manager_monthly[selectedManager];
+            const labels = data.map(d => `${{d.month}}月`);
+            const sales = data.map(d => d.sales);
+            
+            if (managerChart) managerChart.destroy();
+            
+            managerChart = new Chart(canvas, {{
+                type: 'bar',
+                data: {{
+                    labels: labels,
+                    datasets: [{{
+                        label: `${{selectedManager}} 売上`,
+                        data: sales,
+                        backgroundColor: 'rgba(59, 130, 246, 0.8)'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {{ legend: {{ display: false }} }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            ticks: {{ callback: function(value) {{ return '¥' + value.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
         
         function switchYear() {{
             const year = parseInt(document.getElementById('yearSelect').value);

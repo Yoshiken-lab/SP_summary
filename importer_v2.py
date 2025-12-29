@@ -309,69 +309,97 @@ def import_manager_monthly_sales(xlsx, cursor, report_id):
     """売上シートから担当者別月次売上を取り込み"""
     df = pd.read_excel(xlsx, sheet_name='売上', header=None)
     
-    current_fiscal_year = None
     stats = {'count': 0}
     
-    for i, row in df.iterrows():
-        cell = str(row[1]) if pd.notna(row[1]) else ''
+    # ■売上 担当者別 セクションを探す
+    for i in range(len(df)):
+        cell = str(df.iloc[i, 1]) if pd.notna(df.iloc[i, 1]) else ''
         
-        # 年度ヘッダー検出
-        if re.match(r'\d{4}年度', cell):
-            current_fiscal_year = int(re.search(r'(\d{4})', cell).group(1))
-            continue
-        
-        # 担当者別売上セクション検出(■を含む可能性を考慮)
-        if current_fiscal_year and '売上' in cell and '担当者別' in cell:
-            # 次の行で年度を再確認し、その次がヘッダー行
-            if i + 2 < len(df):
-                next_cell = str(df.iloc[i + 1, 1]) if pd.notna(df.iloc[i + 1, 1]) else ''
-                if '年度' in next_cell and '担当者別' in next_cell:
-                    header_row_idx = i + 2
-                else:
-                    header_row_idx = i + 1
-            else:
-                header_row_idx = i + 1
-            header_row = df.iloc[header_row_idx]
-            
-            # 月カラムのマッピング
-            month_cols = []
-            for col_idx, header_val in enumerate(header_row):
-                if pd.isna(header_val):
-                    continue
-                month = None
-                if '月' in str(header_val):
-                    match = re.search(r'(\d{1,2})', str(header_val))
-                    if match:
-                        month = int(match.group(1))
-                elif isinstance(header_val, (int, float)):
-                    month = excel_serial_to_month(header_val)
+        # 担当者別売上セクションのヘッダーを検出
+        if '売上' in cell and '担当者別' in cell and '■' in cell:
+            # このセクション内で年度ごとに処理
+            j = i + 1
+            while j < len(df):
+                year_cell = str(df.iloc[j, 1]) if pd.notna(df.iloc[j, 1]) else ''
                 
-                if month:
-                    month_cols.append((col_idx, month))
-            
-            # データ行を読み取る
-            for data_row_idx in range(header_row_idx + 1, len(df)):
-                manager_name = df.iloc[data_row_idx, 1]
-                if pd.isna(manager_name) or str(manager_name).strip() == '':
-                    continue
-                
-                # 次のセクションヘッダーが来たら終了
-                if '■' in str(manager_name):
+                # 次のセクション(■)が来たら終了
+                if '■' in year_cell:
                     break
                 
-                manager_name = str(manager_name).strip()
-                manager_name = normalize_manager_name(manager_name, cursor.connection)
+                # 年度ヘッダー検出: "YYYY年度 担当者別"
+                year_match = re.search(r'(\d{4})年度', year_cell)
+                if year_match and '担当者別' in year_cell:
+                    fiscal_year = int(year_match.group(1))
+                    
+                    # ヘッダー行は年度ヘッダーの次の行 (空行があってもその次)
+                    header_row_idx = j + 1
+                    # 空行をスキップ
+                    while header_row_idx < len(df):
+                        header_cell = str(df.iloc[header_row_idx, 1]) if pd.notna(df.iloc[header_row_idx, 1]) else ''
+                        # "年度"や"担当者別"を含む行もスキップ
+                        if header_cell.strip() == '' or ('年度' in header_cell and '担当者別' in header_cell):
+                            header_row_idx += 1
+                        else:
+                            break
+
+                    
+                    if header_row_idx >= len(df):
+                        break
+                    
+                    header_row = df.iloc[header_row_idx]
+                    
+                    # 月カラムのマッピング
+                    month_cols = []
+                    for col_idx, header_val in enumerate(header_row):
+                        if pd.isna(header_val):
+                            continue
+                        month = None
+                        if '月' in str(header_val):
+                            match = re.search(r'(\d{1,2})', str(header_val))
+                            if match:
+                                month = int(match.group(1))
+                        elif isinstance(header_val, (int, float)):
+                            month = excel_serial_to_month(header_val)
+                        
+                        if month:
+                            month_cols.append((col_idx, month))
+                    
+                    # データ行を読み取る
+                    data_row_idx = header_row_idx + 1
+                    while data_row_idx < len(df):
+                        manager_name = df.iloc[data_row_idx, 1]
+                        
+                        # 空行またはデータなし
+                        if pd.isna(manager_name) or str(manager_name).strip() == '':
+                            data_row_idx += 1
+                            continue
+                        
+                        manager_name_str = str(manager_name).strip()
+                        
+                        # 次の年度ヘッダーまたはセクションヘッダーが来たら終了
+                        if '年度' in manager_name_str or '■' in manager_name_str:
+                            j = data_row_idx - 1  # 外側のループで再処理できるように
+                            break
+                        
+                        manager_name_str = normalize_manager_name(manager_name_str, cursor.connection)
+                        
+                        # 各月の売上を取得
+                        for col_idx, month in month_cols:
+                            sales = df.iloc[data_row_idx, col_idx]
+                            if pd.notna(sales) and float(sales) != 0:
+                                cursor.execute('''
+                                    INSERT OR REPLACE INTO manager_monthly_sales
+                                    (report_id, fiscal_year, month, manager, sales)
+                                    VALUES (?, ?, ?, ?, ?)
+                                ''', (report_id, fiscal_year, month, manager_name_str, float(sales)))
+                                stats['count'] += 1
+                        
+                        data_row_idx += 1
                 
-                # 各月の売上を取得
-                for col_idx, month in month_cols:
-                    sales = df.iloc[data_row_idx, col_idx]
-                    if pd.notna(sales) and float(sales) != 0:
-                        cursor.execute('''
-                            INSERT OR REPLACE INTO manager_monthly_sales
-                            (report_id, fiscal_year, month, manager, sales)
-                            VALUES (?, ?, ?, ?, ?)
-                        ''', (report_id, current_fiscal_year, month, manager_name, float(sales)))
-                        stats['count'] += 1
+                j += 1
+            
+            # セクション終了、次のセクションを探す
+            break
     
     return stats
 
