@@ -345,10 +345,6 @@ def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
     conn = get_connection(db_path)
     cursor = conn.cursor()
     
-    if fiscal_year is None:
-        cursor.execute('SELECT MAX(fiscal_year) FROM member_rates')
-        fiscal_year = cursor.fetchone()[0]
-    
     cursor.execute('SELECT MAX(id) FROM reports')
     latest_report_id = cursor.fetchone()[0]
     
@@ -379,6 +375,107 @@ def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
     return data
 
 
+
+
+
+def get_school_monthly_sales(db_path=None, school_id=None):
+    """特定学校の月次売上推移を取得（全年度）"""
+    if school_id is None:
+        return {}
+    
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT MAX(id) FROM reports')
+    latest_report_id = cursor.fetchone()[0]
+    
+    # 全年度のデータを取得
+    cursor.execute('''
+        SELECT fiscal_year, month, sales
+        FROM school_monthly_sales
+        WHERE school_id = ? AND report_id = ?
+        ORDER BY fiscal_year DESC, month
+    ''', (school_id, latest_report_id))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    # 年度ごとに整形
+    data = {}
+    for row in results:
+        fiscal_year, month, sales = row
+        if fiscal_year not in data:
+            data[fiscal_year] = []
+        data[fiscal_year].append({'month': month, 'sales': sales})
+    
+    return data
+
+
+def get_event_sales_data(db_path=None, fiscal_year=None, limit=10):
+    """イベント別売上TOPを取得"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    if fiscal_year is None:
+        cursor.execute('SELECT MAX(fiscal_year) FROM event_sales')
+        fiscal_year = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT MAX(id) FROM reports')
+    latest_report_id = cursor.fetchone()[0]
+    
+    cursor.execute('''
+        SELECT event_name, SUM(sales) as total
+        FROM event_sales
+        WHERE fiscal_year = ? AND report_id = ?
+        GROUP BY event_name
+        ORDER BY total DESC
+        LIMIT ?
+    ''', (fiscal_year, latest_report_id, limit))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    return [{'event': row[0], 'sales': row[1]} for row in results]
+
+
+def get_member_rate_distribution(db_path=None, fiscal_year=None):
+    """会員率分布データ(散布図用)を取得"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    if fiscal_year is None:
+        cursor.execute('SELECT MAX(fiscal_year) FROM member_rates')
+        fiscal_year = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT MAX(id) FROM reports')
+    latest_report_id = cursor.fetchone()[0]
+    
+    # 最新のスナップショット日付を取得
+    cursor.execute('''
+        SELECT MAX(snapshot_date) FROM member_rates
+        WHERE report_id = ?
+    ''', (latest_report_id,))
+    latest_date = cursor.fetchone()[0]
+    
+    cursor.execute('''
+        SELECT s.school_name, m.total_students, m.member_rate, s.region
+        FROM member_rates m
+        JOIN schools_master s ON m.school_id = s.school_id
+        WHERE m.report_id = ? AND m.snapshot_date = ?
+          AND m.total_students > 0 AND m.member_rate IS NOT NULL
+    ''', (latest_report_id, latest_date))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    return [{
+        'school': row[0],
+        'total_students': row[1],
+        'rate': row[2],
+        'region': row[3] or '未分類'
+    } for row in results]
+
+
 def generate_dashboard(db_path=None, output_dir=None):
     """ダッシュボードHTMLを生成"""
     
@@ -399,11 +496,23 @@ def generate_dashboard(db_path=None, output_dir=None):
             'branch': get_branch_sales(db_path, year),
             'branch_monthly': get_branch_monthly_sales(db_path, year),
             'manager_monthly': get_manager_monthly_sales(db_path, year),
-            'top_schools': get_top_schools(db_path, year)
+            'top_schools': get_top_schools(db_path, year, limit=20),
+            'top_events': get_event_sales_data(db_path, year, limit=10),
+            'member_rates': get_member_rate_distribution(db_path, year)
         }
     
     # 学校一覧を取得（全年度共通）
     schools_list = get_schools_list(db_path)
+    
+    # 学校別の詳細データを収集（売上推移と会員率）
+    school_details = {}
+    for school in schools_list:
+        school_id = school['id']
+        school_details[school_id] = {
+            'name': school['name'],
+            'monthly_sales': get_school_monthly_sales(db_path, school_id),
+            'member_rates': get_member_rates_by_school(db_path, school_id)
+        }
     
     # デフォルトは最新年度
     default_year =available_years[0] if available_years else datetime.now().year
@@ -582,23 +691,165 @@ def generate_dashboard(db_path=None, output_dir=None):
         </div>
         
         <div class="chart-card">
-            <h3>🏢 事業所別売上</h3>
-            <canvas id="branchChart"></canvas>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; border: none; padding: 0;">🔍 詳細分析</h3>
+                <button onclick="openSchoolDetail()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">📊 学校別詳細を見る</button>
+            </div>
+            <div style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
+                <button id="tabSchool" onclick="switchDetailTab('school')" class="detail-tab active" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">🏫 学校別売上</button>
+                <button id="tabEvent" onclick="switchDetailTab('event')" class="detail-tab" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">🎉 イベント別売上</button>
+                <button id="tabMember" onclick="switchDetailTab('member')" class="detail-tab" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">👥 会員率分布</button>
+            </div>
+            
+            <!-- 学校別パネル -->
+            <div id="schoolPanel" class="detail-panel">
+                <canvas id="schoolChart"></canvas>
+            </div>
+            
+            <!-- イベント別パネル -->
+            <div id="eventPanel" class="detail-panel" style="display: none;">
+                <canvas id="eventChart"></canvas>
+            </div>
+
+            <!-- 会員率パネル -->
+            <div id="memberPanel" class="detail-panel" style="display: none;">
+                <canvas id="memberChart"></canvas>
+            </div>
         </div>
         
+        <!-- 学校別分析セクション -->
         <div class="chart-card">
-            <h3>🏫 学校別売上 TOP10</h3>
-            <canvas id="schoolChart"></canvas>
+            <h3>📚 学校別分析</h3>
+            <div style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
+                <button id="tabMemberRate" onclick="switchSchoolAnalysisTab('memberRate')" class="school-analysis-tab active" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">👥 会員率推移</button>
+                <button id="tabSalesTrend" onclick="switchSchoolAnalysisTab('salesTrend')" class="school-analysis-tab" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">📈 学校別売上推移</button>
+            </div>
+            
+            <!-- 会員率推移パネル -->
+            <div id="memberRatePanel" class="school-analysis-panel">
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <div>
+                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">写真館:</label>
+                        <select id="memberStudioFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                            <option value="">-- 全て --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">属性:</label>
+                        <select id="memberRegionFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                            <option value="">-- 全て --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">学校名:</label>
+                        <select id="memberSchoolFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                            <option value="">-- 選択してください --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">年度:</label>
+                        <select id="memberYearFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div>
+                        <label style="margin-right: 16px;"><input type="radio" name="memberGradeDisplay" value="all" checked> 全学年</label>
+                        <label><input type="radio" name="memberGradeDisplay" value="byGrade"> 学年ごと</label>
+                    </div>
+                    <div>
+                        <button onclick="searchMemberRate()" style="padding: 8px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-right: 8px;">検索</button>
+                        <button onclick="resetMemberRateFilters()" style="padding: 8px 24px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-right: 8px;">リセット</button>
+                        <button onclick="downloadMemberRateCSV()" style="padding: 8px 24px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">CSVダウンロード</button>
+                    </div>
+                </div>
+                <canvas id="memberRateTrendChart"></canvas>
+            </div>
+            
+            <!-- 学校別売上推移パネル -->
+            <div id="salesTrendPanel" class="school-analysis-panel" style="display: none;">
+                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <div>
+                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">事業所:</label>
+                        <select id="salesBranchFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                            <option value="">-- 全て --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">担当者:</label>
+                        <select id="salesManagerFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                            <option value="">-- 全て --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">写真館:</label>
+                        <select id="salesStudioFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                            <option value="">-- 全て --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">学校名:</label>
+                        <select id="salesSchoolFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                            <option value="">-- 選択してください --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">年度:</label>
+                        <select id="salesYearFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+                    <button onclick="searchSalesTrend()" style="padding: 8px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-right: 8px;">検索</button>
+                    <button onclick="resetSalesTrendFilters()" style="padding: 8px 24px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-right: 8px;">リセット</button>
+                    <button onclick="downloadSalesTrendCSV()" style="padding: 8px 24px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">CSVダウンロード</button>
+                </div>
+                <canvas id="salesTrendChart"></canvas>
+            </div>
         </div>
     </div>
     
     <script>
         // 全年度のデータ
         const allYearsData = {json.dumps(all_years_data, ensure_ascii=False, indent=2)};
+        const schoolDetails = {json.dumps(school_details, ensure_ascii=False)};
+        const schoolsList = {json.dumps(schools_list, ensure_ascii=False)};
         
-        let monthlyChart, branchChart, schoolChart, branchMonthlyChart, managerChart;
+        let monthlyChart, branchChart, schoolChart, branchMonthlyChart, managerChart, eventChart, memberChart;
         let currentMonthlySalesYear = {default_year};
         let currentTab = 'monthly';
+        let currentDetailTab = 'school';
+
+        // 詳細分析セクションのタブ切り替え
+        // 詳細分析セクションのタブ切り替え
+        function switchDetailTab(tab) {{
+            currentDetailTab = tab;
+            
+            document.querySelectorAll('.detail-tab').forEach(btn => {{
+                btn.style.color = '#666';
+                btn.style.borderBottomColor = 'transparent';
+                btn.classList.remove('active');
+            }});
+            
+            const activeTab = document.getElementById(tab === 'school' ? 'tabSchool' : tab === 'event' ? 'tabEvent' : 'tabMember');
+            activeTab.style.color = '#3b82f6';
+            activeTab.style.borderBottomColor = '#3b82f6';
+            activeTab.classList.add('active');
+            
+            document.getElementById('schoolPanel').style.display = tab === 'school' ? 'block' : 'none';
+            document.getElementById('eventPanel').style.display = tab === 'event' ? 'block' : 'none';
+            document.getElementById('memberPanel').style.display = tab === 'member' ? 'block' : 'none';
+            
+            // グラフ再描画（サイズ調整のため）
+            const yearData = allYearsData[currentMonthlySalesYear]; // 年度は月別売上と同じものを使用
+            if (tab === 'school') {{
+                updateSchoolChart(yearData.top_schools);
+            }} else if (tab === 'event') {{
+                updateEventChart(yearData.top_events);
+            }} else if (tab === 'member') {{
+                updateMemberChart(yearData.member_rates);
+            }}
+        }}
         
         // 月別売上推移セクションのタブ切り替え
         function switchMonthlySalesTab(tab) {{
@@ -856,8 +1107,16 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             // グラフ更新
             updateMonthlyChart(data.monthly);
-            updateBranchChart(data.branch);
-            updateSchoolChart(data.top_schools);
+            // updateBranchChart(data.branch); // 削除
+            
+            // 現在の詳細タブに応じて更新
+            if (currentDetailTab === 'school') {{
+                updateSchoolChart(data.top_schools);
+            }} else if (currentDetailTab === 'event') {{
+                updateEventChart(data.top_events);
+            }} else if (currentDetailTab === 'member') {{
+                updateMemberChart(data.member_rates);
+            }}
         }}
         
         function updateMonthlyChart(monthlyData) {{
@@ -998,12 +1257,491 @@ def generate_dashboard(db_path=None, output_dir=None):
             }});
         }}
         
+        function updateEventChart(eventData) {{
+            if (!eventData || eventData.length === 0) return;
+
+            const labels = eventData.map(d => d.event);
+            const salesData = eventData.map(d => d.sales);
+            
+            if (eventChart) eventChart.destroy();
+            
+            eventChart = new Chart(document.getElementById('eventChart'), {{
+                type: 'bar',
+                data: {{
+                    labels: labels,
+                    datasets: [{{
+                        label: '売上',
+                        data: salesData,
+                        backgroundColor: 'rgba(16, 185, 129, 0.8)'
+                    }}]
+                }},
+                options: {{
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {{ legend: {{ display: false }} }},
+                    scales: {{
+                        x: {{
+                            beginAtZero: true,
+                            ticks: {{
+                                callback: function(value) {{
+                                    return '¥' + value.toLocaleString();
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+
+        function updateMemberChart(memberData) {{
+            if (!memberData || memberData.length === 0) return;
+
+            // 散布図データ作成
+            const scatterData = memberData.map(d => ({{
+                x: d.total_students,
+                y: d.rate,
+                school: d.school,
+                region: d.region
+            }}));
+
+            if (memberChart) memberChart.destroy();
+
+            memberChart = new Chart(document.getElementById('memberChart'), {{
+                type: 'scatter',
+                data: {{
+                    datasets: [{{
+                        label: '会員率分布',
+                        data: scatterData,
+                        backgroundColor: 'rgba(245, 158, 11, 0.6)',
+                        borderColor: 'rgba(245, 158, 11, 1)',
+                        borderWidth: 1,
+                        pointRadius: 5,
+                        pointHoverRadius: 8
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {{
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    const point = context.raw;
+                                    return `${{point.school}}: ${{((point.y * 100).toFixed(1))}}% (${{point.x}}名)`;
+                                }}
+                            }}
+                        }},
+                        legend: {{ display: false }}
+                    }},
+                    scales: {{
+                        x: {{
+                            type: 'linear',
+                            position: 'bottom',
+                            title: {{ display: true, text: '児童・生徒数' }},
+                            beginAtZero: true
+                        }},
+                        y: {{
+                            title: {{ display: true, text: '会員率' }},
+                            min: 0,
+                            max: 1.1,
+                            ticks: {{
+                                callback: function(value) {{
+                                    return (value * 100).toFixed(0) + '%';
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        
+        // 学校別分析セクション用変数
+        let memberRateTrendChart, salesTrendChart;
+        let currentSchoolAnalysisTab = 'memberRate';
+        
+        // ユニークな値を抽出するヘルパー関数
+        function getUniqueValues(array, key) {{
+            return [...new Set(array.map(item => item[key]).filter(val => val))].sort();
+        }}
+        
+        // フィルター初期化
+        function initializeSchoolAnalysisFilters() {{
+            // 写真館リスト
+            const studios = getUniqueValues(schoolsList, 'studio');
+            const studioSelects = [document.getElementById('memberStudioFilter'), document.getElementById('salesStudioFilter')];
+            studioSelects.forEach(select => {{
+                studios.forEach(studio => {{
+                    const option = document.createElement('option');
+                    option.value = studio;
+                    option.textContent = studio;
+                    select.appendChild(option);
+                }});
+            }});
+            
+            // 属性（地区）リスト
+            const regions = getUniqueValues(schoolsList, 'region');
+            const regionSelect = document.getElementById('memberRegionFilter');
+            regions.forEach(region => {{
+                const option = document.createElement('option');
+                option.value = region;
+                option.textContent = region;
+                regionSelect.appendChild(option);
+            }});
+            
+            // 事業所リスト（branch_monthly_salesから取得）
+            const branches = [];
+            Object.values(allYearsData).forEach(yearData => {{
+                if (yearData.branch_monthly) {{
+                    Object.keys(yearData.branch_monthly).forEach(branch => {{
+                        if (!branches.includes(branch)) branches.push(branch);
+                    }});
+                }}
+            }});
+            branches.sort();
+            const branchSelect = document.getElementById('salesBranchFilter');
+            branches.forEach(branch => {{
+                const option = document.createElement('option');
+                option.value = branch;
+                option.textContent = branch;
+                branchSelect.appendChild(option);
+            }});
+            
+            // 担当者リスト（manager_monthly_salesから取得）
+            const managers = [];
+            Object.values(allYearsData).forEach(yearData => {{
+                if (yearData.manager_monthly) {{
+                    Object.keys(yearData.manager_monthly).forEach(manager => {{
+                        if (!managers.includes(manager)) managers.push(manager);
+                    }});
+                }}
+            }});
+            managers.sort();
+            const managerSelect = document.getElementById('salesManagerFilter');
+            managers.forEach(manager => {{
+                const option = document.createElement('option');
+                option.value = manager;
+                option.textContent = manager;
+                managerSelect.appendChild(option);
+            }});
+            
+            // 学校リスト初期化
+            updateMemberSchoolList();
+            updateSalesSchoolList();
+            
+            // 年度リスト初期化
+            const years = Object.keys(allYearsData).sort((a, b) => b - a);
+            const yearSelects = [document.getElementById('memberYearFilter'), document.getElementById('salesYearFilter')];
+            yearSelects.forEach(select => {{
+                years.forEach(year => {{
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = `${{year}}年度`;
+                    select.appendChild(option);
+                }});
+            }});
+        }}
+        
+        // 会員率タブの学校リスト更新
+        function updateMemberSchoolList() {{
+            const studio = document.getElementById('memberStudioFilter').value;
+            const region = document.getElementById('memberRegionFilter').value;
+            
+            let filtered = schoolsList;
+            if (studio) filtered = filtered.filter(s => s.studio === studio);
+            if (region) filtered = filtered.filter(s => s.region === region);
+            
+            const schoolSelect = document.getElementById('memberSchoolFilter');
+            schoolSelect.innerHTML = '\u003coption value=""\u003e-- 選択してください --\u003c/option\u003e';
+            filtered.forEach(school => {{
+                const option = document.createElement('option');
+                option.value = school.id;
+                option.textContent = school.name;
+                schoolSelect.appendChild(option);
+            }});
+        }}
+        
+        // 売上タブの学校リスト更新
+        function updateSalesSchoolList() {{
+            const studio = document.getElementById('salesStudioFilter').value;
+            
+            let filtered = schoolsList;
+            if (studio) filtered = filtered.filter(s => s.studio === studio);
+            
+            const schoolSelect = document.getElementById('salesSchool Filter');
+            schoolSelect.innerHTML = '\u003coption value=""\u003e-- 選択してください --\u003c/option\u003e';
+            filtered.forEach(school => {{
+                const option = document.createElement('option');
+                option.value = school.id;
+                option.textContent = school.name;
+                schoolSelect.appendChild(option);
+            }});
+        }}
+        
+        // タブ切り替え
+        function switchSchoolAnalysisTab(tab) {{
+            currentSchoolAnalysisTab = tab;
+            
+            document.querySelectorAll('.school-analysis-tab').forEach(btn => {{
+                btn.style.color = '#666';
+                btn.style.borderBottomColor = 'transparent';
+                btn.classList.remove('active');
+            }});
+            
+            const activeTab = document.getElementById(tab === 'memberRate' ? 'tabMemberRate' : 'tabSalesTrend');
+            activeTab.style.color = '#3b82f6';
+            activeTab.style.borderBottomColor = '#3b82f6';
+            activeTab.classList.add('active');
+            
+            document.getElementById('memberRatePanel').style.display = tab === 'memberRate' ? 'block' : 'none';
+            document.getElementById('salesTrendPanel').style.display = tab === 'salesTrend' ? 'block' : 'none';
+        }}
+        
+        // 会員率推移検索
+        function searchMemberRate() {{
+            const schoolId = document.getElementById('memberSchoolFilter').value;
+            if (!schoolId) {{
+                alert('学校を選択してください');
+                return;
+            }}
+            
+            const schoolData = schoolDetails[schoolId];
+            if (!schoolData || !schoolData.member_rates) {{
+                alert('この学校の会員率データがありません');
+                return;
+            }}
+            
+            const gradeDisplay = document.querySelector('input[name="memberGradeDisplay"]:checked').value;
+            renderMemberRateTrend(schoolData.member_rates, gradeDisplay);
+        }}
+        
+        // 会員率推移グラフ描画
+        function renderMemberRateTrend(memberRateData, gradeDisplay) {{
+            if (!memberRateData || Object.keys(memberRateData).length === 0) return;
+            
+            const dates = Object.keys(memberRateData).sort();
+            const labels = dates;
+            
+            let datasets = [];
+            
+            if (gradeDisplay === 'all') {{
+                // 全学年の平均
+                const avgRates = dates.map(date => {{
+                    const grades = memberRateData[date];
+                    const sum = grades.reduce((acc, g) => acc + (g.rate || 0), 0);
+                    return grades.length > 0 ? sum / grades.length : 0;
+                }});
+                
+                datasets = [{{
+                    label: '全学年平均',
+                    data: avgRates,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                }}];
+            }} else {{
+                // 学年ごと
+                const gradeData = {{}};
+                dates.forEach(date => {{
+                    memberRateData[date].forEach(item => {{
+                        const grade = item.grade;
+                        if (!gradeData[grade]) gradeData[grade] = [];
+                        gradeData[grade].push(item.rate);
+                    }});
+                }});
+                
+                const colors = [
+                    {{ border: 'rgb(59, 130, 246)', bg: 'rgba(59, 130, 246, 0.1)' }},
+                    {{ border: 'rgb(16, 185, 129)', bg: 'rgba(16, 185, 129, 0.1)' }},
+                    {{ border: 'rgb(245, 158, 11)', bg: 'rgba(245, 158, 11, 0.1)' }}
+                ];
+                
+                datasets = Object.keys(gradeData).map((grade, index) => {{
+                    const color = colors[index % colors.length];
+                    return {{
+                        label: grade,
+                        data: gradeData[grade],
+                        borderColor: color.border,
+                        backgroundColor: color.bg,
+                        tension: 0.4
+                    }};
+                }});
+            }}
+            
+            if (memberRateTrendChart) memberRateTrendChart.destroy();
+            
+            memberRateTrendChart = new Chart(document.getElementById('memberRateTrendChart'), {{
+                type: 'line',
+                data: {{ labels: labels, datasets: datasets }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            min: 0,
+                            max: 1,
+                            ticks: {{ callback: function(value) {{ return (value * 100).toFixed(0) + '%'; }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // 学校別売上推移検索
+        function searchSalesTrend() {{
+            const schoolId = document.getElementById('salesSchoolFilter').value;
+            if (!schoolId) {{
+                alert('学校を選択してください');
+                return;
+            }}
+            
+            const schoolData = schoolDetails[schoolId];
+            if (!schoolData || !schoolData.monthly_sales) {{
+                alert('この学校の売上データがありません');
+                return;
+            }}
+            
+            const year = parseInt(document.getElementById('salesYearFilter').value);
+            renderSalesTrend(schoolData.monthly_sales, year);
+        }}
+        
+        // 学校別売上推移グラフ描画
+        function renderSalesTrend(salesData, year) {{
+            if (!salesData || Object.keys(salesData).length === 0) return;
+            
+            const currentData = salesData[year] || [];
+            const prevData = salesData[year - 1] || [];
+            
+            if (currentData.length === 0) {{
+                alert(`${{year}}年度のデータがありません`);
+                return;
+            }}
+            
+            const labels = currentData.map(d => `${{d.month}}月`);
+            const currentSales = currentData.map(d => d.sales);
+            
+            const prevSalesMap = {{}};
+            prevData.forEach(d => {{ prevSalesMap[d.month] = d.sales; }});
+            const prevSales = currentData.map(d => prevSalesMap[d.month] || 0);
+            
+            if (salesTrendChart) salesTrendChart.destroy();
+            
+            salesTrendChart = new Chart(document.getElementById('salesTrendChart'), {{
+                type: 'line',
+                data: {{
+                    labels: labels,
+                    datasets: [
+                        {{
+                            label: `${{year}}年度`,
+                            data: currentSales,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4
+                        }},
+                        {{
+                            label: `${{year - 1}}年度`,
+                            data: prevSales,
+                            borderColor: 'rgb(156, 163, 175)',
+                            backgroundColor: 'rgba(156, 163, 175, 0.1)',
+                            tension: 0.4,
+                            borderDash: [5, 5]
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            ticks: {{ callback: function(value) {{ return '¥' + value.toLocaleString(); }} }}
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // リセット関数
+        function resetMemberRateFilters() {{
+            document.getElementById('memberStudioFilter').value = '';
+            document.getElementById('memberRegionFilter').value = '';
+            document.getElementById('memberSchoolFilter').value = '';
+            document.getElementById('memberYearFilter').selectedIndex = 0;
+            document.querySelector('input[name="memberGradeDisplay"][value="all"]').checked = true;
+            if (memberRateTrendChart) memberRateTrendChart.destroy();
+            updateMemberSchoolList();
+        }}
+        
+        function resetSalesTrendFilters() {{
+            document.getElementById('salesBranchFilter').value = '';
+            document.getElementById('salesManagerFilter').value = '';
+            document.getElementById('salesStudioFilter').value = '';
+            document.getElementById('salesSchoolFilter').value = '';
+            document.getElementById('salesYearFilter').selectedIndex = 0;
+            if (salesTrendChart) salesTrendChart.destroy();
+            updateSalesSchoolList();
+        }}
+        
+        // CSV出力関数
+        function downloadMemberRateCSV() {{
+            if (!memberRateTrendChart || !memberRateTrendChart.data) {{
+                alert('グラフを表示してからダウンロードしてください');
+                return;
+            }}
+            
+            const data = memberRateTrendChart.data;
+            const labels = data.labels;
+            const datasets = data.datasets;
+            
+            let csv = 'スナップショット日付,' + datasets.map(d => d.label).join(',') + '\\n';
+            labels.forEach((label, i) => {{
+                csv += label + ',' + datasets.map(d => ((d.data[i] || 0) * 100).toFixed(1) + '%').join(',') + '\\n';
+            }});
+            
+            downloadCSV(csv, '会員率推移.csv');
+        }}
+        
+        function downloadSalesTrendCSV() {{
+            if (!salesTrendChart || !salesTrendChart.data) {{
+                alert('グラフを表示してからダウンロードしてください');
+                return;
+            }}
+            
+            const data = salesTrendChart.data;
+            const labels = data.labels;
+            const datasets = data.datasets;
+            
+            let csv = '月,' + datasets.map(d => d.label).join(',') + '\\n';
+            labels.forEach((label, i) => {{
+                csv += label + ',' + datasets.map(d => (d.data[i] || 0).toLocaleString()).join(',') + '\\n';
+            }});
+            
+            downloadCSV(csv, '学校別売上推移.csv');
+        }}
+        
+        function downloadCSV(csvContent, filename) {{
+            const bom = '\\uFEFF';
+            const blob = new Blob([bom + csvContent], {{ type: 'text/csv;charset=utf-8;' }});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }}
+        
         // 初期表示
         const initialYear = parseInt(document.getElementById('yearSelect').value);
         const initialData = allYearsData[initialYear];
         updateMonthlyChart(initialData.monthly);
-        updateBranchChart(initialData.branch);
+        // updateBranchChart(initialData.branch); // 削除
         updateSchoolChart(initialData.top_schools);
+        updateEventChart(initialData.top_events);
+        updateMemberChart(initialData.member_rates);
+        
+        // 学校別分析フィルター初期化
+        initializeSchoolAnalysisFilters();
     </script>
 </body>
 </html>
