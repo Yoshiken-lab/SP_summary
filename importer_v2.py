@@ -244,71 +244,119 @@ def import_monthly_totals(xlsx, cursor, report_id):
 def import_branch_monthly_sales(xlsx, cursor, report_id):
     """売上シートから事業所別月次売上を取り込み"""
     df = pd.read_excel(xlsx, sheet_name='売上', header=None)
-    
-    # 「■売上　各事業所」セクションを検出
-    start_row = None
-    for i, row in df.iterrows():
-        cell = str(row[1]) if pd.notna(row[1]) else ''
-        if '各事業所' in cell and '売上' in cell:
-            start_row = i
-            break
-    
-    if start_row is None:
-        return {'count': 0}
-    
-    # 年度を抽出(次の行)
-    fiscal_year_row = start_row + 1
-    fy_text = str(df.iloc[fiscal_year_row, 1]) if pd.notna(df.iloc[fiscal_year_row, 1]) else ''
-    match = re.search(r'(\d{4})年度', fy_text)
-    if not match:
-        return {'count': 0}
-    fiscal_year = int(match.group(1))
-    
-    # 月のマッピング(Excelシリアル値 → 月)
-    month_row_idx = start_row + 2
-    month_cols = []
-    for col_idx in range(2, len(df.columns)):
-        val = df.iloc[month_row_idx, col_idx]
-        if pd.notna(val):
-            try:
-                # Excelシリアル値をdatetimeに変換
-                date_val = pd.to_datetime(val, unit='D', origin='1899-12-30')
-                month = date_val.month
-                month_cols.append((col_idx, month))
-            except:
-                continue
-    
-    # 事業所データを読み取り
     stats = {'count': 0}
-    for i in range(start_row + 3, len(df)):
-        branch_name_val = df.iloc[i, 1]
-        if pd.isna(branch_name_val):
-            break
-        
-        branch_name = str(branch_name_val).strip()
-        
-        # 除外するキーワード
-        if branch_name in ['予算', '予算比', '昨年差', '昨年比', '合計', '']:
-            continue
-        
-        # 各月の売上を登録
-        for col_idx, month in month_cols:
-            sales = df.iloc[i, col_idx]
-            if pd.notna(sales) and float(sales) != 0:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO branch_monthly_sales
-                    (report_id, fiscal_year, month, branch_name, sales, budget)
-                    VALUES (?, ?, ?, ?, ?, NULL)
-                ''', (report_id, fiscal_year, month, branch_name, float(sales)))
-                stats['count'] += 1
     
+    # ■売上 各事業所 セクションを探す
+    for i in range(len(df)):
+        cell = str(df.iloc[i, 1]) if pd.notna(df.iloc[i, 1]) else ''
+        
+        if '各事業所' in cell and '売上' in cell and '■' in cell:
+            # このセクション内で年度ごとに処理
+            j = i + 1
+            while j < len(df):
+                year_cell = str(df.iloc[j, 1]) if pd.notna(df.iloc[j, 1]) else ''
+                
+                # 次のセクション(■)が来たら完全終了
+                if '■' in year_cell and '売上' in year_cell and '各事業所' not in year_cell:
+                    break
+                    
+                # 年度ヘッダー検出: "YYYY年度 各事業所"
+                year_match = re.search(r'(\d{4})年度', year_cell)
+                if year_match and '各事業所' in year_cell:
+                    fiscal_year = int(year_match.group(1))
+                    
+                    # ヘッダー行を探索 (年度行の次の行以降)
+                    header_row_idx = j + 1
+                    month_cols = []
+                    
+                    # ヘッダー行を探す（空でない、かつ除外ワードでない行）
+                    while header_row_idx < len(df):
+                        header_cell = str(df.iloc[header_row_idx, 1]) if pd.notna(df.iloc[header_row_idx, 1]) else ''
+                        if header_cell.strip() != '' and '年度' in header_cell:
+                             header_row_idx += 1
+                             continue
+                        
+                        # B列が空でもC列以降にデータがあればヘッダー行の可能性
+                        has_data = False
+                        for col_idx in range(2, min(len(df.columns), 15)):
+                             if pd.notna(df.iloc[header_row_idx, col_idx]):
+                                 has_data = True
+                                 break
+                        
+                        if header_cell.strip() != '' or has_data:
+                            break
+                        header_row_idx += 1
+
+                    if header_row_idx < len(df):
+                        header_row = df.iloc[header_row_idx]
+                        for col_idx, header_val in enumerate(header_row):
+                            if pd.isna(header_val):
+                                continue
+                            month = None
+                            if '月' in str(header_val):
+                                # "月"が含まれている場合、厳密に数字+月をチェック
+                                match = re.search(r'(\d{1,2})月', str(header_val))
+                                if match:
+                                    month = int(match.group(1))
+                            elif isinstance(header_val, (int, float)):
+                                month = excel_serial_to_month(header_val)
+                            
+                            if month and 1 <= month <= 12:
+                                month_cols.append((col_idx, month))
+                    
+                    # データ行を読み取る
+                    data_row_idx = header_row_idx + 1
+                    while data_row_idx < len(df):
+                        branch_name_val = df.iloc[data_row_idx, 1]
+                        
+                        if pd.isna(branch_name_val):
+                            data_row_idx += 1
+                            continue
+                            
+                        branch_name = str(branch_name_val).strip()
+                        
+                        # 次の年度ヘッダーが来たら内側ループ終了（jを戻す）
+                        if '年度' in branch_name and '各事業所' in branch_name:
+                            j = data_row_idx - 1
+                            break
+                        
+                        # セクション終了
+                        if '■' in branch_name:
+                            j = len(df) 
+                            break
+
+                        # 除外するキーワード
+                        if branch_name in ['予算', '予算比', '昨年差', '昨年比', '合計', '']:
+                            data_row_idx += 1
+                            continue
+                        
+                        # 各月の売上を登録
+                        for col_idx, month in month_cols:
+                            sales = df.iloc[data_row_idx, col_idx]
+                            try:
+                                sales_val = float(sales)
+                            except (ValueError, TypeError):
+                                sales_val = 0
+                            
+                            if pd.notna(sales) and sales_val != 0:
+                                cursor.execute('''
+                                    INSERT OR REPLACE INTO branch_monthly_sales
+                                    (report_id, fiscal_year, month, branch_name, sales, budget)
+                                    VALUES (?, ?, ?, ?, ?, NULL)
+                                ''', (report_id, fiscal_year, month, branch_name, sales_val))
+                                stats['count'] += 1
+                        
+                        data_row_idx += 1
+                    
+                j += 1
+            break
+            
     return stats
 
 
 def import_manager_monthly_sales(xlsx, cursor, report_id):
     """売上シートから担当者別月次売上を取り込み"""
     df = pd.read_excel(xlsx, sheet_name='売上', header=None)
-    
     stats = {'count': 0}
     
     # ■売上 担当者別 セクションを探す
@@ -356,7 +404,6 @@ def import_manager_monthly_sales(xlsx, cursor, report_id):
                         
                         header_row_idx += 1
 
-                    
                     if header_row_idx >= len(df):
                         break
                     
@@ -369,13 +416,15 @@ def import_manager_monthly_sales(xlsx, cursor, report_id):
                             continue
                         month = None
                         if '月' in str(header_val):
-                            match = re.search(r'(\d{1,2})', str(header_val))
+                            # [修正] "(\d{1,2})月" として "月" を必須にし、"年度"などの誤検知を防ぐ
+                            match = re.search(r'(\d{1,2})月', str(header_val))
                             if match:
                                 month = int(match.group(1))
                         elif isinstance(header_val, (int, float)):
                             month = excel_serial_to_month(header_val)
                         
-                        if month:
+                        # 月が1〜12の範囲内であることを確認
+                        if month and 1 <= month <= 12:
                             month_cols.append((col_idx, month))
                     
                     # データ行を読み取る
@@ -400,19 +449,24 @@ def import_manager_monthly_sales(xlsx, cursor, report_id):
                         # 各月の売上を取得
                         for col_idx, month in month_cols:
                             sales = df.iloc[data_row_idx, col_idx]
-                            if pd.notna(sales) and float(sales) != 0:
+                            try:
+                                sales_val = float(sales)
+                            except (ValueError, TypeError):
+                                sales_val = 0
+                                
+                            if pd.notna(sales) and sales_val != 0:
                                 cursor.execute('''
                                     INSERT OR REPLACE INTO manager_monthly_sales
                                     (report_id, fiscal_year, month, manager, sales)
                                     VALUES (?, ?, ?, ?, ?)
-                                ''', (report_id, fiscal_year, month, manager_name_str, float(sales)))
+                                ''', (report_id, fiscal_year, month, manager_name_str, sales_val))
                                 stats['count'] += 1
                         
                         data_row_idx += 1
                 
                 j += 1
             
-            # セクション終了、次のセクションを探す
+            # セクション終了
             break
     
     return stats
@@ -675,7 +729,7 @@ def import_member_rates(xlsx, cursor, report_id, report_date, sheet_name='会員
                 if school_id not in schools_to_add:
                     schools_to_add[school_id] = school_name
         
-        # schools_masterに未登録の学校を追加
+        # schools_masterに未登録学校を追加
         cursor.execute('SELECT MAX(logical_school_id) FROM schools_master')
         next_logical_id = (cursor.fetchone()[0] or 0) + 1
         
