@@ -9,7 +9,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from database_v2 import get_connection
+from database_v2 import get_connection, get_rapid_growth_schools
 
 
 def get_available_fiscal_years(db_path=None):
@@ -511,6 +511,9 @@ def generate_dashboard(db_path=None, output_dir=None):
             'monthly_sales': get_school_monthly_sales(db_path, school_id),
             'member_rates': get_member_rates_by_school(db_path, school_id)
         }
+    
+    # 条件別集計データを取得
+    rapid_growth_data = get_rapid_growth_schools(db_path)
     
     # デフォルトは最新年度
     default_year =available_years[0] if available_years else datetime.now().year
@@ -1949,6 +1952,170 @@ def generate_dashboard(db_path=None, output_dir=None):
         
         // 学校別分析フィルター初期化
         initializeSchoolAnalysisFilters();
+    </script>
+    
+    <!-- 条件別集計セクション -->
+    <div class="alert-section" style="margin: 40px 0; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h2 style="font-size: 24px; margin-bottom: 30px; color: #333;">条件別集計</h2>
+        
+        <!-- カテゴリコンテナ -->
+        <div class="alert-category-container" style="display: flex; gap: 20px; margin-bottom: 30px;">
+            <!-- 売上・実績カテゴリ -->
+            <div class="alert-category" style="flex: 1; padding: 20px; background: #f0fdf4; border-radius: 8px; border: 2px solid #86efac;">
+                <div class="alert-category-title" style="font-weight: bold; color: #166534; margin-bottom: 15px; font-size: 16px;">📊 売上・実績</div>
+                <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button onclick="showAlert('rapid_growth')" id="tab-rapid_growth" class="alert-tab active" style="padding: 8px 16px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">売上好調校</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 売上好調校タブコンテンツ -->
+        <div id="alert-rapid_growth" class="alert-content active" style="display: block;">
+            <div class="alert-header" style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                <button class="csv-download-btn" onclick="downloadAlertCSV('rapid_growth')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+            </div>
+            <div id="rapid_growth-table-container"></div>
+            <div id="rapid_growth-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
+        </div>
+    </div>
+    
+    <script>
+        // 条件別集計データ
+        const rapidGrowthData = {json.dumps(rapid_growth_data)};
+        
+        const alertsData = {{
+            'rapid_growth': rapidGrowthData
+        }};
+        
+        let currentAlertPage = 1;
+        const alertPageSize = 30;
+        
+        // タブ切り替え
+        function showAlert(alertType) {{
+            // 全タブコンテンツを非表示
+            document.querySelectorAll('.alert-content').forEach(el => el.style.display = 'none');
+            // 全タブボタンを非アクテ
+
+ィブ化
+            document.querySelectorAll('.alert-tab').forEach(el => {{
+                el.classList.remove('active');
+                el.style.background = '#e5e7eb';
+                el.style.color = '#374151';
+            }});
+            
+            // 選択タブを表示
+            const contentEl = document.getElementById(`alert-${{alertType}}`);
+            if (contentEl) contentEl.style.display = 'block';
+            
+            // 選択タブボタンをアクティブ化
+            const tabEl = document.getElementById(`tab-${{alertType}}`);
+            if (tabEl) {{
+                tabEl.classList.add('active');
+                tabEl.style.background = '#22c55e';
+                tabEl.style.color = 'white';
+            }}
+            
+            // データをレンダリング
+            renderAlertTable(alertType, 1);
+        }}
+        
+        // テーブルレンダリング
+        function renderAlertTable(alertType, page) {{
+            currentAlertPage = page;
+            const data = alertsData[alertType] || [];
+            const container = document.getElementById(`${{alertType}}-table-container`);
+            if (!container) return;
+            
+            if (data.length === 0) {{
+                container.innerHTML = '<p style="text-align: center; padding: 40px; color: #888;">データがありません</p>';
+                return;
+            }}
+            
+            // ページネーション
+            const startIdx = (page - 1) * alertPageSize;
+            const endIdx = startIdx + alertPageSize;
+            const pageData = data.slice(startIdx, endIdx);
+            
+            // テーブル生成
+            let html = '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">';
+            html += '<thead><tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">';
+            html += '<th style="padding: 12px; text-align: left;">学校名</th>';
+            html += '<th style="padding: 12px; text-align: left;">属性</th>';
+            html += '<th style="padding: 12px; text-align: left;">写真館</th>';
+            html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
+            html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
+            html += '<th style="padding: 12px; text-align: right;">成長率</th>';
+            html += '</tr></thead><tbody>';
+            
+            pageData.forEach((row, idx) => {{
+                const bgColor = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
+                html += `<tr style="background: ${{bgColor}}; border-bottom: 1px solid #e5e7eb;">`;
+                html += `<td style="padding: 12px;">${{row.school_name}}</td>`;
+                html += `<td style="padding: 12px;">${{row.attribute || '-'}}</td>`;
+                html += `<td style="padding: 12px;">${{row.studio || '-'}}</td>`;
+                html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold;">+${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
+                html += '</tr>';
+            }});
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+            
+            // ページネーション
+            renderPagination(alertType, data.length, page);
+        }}
+        
+        // ページネーション
+        function renderPagination(alertType, totalCount, currentPage) {{
+            const totalPages = Math.ceil(totalCount / alertPageSize);
+            const paginationEl = document.getElementById(`${{alertType}}-pagination`);
+            if (!paginationEl || totalPages <= 1) {{
+                if (paginationEl) paginationEl.innerHTML = '';
+                return;
+            }}
+            
+            let html = '';
+            if (currentPage > 1) {{
+                html += `<button onclick="renderAlertTable('${{alertType}}', ${{currentPage - 1}})" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">前へ</button>`;
+            }}
+            html += `<span style="padding: 6px 12px; color: #666;">${{currentPage}} / ${{totalPages}}</span>`;
+            if (currentPage < totalPages) {{
+                html += `<button onclick="renderAlertTable('${{alertType}}', ${{currentPage + 1}})" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">次へ</button>`;
+            }}
+            paginationEl.innerHTML = html;
+        }}
+        
+        // CSV出力
+        function downloadAlertCSV(alertType) {{
+            const data = alertsData[alertType] || [];
+            if (data.length === 0) {{
+                alert('データがありません');
+                return;
+            }}
+            
+            let csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,成長率\\n';
+            data.forEach(row => {{
+                csv += `\"${{row.school_name}}\",`;
+                csv += `\"${{row.attribute || ''}}\",`;
+                csv += `\"${{row.studio || ''}}\",`;
+                csv += `\"${{row.manager || ''}}\",`;
+                csv += `\"${{row.region || ''}}\",`;
+                csv += `${{row.current_sales}},`;
+                csv += `${{row.prev_sales}},`;
+                csv += `${{(row.growth_rate * 100).toFixed(1)}}%\\n`;
+            }});
+            
+            const bom = '\\uFEFF';
+            const blob = new Blob([bom + csv], {{ type: 'text/csv;charset=utf-8;' }});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = '売上好調校.csv';
+            link.click();
+        }}
+        
+        // 初期表示
+        renderAlertTable('rapid_growth', 1);
     </script>
 </body>
 </html>

@@ -63,6 +63,28 @@ def parse_month_column(col_name):
     return (None, None)
 
 
+def calculate_fiscal_year(year, month):
+    """
+    年と月から年度を計算（4月始まり）
+    
+    Args:
+        year: 西暦年
+        month: 月 (1-12)
+    
+    Returns:
+        int: 年度 (例: 2025年2月 → 2024年度)
+    
+    Examples:
+        calculate_fiscal_year(2025, 4) → 2025  # 2025年4月 = 2025年度
+        calculate_fiscal_year(2025, 3) → 2024  # 2025年3月 = 2024年度
+        calculate_fiscal_year(2025, 2) → 2024  # 2025年2月 = 2024年度
+    """
+    if month >= 4:
+        return year
+    else:
+        return year - 1
+
+
 def excel_serial_to_month(serial_value):
     """Excelシリアル日付値から月を抽出"""
     try:
@@ -506,9 +528,14 @@ def import_school_monthly_sales(xlsx, cursor, report_id, sheet_name, fiscal_year
         elif '学校名' in val_str:
             col_mapping['school'] = col_idx
         elif '月' in val_str:
-            fy, month = parse_month_column(val_str)
+            year, month = parse_month_column(val_str)
             if month:
-                month_cols.append((col_idx, fy or fiscal_year, month))
+                # 年が明示されている場合は年度を計算、なければfiscal_yearを使用
+                if year:
+                    fy = calculate_fiscal_year(year, month)
+                else:
+                    fy = fiscal_year
+                month_cols.append((col_idx, fy, month))
     
     stats = {'count': 0, 'unmatched_schools': []}
     
@@ -549,7 +576,7 @@ def import_school_monthly_sales(xlsx, cursor, report_id, sheet_name, fiscal_year
     return stats
 
 
-def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):
+def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year, report_date):
     """イベント別売上を取り込み"""
     df = pd.read_excel(xlsx, sheet_name=sheet_name, header=None)
     
@@ -586,9 +613,36 @@ def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):
         elif '開始日' in val_str or 'イベント日' in val_str:
             col_mapping['event_date'] = col_idx
         elif '月' in val_str:
-            fy, month = parse_month_column(val_str)
+            year, month = parse_month_column(val_str)
             if month:
-                month_cols.append((col_idx, fy or fiscal_year, month))
+                # 年が明示されている場合は年度を計算、なければfiscal_yearを使用
+                fy_before = fiscal_year
+                year_parsed = year
+                if year:
+                    fy = calculate_fiscal_year(year, month)
+                    fy_before = fy
+                else:
+                    fy = fiscal_year
+                
+                # 未来日付チェックと補正
+                # 例: 報告書が2025年12月で、fy=2025, month=2の場合、それは2026年2月(未来)になる
+                # その場合、前年度(2025年2月)のデータである可能性が高いので補正する
+                corrected = False
+                if report_date:
+                    if month >= 4:
+                        calc_year = fy
+                    else:
+                        calc_year = fy + 1
+                    
+                    calc_date = datetime(calc_year, month, 1).date()
+                    # 報告書日付の翌月末までを許容範囲とする(多少の未来はあり得ると仮定しても、1年はあり得ない)
+                    # ここでは単純に「報告書日付より後の2月3月」は前年度とみなす
+                    rep_first_day = report_date.replace(day=1)
+                    if calc_date > rep_first_day + pd.Timedelta(days=60): # 2ヶ月以上の未来
+                         fy = fy - 1
+                         corrected = True
+
+                month_cols.append((col_idx, fy, month))
     
     stats = {'count': 0, 'unmatched_schools': []}
     
@@ -889,7 +943,7 @@ def import_excel_v2(file_path, db_path=None):
                 if match:
                     fiscal_year = int(match.group(1))
                     print(f"  {sheet_name} を処理中...")
-                    stats = import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year)
+                    stats = import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year, report_date)
                     event_sales_count += stats['count']
                     all_unmatched_schools.extend(stats['unmatched_schools'])
         all_stats['event_sales'] = event_sales_count

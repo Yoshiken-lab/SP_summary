@@ -27,6 +27,7 @@ def get_connection(db_path=None):
     # WALモード有効化（並行アクセス対応）
     conn.execute('PRAGMA journal_mode=WAL')
     conn.execute('PRAGMA synchronous=NORMAL')
+    conn.execute('PRAGMA foreign_keys = ON')  # 外部キー制約有効化
     
     return conn
 
@@ -204,6 +205,104 @@ def normalize_manager_name(manager_name, conn=None):
         conn.close()
     
     return row[0] if row else manager_name
+
+
+# ============================================
+# 条件別集計機能
+# ============================================
+
+def get_current_fiscal_year():
+    """現在の年度を取得（4月始まり）"""
+    now = datetime.now()
+    return now.year if now.month >= 4 else now.year - 1
+
+
+def get_latest_report_id(conn):
+    """最新のレポートIDを取得"""
+    cursor = conn.cursor()
+    cursor.execute('SELECT MAX(id) FROM reports')
+    row = cursor.fetchone()
+    return row[0] if row else None
+
+
+def get_rapid_growth_schools(db_path=None, target_fy=None):
+    """
+    売上好調校を取得
+    
+    前年比で50%以上の売上成長を見せている学校
+    
+    Args:
+        db_path: データベースパス
+        target_fy: 対象年度（Noneの場合は現在年度）
+    
+    Returns:
+        list: [{school_id, school_name, attribute, studio, current_sales, prev_sales, growth_rate}, ...]
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    current_fy = target_fy if target_fy else get_current_fiscal_year()
+    prev_fy = current_fy - 1
+    
+    report_id = get_latest_report_id(conn)
+    if not report_id:
+        conn.close()
+        return []
+
+    # event_salesから売上を集計
+    query = '''
+        WITH current_sales AS (
+            SELECT
+                school_id,
+                COALESCE(SUM(sales), 0) as total_sales
+            FROM event_sales
+            WHERE fiscal_year = ? AND report_id = ?
+            GROUP BY school_id
+        ),
+        prev_sales AS (
+            SELECT
+                school_id,
+                COALESCE(SUM(sales), 0) as total_sales
+            FROM event_sales
+            WHERE fiscal_year = ? AND report_id = ?
+            GROUP BY school_id
+        )
+        SELECT
+            s.school_id,
+            s.school_name,
+            s.attribute,
+            s.studio,
+            s.manager,
+            s.region,
+            COALESCE(curr.total_sales, 0) as current_sales,
+            COALESCE(prev.total_sales, 0) as prev_sales,
+            (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales as growth_rate
+        FROM schools_master s
+        JOIN current_sales curr ON curr.school_id = s.school_id
+        JOIN prev_sales prev ON prev.school_id = s.school_id
+        WHERE prev.total_sales > 10000  -- 最低売上を設定
+          AND (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales >= 0.5
+        ORDER BY growth_rate DESC
+    '''
+    
+    cursor.execute(query, (current_fy, report_id, prev_fy, report_id))
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': row[2] or '',
+            'studio': row[3] or '',
+            'manager': row[4] or '',
+            'region': row[5] or '',
+            'current_sales': row[6],
+            'prev_sales': row[7],
+            'growth_rate': row[8]
+        })
+    
+    conn.close()
+    return results
 
 
 if __name__ == '__main__':
