@@ -578,7 +578,7 @@ def generate_dashboard(db_path=None, output_dir=None):
     
     # 会員率・売上低下校データの取得（今年度のみ・ベース条件での取得）
     print("   会員率・売上低下校データを取得中...")
-    decline_data_raw = get_declining_schools(db_path, target_fy=default_year)
+    decline_data_raw = get_declining_schools(db_path, target_fy=default_year, member_rate_threshold=1.1, sales_decline_threshold=0.0)
     decline_data = [
         {
             'school_name': r['school_name'],
@@ -2099,26 +2099,39 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <label style="font-weight: bold; color: #374151;">会員率:</label>
                     <select id="declineMemberRateFilter" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
-                        <option value="50">50%未満</option>
+                        <option value="110">指定なし</option>
+                        <option value="50" selected>50%未満</option>
                         <option value="40">40%未満</option>
                         <option value="30">30%未満</option>
                         <option value="20">20%未満</option>
+                        <option value="10">10%未満</option>
                     </select>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <label style="font-weight: bold; color: #374151;">売上減少率:</label>
-                    <select id="declineSalesFilter" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
-                        <option value="10">10%以上減少</option>
-                        <option value="20">20%以上減少</option>
-                        <option value="30">30%以上減少</option>
-                        <option value="40">40%以上減少</option>
-                        <option value="50">50%以上減少</option>
-                        <option value="60">60%以上減少</option>
-                        <option value="70">70%以上減少</option>
-                        <option value="80">80%以上減少</option>
-                        <option value="90">90%以上減少</option>
-                        <option value="100">100%減少（0円）</option>
+                    <select id="declineSalesMin" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
+                        <option value="0">0%</option>
+                        <option value="10" selected>10%</option>
+                        <option value="20">20%</option>
+                        <option value="30">30%</option>
+                        <option value="40">40%</option>
+                        <option value="50">50%</option>
                     </select>
+                    <span>～</span>
+                    <select id="declineSalesMax" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
+                        <option value="200"> - </option>
+                        <option value="10">10%</option>
+                        <option value="20">20%</option>
+                        <option value="30">30%</option>
+                        <option value="40">40%</option>
+                        <option value="50">50%</option>
+                        <option value="60">60%</option>
+                        <option value="70">70%</option>
+                        <option value="80">80%</option>
+                        <option value="90">90%</option>
+                        <option value="100">100%</option>
+                    </select>
+                    <span>減少</span>
                 </div>
             </div>
             <div class="alert-header" style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
@@ -2194,11 +2207,13 @@ def generate_dashboard(db_path=None, output_dir=None):
                 alertsData['no_events'] = data;
             }} else if (alertType === 'decline') {{
                 const memberRateThreshold = parseFloat(document.getElementById('declineMemberRateFilter').value) / 100;
-                const salesDeclineThreshold = parseFloat(document.getElementById('declineSalesFilter').value) / 100;
+                const salesMin = parseFloat(document.getElementById('declineSalesMin').value) / 100;
+                const salesMax = parseFloat(document.getElementById('declineSalesMax').value) / 100;
                 
                 if (declineBaseData) {{
                     data = declineBaseData.filter(row => {{
-                        return row.member_rate < memberRateThreshold && row.growth_rate <= -salesDeclineThreshold;
+                        const declineRate = -row.growth_rate;
+                        return row.member_rate < memberRateThreshold && declineRate >= salesMin && declineRate <= salesMax;
                     }});
                 }}
                 alertsData['decline'] = data;
