@@ -1717,7 +1717,18 @@ def generate_dashboard(db_path=None, output_dir=None):
                 options: {{
                     responsive: true,
                     maintainAspectRatio: true,
-                    plugins: {{ legend: {{ display: true, position: 'top' }} }},
+                    plugins: {{ 
+                        legend: {{ display: true, position: 'top' }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    const label = context.dataset.label || '';
+                                    const value = context.parsed.y;
+                                    return label + ': ' + (value * 100).toFixed(1) + '%';
+                                }}
+                            }}
+                        }}
+                    }},
                     scales: {{
                         y: {{
                             min: 0,
