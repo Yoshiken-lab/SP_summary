@@ -1535,10 +1535,26 @@ def generate_dashboard(db_path=None, output_dir=None):
         
         // 売上タブの学校リスト更新
         function updateSalesSchoolList() {{
+            const branch = document.getElementById('salesBranchFilter').value;
+            const manager = document.getElementById('salesManagerFilter').value;
             const studio = document.getElementById('salesStudioFilter').value;
             
             let filtered = schoolsList;
-            if (studio) filtered = filtered.filter(s => s.studio === studio);
+            
+            // 事業所で絞り込み
+            if (branch) {{
+                filtered = filtered.filter(s => s.branch === branch);
+            }}
+            
+            // 担当者で絞り込み
+            if (manager) {{
+                filtered = filtered.filter(s => s.manager === manager);
+            }}
+            
+            // 写真館で絞り込み
+            if (studio) {{
+                filtered = filtered.filter(s => s.studio === studio);
+            }}
             
             const schoolSelect = document.getElementById('salesSchoolFilter');
             schoolSelect.innerHTML = '\u003coption value=""\u003e-- 選択してください --\u003c/option\u003e';
