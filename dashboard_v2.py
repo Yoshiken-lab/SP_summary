@@ -338,31 +338,29 @@ def get_schools_list(db_path=None):
 
 
 def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
-    """特定学校の会員率推移を取得"""
+    """特定学校の会員率推移を取得（全報告書から）"""
     if school_id is None:
         return []
     
     conn = get_connection(db_path)
     cursor = conn.cursor()
     
-    cursor.execute('SELECT MAX(id) FROM reports')
-    latest_report_id = cursor.fetchone()[0]
-    
-    # 学年別データ
+    # 全報告書から学年別データを取得
     cursor.execute('''
-        SELECT snapshot_date, grade, member_rate, total_students, member_count
-        FROM member_rates
-        WHERE school_id = ? AND report_id = ?
-        ORDER BY snapshot_date, grade
-    ''', (school_id, latest_report_id))
+        SELECT r.report_date, m.snapshot_date, m.grade, m.member_rate, m.total_students, m.member_count
+        FROM member_rates m
+        JOIN reports r ON m.report_id = r.id
+        WHERE m.school_id = ?
+        ORDER BY m.snapshot_date, m.grade
+    ''', (school_id,))
     
     results = cursor.fetchall()
     conn.close()
     
-    # データを整形
+    # データを整形 (snapshot_date毎にグループ化)
     data = {}
     for row in results:
-        snapshot_date, grade, rate, total_students, member_count = row
+        report_date, snapshot_date, grade, rate, total_students, member_count = row
         if snapshot_date not in data:
             data[snapshot_date] = []
         data[snapshot_date].append({
@@ -690,32 +688,6 @@ def generate_dashboard(db_path=None, output_dir=None):
             </div>
         </div>
         
-        <div class="chart-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 style="margin: 0; border: none; padding: 0;">🔍 詳細分析</h3>
-                <button onclick="openSchoolDetail()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">📊 学校別詳細を見る</button>
-            </div>
-            <div style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
-                <button id="tabSchool" onclick="switchDetailTab('school')" class="detail-tab active" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">🏫 学校別売上</button>
-                <button id="tabEvent" onclick="switchDetailTab('event')" class="detail-tab" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">🎉 イベント別売上</button>
-                <button id="tabMember" onclick="switchDetailTab('member')" class="detail-tab" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">👥 会員率分布</button>
-            </div>
-            
-            <!-- 学校別パネル -->
-            <div id="schoolPanel" class="detail-panel">
-                <canvas id="schoolChart"></canvas>
-            </div>
-            
-            <!-- イベント別パネル -->
-            <div id="eventPanel" class="detail-panel" style="display: none;">
-                <canvas id="eventChart"></canvas>
-            </div>
-
-            <!-- 会員率パネル -->
-            <div id="memberPanel" class="detail-panel" style="display: none;">
-                <canvas id="memberChart"></canvas>
-            </div>
-        </div>
         
         <!-- 学校別分析セクション -->
         <div class="chart-card">
@@ -771,19 +743,19 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px;">
                     <div>
                         <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">事業所:</label>
-                        <select id="salesBranchFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="salesBranchFilter" onchange="updateSalesSchoolList()" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="">-- 全て --</option>
                         </select>
                     </div>
                     <div>
                         <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">担当者:</label>
-                        <select id="salesManagerFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="salesManagerFilter" onchange="updateSalesSchoolList()" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="">-- 全て --</option>
                         </select>
                     </div>
                     <div>
                         <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">写真館:</label>
-                        <select id="salesStudioFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="salesStudioFilter" onchange="updateSalesSchoolList()" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="">-- 全て --</option>
                         </select>
                     </div>
@@ -1469,7 +1441,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             let filtered = schoolsList;
             if (studio) filtered = filtered.filter(s => s.studio === studio);
             
-            const schoolSelect = document.getElementById('salesSchool Filter');
+            const schoolSelect = document.getElementById('salesSchoolFilter');
             schoolSelect.innerHTML = '\u003coption value=""\u003e-- 選択してください --\u003c/option\u003e';
             filtered.forEach(school => {{
                 const option = document.createElement('option');
@@ -1735,10 +1707,6 @@ def generate_dashboard(db_path=None, output_dir=None):
         const initialYear = parseInt(document.getElementById('yearSelect').value);
         const initialData = allYearsData[initialYear];
         updateMonthlyChart(initialData.monthly);
-        // updateBranchChart(initialData.branch); // 削除
-        updateSchoolChart(initialData.top_schools);
-        updateEventChart(initialData.top_events);
-        updateMemberChart(initialData.member_rates);
         
         // 学校別分析フィルター初期化
         initializeSchoolAnalysisFilters();
