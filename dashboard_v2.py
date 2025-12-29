@@ -702,13 +702,13 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
                     <div>
                         <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">写真館:</label>
-                        <select id="memberStudioFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="memberStudioFilter" onchange="updateMemberRegionList(); updateMemberSchoolList();" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="">-- 全て --</option>
                         </select>
                     </div>
                     <div>
                         <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">属性:</label>
-                        <select id="memberRegionFilter" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="memberRegionFilter" onchange="updateMemberSchoolList();" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="">-- 全て --</option>
                         </select>
                     </div>
@@ -1415,6 +1415,42 @@ def generate_dashboard(db_path=None, output_dir=None):
             }});
         }}
         
+        // 会員率タブの属性リスト更新（写真館に応じて絞り込み）
+        function updateMemberRegionList() {{
+            const studio = document.getElementById('memberStudioFilter').value;
+            
+            let filteredRegions = [];
+            if (studio) {{
+                // 選択した写真館が担当している属性（学校種）のみ
+                filteredRegions = [...new Set(
+                    schoolsList
+                        .filter(s => s.studio === studio)
+                        .map(s => s.region)
+                        .filter(r => r)
+                )].sort();
+            }} else {{
+                // 全ての属性
+                filteredRegions = getUniqueValues(schoolsList, 'region');
+            }}
+            
+            const regionSelect = document.getElementById('memberRegionFilter');
+            const currentValue = regionSelect.value;
+            regionSelect.innerHTML = '\u003coption value=""\u003e-- 全て --\u003c/option\u003e';
+            filteredRegions.forEach(region => {{
+                const option = document.createElement('option');
+                option.value = region;
+                option.textContent = region;
+                regionSelect.appendChild(option);
+            }});
+            
+            // 以前の選択を復元（可能なら）
+            if (filteredRegions.includes(currentValue)) {{
+                regionSelect.value = currentValue;
+            }} else {{
+                regionSelect.value = '';
+            }}
+        }}
+        
         // 会員率タブの学校リスト更新
         function updateMemberSchoolList() {{
             const studio = document.getElementById('memberStudioFilter').value;
@@ -1488,19 +1524,51 @@ def generate_dashboard(db_path=None, output_dir=None):
             renderMemberRateTrend(schoolData.member_rates, gradeDisplay);
         }}
         
-        // 会員率推移グラフ描画
+        // 会員率推移グラフ描画（月単位集約+年度順ソート）
         function renderMemberRateTrend(memberRateData, gradeDisplay) {{
             if (!memberRateData || Object.keys(memberRateData).length === 0) return;
             
-            const dates = Object.keys(memberRateData).sort();
-            const labels = dates;
+            // 月ごとに集約（最新のデータを採用）
+            const monthlyData = {{}};
+            Object.keys(memberRateData).forEach(snapshotDate => {{
+                const yearMonth = snapshotDate.substring(0, 7); // "2025-11-28" -> "2025-11"
+                if (!monthlyData[yearMonth] || snapshotDate > monthlyData[yearMonth].date) {{
+                    monthlyData[yearMonth] = {{
+                        date: snapshotDate,
+                        data: memberRateData[snapshotDate]
+                    }};
+                }}
+            }});
+            
+            // 年度順にソート（4月始まり）
+            const sortedMonths = Object.keys(monthlyData).sort((a, b) => {{
+                const [yearA, monthA] = a.split('-').map(Number);
+                const [yearB, monthB] = b.split('-').map(Number);
+                
+                // 年度の計算: 4月以降は同年度、1-3月は前年度
+                const fiscalYearA = monthA >= 4 ? yearA : yearA - 1;
+                const fiscalYearB = monthB >= 4 ? yearB : yearB - 1;
+                
+                if (fiscalYearA !== fiscalYearB) return fiscalYearA - fiscalYearB;
+                
+                // 同一年度内では月順（月を年度順に変換: 4->1, 5->2, ..., 3->12）
+                const fiscalMonthA = monthA >= 4 ? monthA - 3 : monthA + 9;
+                const fiscalMonthB = monthB >= 4 ? monthB - 3 : monthB + 9;
+                return fiscalMonthA - fiscalMonthB;
+            }});
+            
+            // ラベルは月のみ（例: "4月", "5月", ...）
+            const labels = sortedMonths.map(ym => {{
+                const month = parseInt(ym.split('-')[1]);
+                return `${{month}}月`;
+            }});
             
             let datasets = [];
             
             if (gradeDisplay === 'all') {{
                 // 全学年の平均
-                const avgRates = dates.map(date => {{
-                    const grades = memberRateData[date];
+                const avgRates = sortedMonths.map(ym => {{
+                    const grades = monthlyData[ym].data;
                     const sum = grades.reduce((acc, g) => acc + (g.rate || 0), 0);
                     return grades.length > 0 ? sum / grades.length : 0;
                 }});
@@ -1515,8 +1583,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             }} else {{
                 // 学年ごと
                 const gradeData = {{}};
-                dates.forEach(date => {{
-                    memberRateData[date].forEach(item => {{
+                sortedMonths.forEach(ym => {{
+                    monthlyData[ym].data.forEach(item => {{
                         const grade = item.grade;
                         if (!gradeData[grade]) gradeData[grade] = [];
                         gradeData[grade].push(item.rate);
@@ -1591,12 +1659,19 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return;
             }}
             
-            const labels = currentData.map(d => `${{d.month}}月`);
-            const currentSales = currentData.map(d => d.sales);
+            // データを年度順にソート（4月始まり）
+            const sortedCurrent = [...currentData].sort((a, b) => {{
+                const monthA = a.month >= 4 ? a.month - 3 : a.month + 9;
+                const monthB = b.month >= 4 ? b.month - 3 : b.month + 9;
+                return monthA - monthB;
+            }});
+            
+            const labels = sortedCurrent.map(d => `${{d.month}}月`);
+            const currentSales = sortedCurrent.map(d => d.sales);
             
             const prevSalesMap = {{}};
             prevData.forEach(d => {{ prevSalesMap[d.month] = d.sales; }});
-            const prevSales = currentData.map(d => prevSalesMap[d.month] || 0);
+            const prevSales = sortedCurrent.map(d => prevSalesMap[d.month] || 0);
             
             if (salesTrendChart) salesTrendChart.destroy();
             
