@@ -685,6 +685,7 @@ def sync_school_master(master_file_path, db_path=None):
     region_col = None
     manager_col = None
     studio_col = None
+    attribute_col = None  # 属性カラムを追加
 
     for col in df.columns:
         col_str = str(col)
@@ -698,12 +699,14 @@ def sync_school_master(master_file_path, db_path=None):
             manager_col = col
         elif '写真館' in col_str:
             studio_col = col
+        elif '属性' in col_str:  # 属性カラムを検出
+            attribute_col = col
 
     if id_col is None or name_col is None:
         print("  エラー: IDまたは学校名カラムが見つかりません")
         return
 
-    print(f"  カラム検出: ID={id_col}, 学校名={name_col}, 事業所={region_col}, 担当={manager_col}, 写真館={studio_col}")
+    print(f"  カラム検出: ID={id_col}, 学校名={name_col}, 事業所={region_col}, 担当={manager_col}, 写真館={studio_col}, 属性={attribute_col}")
 
     # DB接続
     from database import get_connection, init_database
@@ -736,6 +739,7 @@ def sync_school_master(master_file_path, db_path=None):
             region = str(row[region_col]).strip() if region_col and pd.notna(row[region_col]) else None
             manager = str(row[manager_col]).strip() if manager_col and pd.notna(row[manager_col]) else None
             studio = str(row[studio_col]).strip() if studio_col and pd.notna(row[studio_col]) else None
+            attribute = str(row[attribute_col]).strip() if attribute_col and pd.notna(row[attribute_col]) else None  # 属性を読み取り
 
             # 1. 外部IDで検索
             cursor.execute('SELECT school_id FROM school_external_ids WHERE external_id = ?', (external_id,))
@@ -768,7 +772,7 @@ def sync_school_master(master_file_path, db_path=None):
                     stats['already_synced'] += 1
 
                 # 属性情報も更新
-                _update_school_attrs(cursor, school_id, region, manager, studio)
+                _update_school_attrs(cursor, school_id, region, manager, studio, attribute)
             else:
                 # 2. 外部IDがない → 学校名で検索
                 cursor.execute('SELECT id FROM schools WHERE school_name = ?', (normalized_name,))
@@ -785,13 +789,13 @@ def sync_school_master(master_file_path, db_path=None):
                     stats['linked_extid'] += 1
 
                     # 属性情報も更新
-                    _update_school_attrs(cursor, school_id, region, manager, studio)
+                    _update_school_attrs(cursor, school_id, region, manager, studio, attribute)
                 else:
                     # 3. どちらも見つからない → 新規登録
                     cursor.execute('''
-                        INSERT INTO schools (school_name, region, manager, studio_name)
-                        VALUES (?, ?, ?, ?)
-                    ''', (normalized_name, region, manager, studio))
+                        INSERT INTO schools (school_name, region, manager, studio_name, attribute)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (normalized_name, region, manager, studio, attribute))
                     school_id = cursor.lastrowid
 
                     cursor.execute('''
@@ -813,7 +817,7 @@ def sync_school_master(master_file_path, db_path=None):
         conn.close()
 
 
-def _update_school_attrs(cursor, school_id, region, manager, studio):
+def _update_school_attrs(cursor, school_id, region, manager, studio, attribute=None):
     """学校の属性情報を更新（値がある場合のみ）"""
     updates = []
     params = []
@@ -828,6 +832,9 @@ def _update_school_attrs(cursor, school_id, region, manager, studio):
     if studio:
         updates.append('studio_name = ?')
         params.append(studio)
+    if attribute:  # 属性を追加
+        updates.append('attribute = ?')
+        params.append(attribute)
 
     if updates:
         params.append(school_id)

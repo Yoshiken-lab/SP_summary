@@ -321,7 +321,7 @@ def get_schools_list(db_path=None):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT DISTINCT school_id, school_name, region, studio
+        SELECT DISTINCT school_id, school_name, attribute, studio
         FROM schools_master
         WHERE school_id IN (
             SELECT DISTINCT school_id FROM member_rates
@@ -1647,7 +1647,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             renderSalesTrend(schoolData.monthly_sales, year);
         }}
         
-        // 学校別売上推移グラフ描画
+        // 学校別売上推移グラフ描画（累積表示）
         function renderSalesTrend(salesData, year) {{
             if (!salesData || Object.keys(salesData).length === 0) return;
             
@@ -1667,11 +1667,30 @@ def generate_dashboard(db_path=None, output_dir=None):
             }});
             
             const labels = sortedCurrent.map(d => `${{d.month}}月`);
-            const currentSales = sortedCurrent.map(d => d.sales);
+            
+            // 累積売上を計算
+            let cumulative = 0;
+            const currentSales = sortedCurrent.map(d => {{
+                cumulative += d.sales;
+                return cumulative;
+            }});
+            
+            // 前年度データも年度順にソートして累積計算
+            const sortedPrev = [...prevData].sort((a, b) => {{
+                const monthA = a.month >= 4 ? a.month - 3 : a.month + 9;
+                const monthB = b.month >= 4 ? b.month - 3 : b.month + 9;
+                return monthA - monthB;
+            }});
             
             const prevSalesMap = {{}};
-            prevData.forEach(d => {{ prevSalesMap[d.month] = d.sales; }});
-            const prevSales = sortedCurrent.map(d => prevSalesMap[d.month] || 0);
+            sortedPrev.forEach(d => {{ prevSalesMap[d.month] = d.sales; }});
+            
+            let prevCumulative = 0;
+            const prevSales = sortedCurrent.map(d => {{
+                const monthlySales = prevSalesMap[d.month] || 0;
+                prevCumulative += monthlySales;
+                return prevCumulative;
+            }});
             
             if (salesTrendChart) salesTrendChart.destroy();
             
@@ -1681,14 +1700,14 @@ def generate_dashboard(db_path=None, output_dir=None):
                     labels: labels,
                     datasets: [
                         {{
-                            label: `${{year}}年度`,
+                            label: `${{year}}年度（累積）`,
                             data: currentSales,
                             borderColor: 'rgb(59, 130, 246)',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
                             tension: 0.4
                         }},
                         {{
-                            label: `${{year - 1}}年度`,
+                            label: `${{year - 1}}年度（累積）`,
                             data: prevSales,
                             borderColor: 'rgb(156, 163, 175)',
                             backgroundColor: 'rgba(156, 163, 175, 0.1)',
