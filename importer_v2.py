@@ -241,6 +241,70 @@ def import_monthly_totals(xlsx, cursor, report_id):
     return stats
 
 
+def import_branch_monthly_sales(xlsx, cursor, report_id):
+    """売上シートから事業所別月次売上を取り込み"""
+    df = pd.read_excel(xlsx, sheet_name='売上', header=None)
+    
+    # 「■売上　各事業所」セクションを検出
+    start_row = None
+    for i, row in df.iterrows():
+        cell = str(row[1]) if pd.notna(row[1]) else ''
+        if '各事業所' in cell and '売上' in cell:
+            start_row = i
+            break
+    
+    if start_row is None:
+        return {'count': 0}
+    
+    # 年度を抽出(次の行)
+    fiscal_year_row = start_row + 1
+    fy_text = str(df.iloc[fiscal_year_row, 1]) if pd.notna(df.iloc[fiscal_year_row, 1]) else ''
+    match = re.search(r'(\d{4})年度', fy_text)
+    if not match:
+        return {'count': 0}
+    fiscal_year = int(match.group(1))
+    
+    # 月のマッピング(Excelシリアル値 → 月)
+    month_row_idx = start_row + 2
+    month_cols = []
+    for col_idx in range(2, len(df.columns)):
+        val = df.iloc[month_row_idx, col_idx]
+        if pd.notna(val):
+            try:
+                # Excelシリアル値をdatetimeに変換
+                date_val = pd.to_datetime(val, unit='D', origin='1899-12-30')
+                month = date_val.month
+                month_cols.append((col_idx, month))
+            except:
+                continue
+    
+    # 事業所データを読み取り
+    stats = {'count': 0}
+    for i in range(start_row + 3, len(df)):
+        branch_name_val = df.iloc[i, 1]
+        if pd.isna(branch_name_val):
+            break
+        
+        branch_name = str(branch_name_val).strip()
+        
+        # 除外するキーワード
+        if branch_name in ['予算', '予算比', '昨年差', '昨年比', '合計', '']:
+            continue
+        
+        # 各月の売上を登録
+        for col_idx, month in month_cols:
+            sales = df.iloc[i, col_idx]
+            if pd.notna(sales) and float(sales) != 0:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO branch_monthly_sales
+                    (report_id, fiscal_year, month, branch_name, sales, budget)
+                    VALUES (?, ?, ?, ?, ?, NULL)
+                ''', (report_id, fiscal_year, month, branch_name, float(sales)))
+                stats['count'] += 1
+    
+    return stats
+
+
 def import_manager_monthly_sales(xlsx, cursor, report_id):
     """売上シートから担当者別月次売上を取り込み"""
     df = pd.read_excel(xlsx, sheet_name='売上', header=None)
@@ -687,19 +751,25 @@ def import_excel_v2(file_path, db_path=None):
         all_unmatched_schools = []
         
         # 1. 月次全体売上
-        print("\n[1/5] 月次全体売上を取り込み中...")
+        print("\n[1/6] 月次全体売上を取り込み中...")
         stats = import_monthly_totals(xlsx, cursor, report_id)
         all_stats['monthly_totals'] = stats['count']
         print(f"  → {stats['count']}件を取り込みました")
         
-        # 2. 担当者別月次売上
-        print("\n[2/5] 担当者別月次売上を取り込み中...")
+        # 2. 事業所別売上
+        print("\n[2/6] 事業所別売上を取り込み中...")
+        stats = import_branch_monthly_sales(xlsx, cursor, report_id)
+        all_stats['branch_monthly_sales'] = stats['count']
+        print(f"  → {stats['count']}件を取り込みました")
+        
+        # 3. 担当者別月次売上
+        print("\n[3/6] 担当者別月次売上を取り込み中...")
         stats = import_manager_monthly_sales(xlsx, cursor, report_id)
         all_stats['manager_monthly_sales'] = stats['count']
         print(f"  → {stats['count']}件を取り込みました")
         
-        # 3. 学校別月次売上(複数年度)
-        print("\n[3/5] 学校別月次売上を取り込み中...")
+        # 4. 学校別月次売上(複数年度)
+        print("\n[4/6] 学校別月次売上を取り込み中...")
         school_sales_count = 0
         for sheet_name in xlsx.sheet_names:
             if '学校別' in sheet_name and '比較' not in sheet_name:
@@ -714,8 +784,8 @@ def import_excel_v2(file_path, db_path=None):
         all_stats['school_monthly_sales'] = school_sales_count
         print(f"  → {school_sales_count}件を取り込みました")
         
-        # 4. イベント別売上(複数年度)
-        print("\n[4/5] イベント別売上を取り込み中...")
+        # 5. イベント別売上(複数年度)
+        print("\n[5/6] イベント別売上を取り込み中...")
         event_sales_count = 0
         for sheet_name in xlsx.sheet_names:
             if 'イベント別' in sheet_name:
@@ -729,8 +799,8 @@ def import_excel_v2(file_path, db_path=None):
         all_stats['event_sales'] = event_sales_count
         print(f"  → {event_sales_count}件を取り込みました")
         
-        # 5. 会員率
-        print("\n[5/5] 会員率を取り込み中...")
+        # 6. 会員率
+        print("\n[6/6] 会員率を取り込み中...")
         stats = import_member_rates(xlsx, cursor, report_id, report_date)
         all_stats['member_rates'] = stats['count']
         all_unmatched_schools.extend(stats['unmatched_schools'])

@@ -82,22 +82,7 @@ def init_database(db_path=None):
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_monthly_totals_fy ON monthly_totals(fiscal_year, month)')
     
-    # 4. branch_monthly_sales (事業所別月次売上)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS branch_monthly_sales (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_id INTEGER NOT NULL,
-            fiscal_year INTEGER NOT NULL,
-            month INTEGER NOT NULL,
-            branch TEXT NOT NULL,
-            sales REAL NOT NULL,
-            FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
-            UNIQUE(report_id, fiscal_year, month, branch)
-        )
-    ''')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_branch_sales_fy ON branch_monthly_sales(fiscal_year, month)')
-    
-    # 5. manager_monthly_sales (担当者別月次売上)
+    # 4. manager_monthly_sales (担当者別月次売上)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS manager_monthly_sales (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +97,23 @@ def init_database(db_path=None):
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_manager_sales_fy ON manager_monthly_sales(fiscal_year, month)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_manager_sales_manager ON manager_monthly_sales(manager)')
+    
+    # 5. branch_monthly_sales (事業所別月次売上)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS branch_monthly_sales (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_id INTEGER NOT NULL,
+            fiscal_year INTEGER NOT NULL,
+            month INTEGER NOT NULL,
+            branch_name TEXT NOT NULL,
+            sales REAL NOT NULL,
+            budget REAL,
+            FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
+            UNIQUE(report_id, fiscal_year, month, branch_name)
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_branch_sales_fy ON branch_monthly_sales(fiscal_year, month)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_branch_sales_branch ON branch_monthly_sales(branch_name)')
     
     # 6. school_monthly_sales (学校別月次売上)
     cursor.execute('''
