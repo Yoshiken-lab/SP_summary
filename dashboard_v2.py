@@ -645,7 +645,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         <!-- 月別売上推移セクション -->
         <div class="chart-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 style="margin: 0; border: none; padding: 0;">📈 月別売上推移</h3>
+                <h3 style="margin: 0; border: none; padding: 0;">月別売上推移</h3>
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <label style="font-size: 14px; color: #666; font-weight: 600;">年度:</label>
                     <select id="monthlySalesYearSelect" onchange="changeMonthlySalesYear()" style="padding: 8px 14px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 14px; font-weight: 600; color: #1a1a2e; cursor: pointer; background: white;">
@@ -691,10 +691,10 @@ def generate_dashboard(db_path=None, output_dir=None):
         
         <!-- 学校別分析セクション -->
         <div class="chart-card">
-            <h3>📚 学校別分析</h3>
+            <h3>学校別分析</h3>
             <div style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
-                <button id="tabMemberRate" onclick="switchSchoolAnalysisTab('memberRate')" class="school-analysis-tab active" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #3b82f6; cursor: pointer; border-bottom: 3px solid #3b82f6; margin-bottom: -2px;">👥 会員率推移</button>
-                <button id="tabSalesTrend" onclick="switchSchoolAnalysisTab('salesTrend')" class="school-analysis-tab" style="padding: 10px 20px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">📈 学校別売上推移</button>
+                <button id="tabMemberRate" class="school-analysis-tab active" onclick="switchSchoolAnalysisTab('memberRate')" style="padding: 12px 24px; background: none; border: none; border-bottom: 3px solid #3b82f6; color: #3b82f6; font-weight: 600; cursor: pointer; font-size: 14px;">会員率推移</button>
+                <button id="tabSalesTrend" class="school-analysis-tab" onclick="switchSchoolAnalysisTab('salesTrend')" style="padding: 12px 24px; background: none; border: none; border-bottom: 3px solid transparent; color: #666; font-weight: 600; cursor: pointer; font-size: 14px;">学校別売上推移</button>
             </div>
             
             <!-- 会員率推移パネル -->
@@ -1126,7 +1126,8 @@ def generate_dashboard(db_path=None, output_dir=None):
                             borderColor: 'rgb(239, 68, 68)',
                             borderDash: [10, 5],
                             borderWidth: 2,
-                            pointRadius: 0
+                            pointRadius: 0,
+                            tension: 0.4
                         }}
                     ]
                 }},
