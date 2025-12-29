@@ -305,6 +305,94 @@ def get_rapid_growth_schools(db_path=None, target_fy=None):
     return results
 
 
+def get_new_schools(db_path=None, target_fy=None, target_month=None):
+    """
+    新規開始校を取得（指定年度に売上があり、前年度に売上がない学校）
+    
+    Args:
+        db_path: データベースパス
+        target_fy: 対象年度（Noneの場合は現在年度）
+        target_month: 対象月（Noneの場合は全月）
+    
+    Returns:
+        list: [{school_id, school_name, attribute, studio, current_sales, prev_sales, growth_rate}, ...]
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    current_fy = target_fy if target_fy else get_current_fiscal_year()
+    prev_fy = current_fy - 1
+    
+    report_id = get_latest_report_id(conn)
+    if not report_id:
+        conn.close()
+        return []
+
+    # 月指定がある場合の条件
+    month_condition = "AND month = ?" if target_month else ""
+    
+    # パラメータ構築
+    params = [current_fy, report_id]
+    if target_month:
+        params.append(target_month)
+    
+    # 前年度のパラメータ
+    params.extend([prev_fy, report_id])
+
+    query = f'''
+        WITH current_sales AS (
+            SELECT
+                school_id,
+                COALESCE(SUM(sales), 0) as total_sales
+            FROM event_sales
+            WHERE fiscal_year = ? AND report_id = ? {month_condition}
+            GROUP BY school_id
+            HAVING total_sales > 0
+        ),
+        prev_sales AS (
+            SELECT
+                school_id,
+                COALESCE(SUM(sales), 0) as total_sales
+            FROM event_sales
+            WHERE fiscal_year = ? AND report_id = ?
+            GROUP BY school_id
+        )
+        SELECT
+            s.school_id,
+            s.school_name,
+            s.attribute,
+            s.studio,
+            s.manager,
+            s.region,
+            curr.total_sales,
+            COALESCE(prev.total_sales, 0) as prev_sales
+        FROM current_sales curr
+        JOIN schools_master s ON s.school_id = curr.school_id
+        LEFT JOIN prev_sales prev ON prev.school_id = curr.school_id
+        WHERE prev.total_sales IS NULL OR prev.total_sales = 0
+        ORDER BY curr.total_sales DESC
+    '''
+    
+    cursor.execute(query, params)
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': row[2] or '',
+            'studio': row[3] or '',
+            'manager': row[4] or '',
+            'region': row[5] or '',
+            'current_sales': row[6],
+            'prev_sales': row[7],
+            'growth_rate': 1.0  # 新規なので100%（便宜上）
+        })
+    
+    conn.close()
+    return results
+
+
 if __name__ == '__main__':
     # テスト実行: データベース初期化
     init_database()

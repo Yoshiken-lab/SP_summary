@@ -9,7 +9,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from database_v2 import get_connection, get_rapid_growth_schools
+from database_v2 import get_connection, get_rapid_growth_schools, get_new_schools
 
 
 def get_available_fiscal_years(db_path=None):
@@ -518,6 +518,42 @@ def generate_dashboard(db_path=None, output_dir=None):
     # デフォルトは最新年度
     default_year =available_years[0] if available_years else datetime.now().year
     stats = all_years_data[default_year]['stats']
+    
+    # 売上好調校データの取得（今年度のみ）
+    print("   売上好調校データを取得中...")
+    rapid_growth_schools = get_rapid_growth_schools(db_path, target_fy=default_year)
+    rapid_growth_data = [
+        {
+            'school_name': r['school_name'],
+            'attribute': r['attribute'],
+            'studio': r['studio'],
+            'manager': r['manager'],
+            'region': r['region'],
+            'current_sales': r['current_sales'],
+            'prev_sales': r['prev_sales'],
+            'growth_rate': r['growth_rate']
+        }
+        for r in rapid_growth_schools
+    ]
+    
+    # 新規開始校データの取得（全年度）
+    print("   新規開始校データを取得中...")
+    new_schools_all = {}
+    for y in available_years:
+        schools = get_new_schools(db_path, target_fy=y)
+        new_schools_all[y] = [
+            {
+                'school_name': r['school_name'],
+                'attribute': r['attribute'],
+                'studio': r['studio'],
+                'manager': r['manager'],
+                'region': r['region'],
+                'current_sales': r['current_sales'],
+                'prev_sales': r['prev_sales'],
+                'growth_rate': r['growth_rate']
+            }
+            for r in schools
+        ]
     
     # HTMLファイル名
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -1965,6 +2001,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <div class="alert-category-title" style="font-weight: bold; color: #166534; margin-bottom: 15px; font-size: 16px;">📊 売上・実績</div>
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button onclick="showAlert('rapid_growth')" id="tab-rapid_growth" class="alert-tab active" style="padding: 8px 16px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">売上好調校</button>
+                    <button onclick="showAlert('new_schools')" id="tab-new_schools" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">新規開始校</button>
                 </div>
             </div>
         </div>
@@ -1977,14 +2014,31 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div id="rapid_growth-table-container"></div>
             <div id="rapid_growth-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
         </div>
+
+        <!-- 新規開始校タブコンテンツ -->
+        <div id="alert-new_schools" class="alert-content" style="display: none;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <label style="font-weight: bold; color: #374151;">対象年度:</label>
+                <select id="newSchoolsYearFilter" onchange="renderAlertTable('new_schools', 1)" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white;">
+                    <!-- JSで生成 -->
+                </select>
+            </div>
+            <div class="alert-header" style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                <button class="csv-download-btn" onclick="downloadAlertCSV('new_schools')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+            </div>
+            <div id="new_schools-table-container"></div>
+            <div id="new_schools-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
+        </div>
     </div>
     
     <script>
         // 条件別集計データ
-        const rapidGrowthData = {json.dumps(rapid_growth_data)};
+        const rapidGrowthData = {json.dumps(rapid_growth_data, ensure_ascii=False)};
+        const newSchoolsAllData = {json.dumps(new_schools_all, ensure_ascii=False)};
         
         const alertsData = {{
-            'rapid_growth': rapidGrowthData
+            'rapid_growth': rapidGrowthData,
+            'new_schools': [] // 初期値は空、ロード時に設定
         }};
         
         let currentAlertPage = 1;
@@ -2022,7 +2076,19 @@ def generate_dashboard(db_path=None, output_dir=None):
         // テーブルレンダリング
         function renderAlertTable(alertType, page) {{
             currentAlertPage = page;
-            const data = alertsData[alertType] || [];
+            
+            // データ取得ロジック分岐
+            let data = [];
+            if (alertType === 'new_schools') {{
+                const year = document.getElementById('newSchoolsYearFilter').value;
+                if (year && newSchoolsAllData[year]) {{
+                    data = newSchoolsAllData[year];
+                }}
+                alertsData['new_schools'] = data; // CSV出力用に保存
+            }} else {{
+                data = alertsData[alertType] || [];
+            }}
+            
             const container = document.getElementById(`${{alertType}}-table-container`);
             if (!container) return;
             
@@ -2115,6 +2181,20 @@ def generate_dashboard(db_path=None, output_dir=None):
         }}
         
         // 初期表示
+        
+        // 新規開始校用年度フィルター初期化(Available Yearsを使用)
+        const newSchoolsYearSelect = document.getElementById('newSchoolsYearFilter');
+        Object.keys(newSchoolsAllData).sort((a,b) => b-a).forEach(year => {{
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = year + '年度';
+            newSchoolsYearSelect.appendChild(option);
+        }});
+        // デフォルトを選択
+        if (newSchoolsYearSelect.options.length > 0) {{
+            newSchoolsYearSelect.selectedIndex = 0;
+        }}
+        
         renderAlertTable('rapid_growth', 1);
     </script>
 </body>
