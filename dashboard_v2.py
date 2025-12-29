@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from database_v2 import (
-    get_connection, get_rapid_growth_schools, get_new_schools, get_no_events_schools
+    get_connection, get_rapid_growth_schools, get_new_schools, get_no_events_schools, get_declining_schools
 )    
 
 
@@ -576,6 +576,24 @@ def generate_dashboard(db_path=None, output_dir=None):
             for r in schools
         ]
     
+    # 会員率・売上低下校データの取得（今年度のみ・ベース条件での取得）
+    print("   会員率・売上低下校データを取得中...")
+    decline_data_raw = get_declining_schools(db_path, target_fy=default_year)
+    decline_data = [
+        {
+            'school_name': r['school_name'],
+            'attribute': r['attribute'],
+            'studio': r['studio'],
+            'manager': r['manager'],
+            'region': r['region'],
+            'current_sales': r['current_sales'],
+            'prev_sales': r['prev_sales'],
+            'growth_rate': r['growth_rate'],
+            'member_rate': r['member_rate']
+        }
+        for r in decline_data_raw
+    ]
+
     # HTMLファイル名
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     output_file = output_dir / f'dashboard_{timestamp}.html'
@@ -2023,7 +2041,15 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button onclick="showAlert('rapid_growth')" id="tab-rapid_growth" class="alert-tab active" style="padding: 8px 16px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">売上好調校</button>
                     <button onclick="showAlert('new_schools')" id="tab-new_schools" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">新規開始校</button>
+                </div>
+            </div>
+            
+            <!-- 要注意・改善カテゴリ -->
+            <div class="alert-category" style="flex: 1; padding: 20px; background: #fff7ed; border-radius: 8px; border: 2px solid #fed7aa;">
+                <div class="alert-category-title" style="font-weight: bold; color: #9a3412; margin-bottom: 15px; font-size: 16px;">⚠️ 要注意・改善</div>
+                <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button onclick="showAlert('no_events')" id="tab-no_events" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">今年度未実施校</button>
+                    <button onclick="showAlert('decline')" id="tab-decline" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">会員率・売上低下</button>
                 </div>
             </div>
         </div>
@@ -2066,6 +2092,41 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div id="no_events-table-container"></div>
             <div id="no_events-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
         </div>
+
+        <!-- 会員率・売上低下タブコンテンツ -->
+        <div id="alert-decline" class="alert-content" style="display: none;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label style="font-weight: bold; color: #374151;">会員率:</label>
+                    <select id="declineMemberRateFilter" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
+                        <option value="50">50%未満</option>
+                        <option value="40">40%未満</option>
+                        <option value="30">30%未満</option>
+                        <option value="20">20%未満</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label style="font-weight: bold; color: #374151;">売上減少率:</label>
+                    <select id="declineSalesFilter" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
+                        <option value="10">10%以上減少</option>
+                        <option value="20">20%以上減少</option>
+                        <option value="30">30%以上減少</option>
+                        <option value="40">40%以上減少</option>
+                        <option value="50">50%以上減少</option>
+                        <option value="60">60%以上減少</option>
+                        <option value="70">70%以上減少</option>
+                        <option value="80">80%以上減少</option>
+                        <option value="90">90%以上減少</option>
+                        <option value="100">100%減少（0円）</option>
+                    </select>
+                </div>
+            </div>
+            <div class="alert-header" style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                <button class="csv-download-btn" onclick="downloadAlertCSV('decline')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+            </div>
+            <div id="decline-table-container"></div>
+            <div id="decline-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
+        </div>
     </div>
     
     <script>
@@ -2073,11 +2134,13 @@ def generate_dashboard(db_path=None, output_dir=None):
         const rapidGrowthData = {json.dumps(rapid_growth_data, ensure_ascii=False)};
         const newSchoolsAllData = {json.dumps(new_schools_all, ensure_ascii=False)};
         const noEventsAllData = {json.dumps(no_events_all, ensure_ascii=False)};
+        const declineBaseData = {json.dumps(decline_data, ensure_ascii=False)};
         
         const alertsData = {{
             'rapid_growth': rapidGrowthData,
             'new_schools': [], // 初期値は空、ロード時に設定
-            'no_events': []
+            'no_events': [],
+            'decline': declineBaseData
         }};
         
         let currentAlertPage = 1;
@@ -2129,6 +2192,16 @@ def generate_dashboard(db_path=None, output_dir=None):
                     data = noEventsAllData[year];
                 }}
                 alertsData['no_events'] = data;
+            }} else if (alertType === 'decline') {{
+                const memberRateThreshold = parseFloat(document.getElementById('declineMemberRateFilter').value) / 100;
+                const salesDeclineThreshold = parseFloat(document.getElementById('declineSalesFilter').value) / 100;
+                
+                if (declineBaseData) {{
+                    data = declineBaseData.filter(row => {{
+                        return row.member_rate < memberRateThreshold && row.growth_rate <= -salesDeclineThreshold;
+                    }});
+                }}
+                alertsData['decline'] = data;
             }} else {{
                 data = alertsData[alertType] || [];
             }}
@@ -2157,6 +2230,11 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
             }} else if (alertType === 'no_events') {{
                 html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
+            }} else if (alertType === 'decline') {{
+                html += '<th style="padding: 12px; text-align: right;">会員率</th>';
+                html += '<th style="padding: 12px; text-align: right;">売上変化率</th>';
+                html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
+                html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
             }} else {{
                 html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
                 html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
@@ -2172,6 +2250,12 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += `<td style="padding: 12px;">${{row.studio || '-'}}</td>`;
                 
                 if (alertType === 'no_events') {{
+                    html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                }} else if (alertType === 'decline') {{
+                    const rateColor = row.member_rate < 0.2 ? '#ef4444' : '#f97316';
+                    html += `<td style="padding: 12px; text-align: right; color: ${{rateColor}}; font-weight: bold;">${{(row.member_rate * 100).toFixed(1)}}%</td>`;
+                    html += `<td style="padding: 12px; text-align: right; color: #ef4444; font-weight: bold;">${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
+                    html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
                 }} else {{
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
@@ -2218,7 +2302,11 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return;
             }}
             
-            let csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,成長率\\n';
+            // CSVヘッダーとデータ生成
+            let csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,成長率';
+            if (alertType === 'decline') csv += ',会員率';
+            csv += '\\n';
+            
             data.forEach(row => {{
                 csv += `\"${{row.school_name}}\",`;
                 csv += `\"${{row.attribute || ''}}\",`;
@@ -2236,6 +2324,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             link.href = URL.createObjectURL(blob);
             if (alertType === 'new_schools') link.download = '新規開始校.csv';
             else if (alertType === 'no_events') link.download = '今年度未実施校.csv';
+            else if (alertType === 'decline') link.download = '会員率・売上低下校.csv';
             else link.download = '売上好調校.csv';
             link.click();
         }}

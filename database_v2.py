@@ -477,6 +477,104 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
     return results
 
 
+def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.5, sales_decline_threshold=0.1):
+    """
+    会員率・売上低下校を取得
+    
+    Args:
+        db_path: データベースパス
+        target_fy: 対象年度
+        member_rate_threshold: 会員率の閾値（これより低い学校を取得）
+        sales_decline_threshold: 売上減少率の閾値（これより減少幅が大きい学校を取得。正の値で指定）
+                                 例: 0.1 なら -10% 以下（減少率10%以上）
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    current_fy = target_fy if target_fy else get_current_fiscal_year()
+    prev_fy = current_fy - 1
+    
+    report_id = get_latest_report_id(conn)
+    if not report_id:
+        conn.close()
+        return []
+
+    # 最新の会員率スナップショットを取得(grade='全学年')
+    # event_salesから売上を集計
+    
+    query = f'''
+        WITH current_sales AS (
+            SELECT
+                school_id,
+                COALESCE(SUM(sales), 0) as total_sales
+            FROM event_sales
+            WHERE fiscal_year = ? AND report_id = ?
+            GROUP BY school_id
+        ),
+        prev_sales AS (
+            SELECT
+                school_id,
+                COALESCE(SUM(sales), 0) as total_sales
+            FROM event_sales
+            WHERE fiscal_year = ? AND report_id = ?
+            GROUP BY school_id
+        ),
+        latest_rates AS (
+            SELECT 
+                school_id,
+                member_rate
+            FROM member_rates
+            WHERE report_id = ? AND grade = '全学年'
+        )
+        SELECT
+            s.school_id,
+            s.school_name,
+            s.attribute,
+            s.studio,
+            s.manager,
+            s.region,
+            COALESCE(curr.total_sales, 0) as current_sales,
+            COALESCE(prev.total_sales, 0) as prev_sales,
+            (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales as growth_rate,
+            COALESCE(r.member_rate, 0) as member_rate
+        FROM schools_master s
+        JOIN current_sales curr ON curr.school_id = s.school_id
+        JOIN prev_sales prev ON prev.school_id = s.school_id
+        LEFT JOIN latest_rates r ON r.school_id = s.school_id
+        WHERE prev.total_sales > 0
+          -- 売上減少率判定: (curr - prev) / prev <= -threshold
+          AND (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales <= ?
+          -- 会員率判定
+          AND COALESCE(r.member_rate, 0) < ?
+        ORDER BY (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales ASC
+    '''
+    
+    # 閾値は正の値で渡されるので、減少率としてはマイナスにする
+    decline_limit = -sales_decline_threshold
+    
+    params = [current_fy, report_id, prev_fy, report_id, report_id, decline_limit, member_rate_threshold]
+    
+    cursor.execute(query, params)
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': row[2] or '',
+            'studio': row[3] or '',
+            'manager': row[4] or '',
+            'region': row[5] or '',
+            'current_sales': row[6],
+            'prev_sales': row[7],
+            'growth_rate': row[8],
+            'member_rate': row[9]
+        })
+    
+    conn.close()
+    return results
+
+
 if __name__ == '__main__':
     # テスト実行: データベース初期化
     init_database()
