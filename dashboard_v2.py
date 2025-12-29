@@ -1759,59 +1759,67 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return;
             }}
             
-            // データを年度順にソート（4月始まり）
-            // 売上がある月のみに絞り込み（0円の月は除外）
-            // かつ、選択した年度に属する月のみを表示
-            const filteredCurrent = currentData.filter(d => {{
-                if (d.sales <= 0) return false;  // 0円の月を除外
-                
-                // 月が選択した年度に属するかチェック
-                // 4-12月は同年度、1-3月は次年度
-                const fiscalYearOfMonth = d.month >= 4 ? year : year + 1;
-                const currentDate = new Date();
-                const currentYear = currentDate.getFullYear();
-                const currentMonth = currentDate.getMonth() + 1;  // 0-11を使用
-                
-                // 未来の月を除外
-                if (fiscalYearOfMonth > currentYear) return false;
-                if (fiscalYearOfMonth === currentYear && d.month > currentMonth) return false;
-                
-                return true;
-            }});
+            // 現在の年月を取得
+            const currentDate = new Date();
+            const currentYear = currentDate.getFullYear();
+            const currentMonth = currentDate.getMonth() + 1;  // 1-12
             
-            const sortedCurrent = [...filteredCurrent].sort((a, b) => {{
-                const monthA = a.month >= 4 ? a.month - 3 : a.month + 9;
-                const monthB = b.month >= 4 ? b.month - 3 : b.month + 9;
-                return monthA - monthB;
-            }});
+            // 年度の4月から現在月までの全ての月を生成
+            // 年度: year年4月 ～ (year+1)年3月
+            const allMonths = [];
             
-            if (sortedCurrent.length === 0) {{
-                alert(`${{year}}年度の売上データがありません（全て0円）`);
+            // 4月～12月（year年に属する月）
+            for (let m = 4; m <= 12; m++) {{
+                if (year > currentYear) break;  // 未来の年度
+                if (year === currentYear && m > currentMonth) break;  // 未来の月
+                allMonths.push(m);
+            }}
+            
+            // 1月～3月（year+1年に属する月）
+            for (let m = 1; m <= 3; m++) {{
+                const nextYear = year + 1;
+                if (nextYear > currentYear) break;  // 未来の年
+                if (nextYear === currentYear && m > currentMonth) break;  // 未来の月
+                allMonths.push(m);
+            }}
+            
+            if (allMonths.length === 0) {{
+                alert(`${{year}}年度のデータ期間がありません`);
                 return;
             }}
             
-            const labels = sortedCurrent.map(d => `${{d.month}}月`);
-            
-            // 累積売上を計算
-            let cumulative = 0;
-            const currentSales = sortedCurrent.map(d => {{
-                cumulative += d.sales;
-                return cumulative;
-            }});
-            
-            // 前年度データも年度順にソートして累積計算
-            const sortedPrev = [...prevData].sort((a, b) => {{
-                const monthA = a.month >= 4 ? a.month - 3 : a.month + 9;
-                const monthB = b.month >= 4 ? b.month - 3 : b.month + 9;
-                return monthA - monthB;
+            // 売上データをマップに変換
+            const currentSalesMap = {{}};
+            currentData.forEach(d => {{
+                currentSalesMap[d.month] = d.sales;
             }});
             
             const prevSalesMap = {{}};
-            sortedPrev.forEach(d => {{ prevSalesMap[d.month] = d.sales; }});
+            prevData.forEach(d => {{
+                prevSalesMap[d.month] = d.sales;
+            }});
             
+            // 年度順にソート
+            const sortedMonths = allMonths.sort((a, b) => {{
+                const fiscalMonthA = a >= 4 ? a - 3 : a + 9;
+                const fiscalMonthB = b >= 4 ? b - 3 : b + 9;
+                return fiscalMonthA - fiscalMonthB;
+            }});
+            
+            const labels = sortedMonths.map(m => `${{m}}月`);
+            
+            // 累積売上を計算（データがない月は前月の累積値を維持）
+            let cumulative = 0;
+            const currentSales = sortedMonths.map(m => {{
+                const monthlySales = currentSalesMap[m] || 0;
+                cumulative += monthlySales;
+                return cumulative;
+            }});
+            
+            // 前年度データも同様に累積計算
             let prevCumulative = 0;
-            const prevSales = sortedCurrent.map(d => {{
-                const monthlySales = prevSalesMap[d.month] || 0;
+            const prevSales = sortedMonths.map(m => {{
+                const monthlySales = prevSalesMap[m] || 0;
                 prevCumulative += monthlySales;
                 return prevCumulative;
             }});
