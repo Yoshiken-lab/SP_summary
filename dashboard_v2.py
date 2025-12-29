@@ -1670,9 +1670,12 @@ def generate_dashboard(db_path=None, output_dir=None):
                 }});
                 
                 const colors = [
-                    {{ border: 'rgb(59, 130, 246)', bg: 'rgba(59, 130, 246, 0.1)' }},
-                    {{ border: 'rgb(16, 185, 129)', bg: 'rgba(16, 185, 129, 0.1)' }},
-                    {{ border: 'rgb(245, 158, 11)', bg: 'rgba(245, 158, 11, 0.1)' }}
+                    {{ border: 'rgb(59, 130, 246)', bg: 'rgba(59, 130, 246, 0.1)' }},    // 青
+                    {{ border: 'rgb(16, 185, 129)', bg: 'rgba(16, 185, 129, 0.1)' }},    // 緑
+                    {{ border: 'rgb(245, 158, 11)', bg: 'rgba(245, 158, 11, 0.1)' }},    // オレンジ
+                    {{ border: 'rgb(239, 68, 68)', bg: 'rgba(239, 68, 68, 0.1)' }},      // 赤
+                    {{ border: 'rgb(168, 85, 247)', bg: 'rgba(168, 85, 247, 0.1)' }},    // 紫
+                    {{ border: 'rgb(236, 72, 153)', bg: 'rgba(236, 72, 153, 0.1)' }}     // ピンク
                 ];
                 
                 datasets = Object.keys(gradeData).map((grade, index) => {{
