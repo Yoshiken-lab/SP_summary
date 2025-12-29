@@ -2090,10 +2090,10 @@ def generate_dashboard(db_path=None, output_dir=None):
             const container = document.getElementById(`${{alertType}}-table-container`);
             if (!container) return;
             
-            if (data.length === 0) {
+            if (data.length === 0) {{
                 container.innerHTML = '<p style="text-align: center; padding: 40px; color: #888;">データがありません</p>';
                 return;
-            }
+            }}
             
             // ページネーション
             const startIdx = (page - 1) * alertPageSize;
@@ -2107,16 +2107,16 @@ def generate_dashboard(db_path=None, output_dir=None):
             html += '<th style="padding: 12px; text-align: left;">属性</th>';
             html += '<th style="padding: 12px; text-align: left;">写真館</th>';
             
-            if (alertType === 'new_schools') {
+            if (alertType === 'new_schools') {{
                 html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
-            } else {
+            }} else {{
                 html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
                 html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
                 html += '<th style="padding: 12px; text-align: right;">成長率</th>';
-            }
+            }}
             html += '</tr></thead><tbody>';
             
-            pageData.forEach((row, idx) => {
+            pageData.forEach((row, idx) => {{
                 const bgColor = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
                 html += `<tr style="background: ${{bgColor}}; border-bottom: 1px solid #e5e7eb;">`;
                 html += `<td style="padding: 12px;">${{row.school_name}}</td>`;
@@ -2124,18 +2124,18 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += `<td style="padding: 12px;">${{row.studio || '-'}}</td>`;
                 html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
                 
-                if (alertType !== 'new_schools') {
+                if (alertType !== 'new_schools') {{
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold;">+${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
-                }
+                }}
                 html += '</tr>';
-            });
+            }});
             
             html += '</tbody></table>';
             container.innerHTML = html;
             
             // ページネーション
-            renderPagination(alertType, data.length, page);
+            renderPagination(alertType, totalCount, currentPage);
         }}
         
         // ページネーション

@@ -229,7 +229,7 @@ def get_rapid_growth_schools(db_path=None, target_fy=None):
     """
     売上好調校を取得
     
-    前年比で50%以上の売上成長を見せている学校
+    前年比で30%以上の売上成長を見せている学校
     
     Args:
         db_path: データベースパス
@@ -281,7 +281,7 @@ def get_rapid_growth_schools(db_path=None, target_fy=None):
         JOIN current_sales curr ON curr.school_id = s.school_id
         JOIN prev_sales prev ON prev.school_id = s.school_id
         WHERE prev.total_sales > 10000  -- 最低売上を設定
-          AND (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales >= 0.5
+          AND (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales >= 0.3
         ORDER BY growth_rate DESC
     '''
     
