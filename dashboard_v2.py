@@ -321,7 +321,7 @@ def get_schools_list(db_path=None):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT DISTINCT school_id, school_name, attribute, studio
+        SELECT DISTINCT school_id, school_name, attribute, studio, region, manager
         FROM schools_master
         WHERE school_id IN (
             SELECT DISTINCT school_id FROM member_rates
@@ -334,7 +334,7 @@ def get_schools_list(db_path=None):
     results = cursor.fetchall()
     conn.close()
     
-    return [{'id': row[0], 'name': row[1], 'region': row[2], 'studio': row[3]} for row in results]
+    return [{'id': row[0], 'name': row[1], 'region': row[2], 'studio': row[3], 'branch': row[4], 'manager': row[5]} for row in results]
 
 
 def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
@@ -1380,23 +1380,9 @@ def generate_dashboard(db_path=None, output_dir=None):
                 branchSelect.appendChild(option);
             }});
             
-            // 担当者リスト（manager_monthly_salesから取得）
-            const managers = [];
-            Object.values(allYearsData).forEach(yearData => {{
-                if (yearData.manager_monthly) {{
-                    Object.keys(yearData.manager_monthly).forEach(manager => {{
-                        if (!managers.includes(manager)) managers.push(manager);
-                    }});
-                }}
-            }});
-            managers.sort();
-            const managerSelect = document.getElementById('salesManagerFilter');
-            managers.forEach(manager => {{
-                const option = document.createElement('option');
-                option.value = manager;
-                option.textContent = manager;
-                managerSelect.appendChild(option);
-            }});
+            // 担当者・写真館リストを初期化（カスケーディングフィルター対応）
+            updateSalesManagerList();
+            updateSalesStudioList();
             
             // 学校リスト初期化
             updateMemberSchoolList();
@@ -1476,32 +1462,20 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             let filteredManagers = [];
             if (branch) {{
-                // allYearsDataから選択した事業所の担当者を抽出
-                Object.values(allYearsData).forEach(yearData => {{
-                    if (yearData.manager_monthly) {{
-                        Object.keys(yearData.manager_monthly).forEach(manager => {{
-                            // 担当者データから事業所情報を取得する必要がある
-                            // 現状のデータ構造では事業所→担当者の紐付けがないため、
-                            // 一旦全担当者を表示
-                            if (!filteredManagers.includes(manager)) {{
-                                filteredManagers.push(manager);
-                            }}
-                        }});
-                    }}
-                }});
-                filteredManagers.sort();
+                // 選択した事業所の担当者のみ
+                filteredManagers = [...new Set(
+                    schoolsList
+                        .filter(s => s.branch === branch)
+                        .map(s => s.manager)
+                        .filter(m => m)
+                )].sort();
             }} else {{
                 // 全ての担当者
-                Object.values(allYearsData).forEach(yearData => {{
-                    if (yearData.manager_monthly) {{
-                        Object.keys(yearData.manager_monthly).forEach(manager => {{
-                            if (!filteredManagers.includes(manager)) {{
-                                filteredManagers.push(manager);
-                            }}
-                        }});
-                    }}
-                }});
-                filteredManagers.sort();
+                filteredManagers = [...new Set(
+                    schoolsList
+                        .map(s => s.manager)
+                        .filter(m => m)
+                )].sort();
             }}
             
             const managerSelect = document.getElementById('salesManagerFilter');
@@ -1524,23 +1498,37 @@ def generate_dashboard(db_path=None, output_dir=None):
             const branch = document.getElementById('salesBranchFilter').value;
             const manager = document.getElementById('salesManagerFilter').value;
             
+            let filteredStudios = [];
             let filtered = schoolsList;
-            // 事業所や担当者による写真館の絞り込みは、
-            // schools_masterに事業所・担当者情報がないため実装困難
-            // 代わりに写真館のユニークリストを表示
-            const studios = getUniqueValues(schoolsList, 'studio');
+            
+            // 事業所で絞り込み
+            if (branch) {{
+                filtered = filtered.filter(s => s.branch === branch);
+            }}
+            
+            // 担当者で絞り込み
+            if (manager) {{
+                filtered = filtered.filter(s => s.manager === manager);
+            }}
+            
+            // 写真館の一覧を取得
+            filteredStudios = [...new Set(
+                filtered
+                    .map(s => s.studio)
+                    .filter(st => st)
+            )].sort();
             
             const studioSelect = document.getElementById('salesStudioFilter');
             const currentValue = studioSelect.value;
             studioSelect.innerHTML = '\u003coption value=""\u003e-- 全て --\u003c/option\u003e';
-            studios.forEach(studio => {{
+            filteredStudios.forEach(studio => {{
                 const option = document.createElement('option');
                 option.value = studio;
                 option.textContent = studio;
                 studioSelect.appendChild(option);
             }});
             
-            if (studios.includes(currentValue)) {{
+            if (filteredStudios.includes(currentValue)) {{
                 studioSelect.value = currentValue;
             }}
         }}
