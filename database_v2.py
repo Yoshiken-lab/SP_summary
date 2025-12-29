@@ -393,6 +393,90 @@ def get_new_schools(db_path=None, target_fy=None, target_month=None):
     return results
 
 
+def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
+    """
+    今年度未実施校を取得（前年度売上があり、今年度売上がない学校）
+    
+    Args:
+        db_path: データベースパス
+        target_fy: 対象年度（Noneの場合は現在年度）
+        target_month: 対象月（Noneの場合は全月）
+    
+    Returns:
+        list: [{school_id, school_name, attribute, studio, current_sales, prev_sales, growth_rate}, ...]
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    current_fy = target_fy if target_fy else get_current_fiscal_year()
+    prev_fy = current_fy - 1
+    
+    report_id = get_latest_report_id(conn)
+    if not report_id:
+        conn.close()
+        return []
+
+    # 月指定がある場合はフィルタリング条件を追加
+    month_condition = "AND month <= ?" if target_month else ""
+    params = [target_month] if target_month else []
+
+    query = f'''
+        WITH current_sales AS (
+            SELECT
+                school_id,
+                COALESCE(SUM(sales), 0) as total_sales
+            FROM event_sales
+            WHERE fiscal_year = ? AND report_id = ? {month_condition}
+            GROUP BY school_id
+        ),
+        prev_sales AS (
+            SELECT
+                school_id,
+                COALESCE(SUM(sales), 0) as total_sales
+            FROM event_sales
+            WHERE fiscal_year = ? AND report_id = ? {month_condition}
+            GROUP BY school_id
+        )
+        SELECT
+            s.school_id,
+            s.school_name,
+            s.attribute,
+            s.studio,
+            s.manager,
+            s.region,
+            COALESCE(curr.total_sales, 0) as current_sales,
+            COALESCE(prev.total_sales, 0) as prev_sales,
+            -1.0 as growth_rate  -- 未実施なので -100%
+        FROM schools_master s
+        LEFT JOIN current_sales curr ON curr.school_id = s.school_id
+        JOIN prev_sales prev ON prev.school_id = s.school_id
+        WHERE prev.total_sales > 0
+          AND COALESCE(curr.total_sales, 0) == 0
+        ORDER BY prev.total_sales DESC
+    '''
+    
+    query_params = [current_fy, report_id] + params + [prev_fy, report_id] + params
+    
+    cursor.execute(query, query_params)
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': row[2] or '',
+            'studio': row[3] or '',
+            'manager': row[4] or '',
+            'region': row[5] or '',
+            'current_sales': row[6],
+            'prev_sales': row[7],
+            'growth_rate': row[8]
+        })
+    
+    conn.close()
+    return results
+
+
 if __name__ == '__main__':
     # テスト実行: データベース初期化
     init_database()

@@ -9,7 +9,9 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from database_v2 import get_connection, get_rapid_growth_schools, get_new_schools
+from database_v2 import (
+    get_connection, get_rapid_growth_schools, get_new_schools, get_no_events_schools
+)    
 
 
 def get_available_fiscal_years(db_path=None):
@@ -542,6 +544,25 @@ def generate_dashboard(db_path=None, output_dir=None):
     for y in available_years:
         schools = get_new_schools(db_path, target_fy=y)
         new_schools_all[y] = [
+            {
+                'school_name': r['school_name'],
+                'attribute': r['attribute'],
+                'studio': r['studio'],
+                'manager': r['manager'],
+                'region': r['region'],
+                'current_sales': r['current_sales'],
+                'prev_sales': r['prev_sales'],
+                'growth_rate': r['growth_rate']
+            }
+            for r in schools
+        ]
+    
+    # 今年度未実施校データの取得（全年度）
+    print("   今年度未実施校データを取得中...")
+    no_events_all = {}
+    for y in available_years:
+        schools = get_no_events_schools(db_path, target_fy=y)
+        no_events_all[y] = [
             {
                 'school_name': r['school_name'],
                 'attribute': r['attribute'],
@@ -2002,6 +2023,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button onclick="showAlert('rapid_growth')" id="tab-rapid_growth" class="alert-tab active" style="padding: 8px 16px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">売上好調校</button>
                     <button onclick="showAlert('new_schools')" id="tab-new_schools" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">新規開始校</button>
+                    <button onclick="showAlert('no_events')" id="tab-no_events" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">今年度未実施校</button>
                 </div>
             </div>
         </div>
@@ -2029,16 +2051,33 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div id="new_schools-table-container"></div>
             <div id="new_schools-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
         </div>
+
+        <!-- 今年度未実施校タブコンテンツ -->
+        <div id="alert-no_events" class="alert-content" style="display: none;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <label style="font-weight: bold; color: #374151;">対象年度:</label>
+                <select id="noEventsYearFilter" onchange="renderAlertTable('no_events', 1)" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white;">
+                    <!-- JSで生成 -->
+                </select>
+            </div>
+            <div class="alert-header" style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                <button class="csv-download-btn" onclick="downloadAlertCSV('no_events')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+            </div>
+            <div id="no_events-table-container"></div>
+            <div id="no_events-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
+        </div>
     </div>
     
     <script>
         // 条件別集計データ
         const rapidGrowthData = {json.dumps(rapid_growth_data, ensure_ascii=False)};
         const newSchoolsAllData = {json.dumps(new_schools_all, ensure_ascii=False)};
+        const noEventsAllData = {json.dumps(no_events_all, ensure_ascii=False)};
         
         const alertsData = {{
             'rapid_growth': rapidGrowthData,
-            'new_schools': [] // 初期値は空、ロード時に設定
+            'new_schools': [], // 初期値は空、ロード時に設定
+            'no_events': []
         }};
         
         let currentAlertPage = 1;
@@ -2083,6 +2122,13 @@ def generate_dashboard(db_path=None, output_dir=None):
                     data = newSchoolsAllData[year];
                 }}
                 alertsData['new_schools'] = data; // CSV出力用に保存
+            }} else if (alertType === 'no_events') {{
+                const yearElement = document.getElementById('noEventsYearFilter');
+                const year = yearElement ? yearElement.value : null;
+                if (year && noEventsAllData[year]) {{
+                    data = noEventsAllData[year];
+                }}
+                alertsData['no_events'] = data;
             }} else {{
                 data = alertsData[alertType] || [];
             }}
@@ -2109,6 +2155,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             if (alertType === 'new_schools') {{
                 html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
+            }} else if (alertType === 'no_events') {{
+                html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
             }} else {{
                 html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
                 html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
@@ -2122,11 +2170,15 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += `<td style="padding: 12px;">${{row.school_name}}</td>`;
                 html += `<td style="padding: 12px;">${{row.attribute || '-'}}</td>`;
                 html += `<td style="padding: 12px;">${{row.studio || '-'}}</td>`;
-                html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
                 
-                if (alertType !== 'new_schools') {{
+                if (alertType === 'no_events') {{
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
-                    html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold;">+${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
+                }} else {{
+                    html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                    if (alertType !== 'new_schools') {{
+                        html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                        html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold;">+${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
+                    }}
                 }}
                 html += '</tr>';
             }});
@@ -2182,7 +2234,9 @@ def generate_dashboard(db_path=None, output_dir=None):
             const blob = new Blob([bom + csv], {{ type: 'text/csv;charset=utf-8;' }});
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = '売上好調校.csv';
+            if (alertType === 'new_schools') link.download = '新規開始校.csv';
+            else if (alertType === 'no_events') link.download = '今年度未実施校.csv';
+            else link.download = '売上好調校.csv';
             link.click();
         }}
         
@@ -2199,6 +2253,19 @@ def generate_dashboard(db_path=None, output_dir=None):
         // デフォルトを選択
         if (newSchoolsYearSelect.options.length > 0) {{
             newSchoolsYearSelect.selectedIndex = 0;
+        }}
+        
+        
+        // 今年度未実施校用年度フィルター初期化(Available Yearsを使用)
+        const noEventsYearSelect = document.getElementById('noEventsYearFilter');
+        Object.keys(noEventsAllData).sort((a,b) => b-a).forEach(year => {{
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = year + '年度';
+            noEventsYearSelect.appendChild(option);
+        }});
+        if (noEventsYearSelect.options.length > 0) {{
+            noEventsYearSelect.selectedIndex = 0;
         }}
         
         renderAlertTable('rapid_growth', 1);
