@@ -743,19 +743,19 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px;">
                     <div>
                         <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">事業所:</label>
-                        <select id="salesBranchFilter" onchange="updateSalesSchoolList()" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="salesBranchFilter" onchange="updateSalesManagerList(); updateSalesStudioList(); updateSalesSchoolList();" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="">-- 全て --</option>
                         </select>
                     </div>
                     <div>
                         <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">担当者:</label>
-                        <select id="salesManagerFilter" onchange="updateSalesSchoolList()" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="salesManagerFilter" onchange="updateSalesStudioList(); updateSalesSchoolList();" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="">-- 全て --</option>
                         </select>
                     </div>
                     <div>
                         <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">写真館:</label>
-                        <select id="salesStudioFilter" onchange="updateSalesSchoolList()" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <select id="salesStudioFilter" onchange="updateSalesSchoolList();" style="width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="">-- 全て --</option>
                         </select>
                     </div>
@@ -1468,6 +1468,81 @@ def generate_dashboard(db_path=None, output_dir=None):
                 option.textContent = school.name;
                 schoolSelect.appendChild(option);
             }});
+        }}
+        
+        // 売上タブの担当者リスト更新（事業所に応じて絞り込み）
+        function updateSalesManagerList() {{
+            const branch = document.getElementById('salesBranchFilter').value;
+            
+            let filteredManagers = [];
+            if (branch) {{
+                // allYearsDataから選択した事業所の担当者を抽出
+                Object.values(allYearsData).forEach(yearData => {{
+                    if (yearData.manager_monthly) {{
+                        Object.keys(yearData.manager_monthly).forEach(manager => {{
+                            // 担当者データから事業所情報を取得する必要がある
+                            // 現状のデータ構造では事業所→担当者の紐付けがないため、
+                            // 一旦全担当者を表示
+                            if (!filteredManagers.includes(manager)) {{
+                                filteredManagers.push(manager);
+                            }}
+                        }});
+                    }}
+                }});
+                filteredManagers.sort();
+            }} else {{
+                // 全ての担当者
+                Object.values(allYearsData).forEach(yearData => {{
+                    if (yearData.manager_monthly) {{
+                        Object.keys(yearData.manager_monthly).forEach(manager => {{
+                            if (!filteredManagers.includes(manager)) {{
+                                filteredManagers.push(manager);
+                            }}
+                        }});
+                    }}
+                }});
+                filteredManagers.sort();
+            }}
+            
+            const managerSelect = document.getElementById('salesManagerFilter');
+            const currentValue = managerSelect.value;
+            managerSelect.innerHTML = '\u003coption value=""\u003e-- 全て --\u003c/option\u003e';
+            filteredManagers.forEach(manager => {{
+                const option = document.createElement('option');
+                option.value = manager;
+                option.textContent = manager;
+                managerSelect.appendChild(option);
+            }});
+            
+            if (filteredManagers.includes(currentValue)) {{
+                managerSelect.value = currentValue;
+            }}
+        }}
+        
+        // 売上タブの写真館リスト更新（事業所・担当者に応じて絞り込み）
+        function updateSalesStudioList() {{
+            const branch = document.getElementById('salesBranchFilter').value;
+            const manager = document.getElementById('salesManagerFilter').value;
+            
+            let filtered = schoolsList;
+            // 事業所や担当者による写真館の絞り込みは、
+            // schools_masterに事業所・担当者情報がないため実装困難
+            // 代わりに写真館のユニークリストを表示
+            const studios = getUniqueValues(schoolsList, 'studio');
+            
+            const studioSelect = document.getElementById('salesStudioFilter');
+            const currentValue = studioSelect.value;
+            studioSelect.innerHTML = '\u003coption value=""\u003e-- 全て --\u003c/option\u003e';
+            studios.forEach(studio => {{
+                const option = document.createElement('option');
+                option.value = studio;
+                option.textContent = studio;
+                studioSelect.appendChild(option);
+            }});
+            
+            if (studios.includes(currentValue)) {{
+                studioSelect.value = currentValue;
+            }}
         }}
         
         // 売上タブの学校リスト更新
