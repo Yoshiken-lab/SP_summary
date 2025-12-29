@@ -255,9 +255,17 @@ def import_manager_monthly_sales(xlsx, cursor, report_id):
             current_fiscal_year = int(re.search(r'(\d{4})', cell).group(1))
             continue
         
-        # 担当者別売上セクション検出
-        if current_fiscal_year and '売上　担当者別' in cell:
-            header_row_idx = i + 1
+        # 担当者別売上セクション検出(■を含む可能性を考慮)
+        if current_fiscal_year and '売上' in cell and '担当者別' in cell:
+            # 次の行で年度を再確認し、その次がヘッダー行
+            if i + 2 < len(df):
+                next_cell = str(df.iloc[i + 1, 1]) if pd.notna(df.iloc[i + 1, 1]) else ''
+                if '年度' in next_cell and '担当者別' in next_cell:
+                    header_row_idx = i + 2
+                else:
+                    header_row_idx = i + 1
+            else:
+                header_row_idx = i + 1
             header_row = df.iloc[header_row_idx]
             
             # 月カラムのマッピング
@@ -384,11 +392,14 @@ def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year):
     """イベント別売上を取り込み"""
     df = pd.read_excel(xlsx, sheet_name=sheet_name, header=None)
     
-    # ヘッダー行を探す
+    # ヘッダー行を探す(全列を検索)
     header_row_idx = None
     for i, row in df.iterrows():
-        if pd.notna(row[1]) and '学校名' in str(row[1]):
-            header_row_idx = i
+        for col_idx in range(len(row)):
+            if pd.notna(row[col_idx]) and '学校名' in str(row[col_idx]):
+                header_row_idx = i
+                break
+        if header_row_idx is not None:
             break
     
     if header_row_idx is None:
@@ -480,40 +491,109 @@ def import_member_rates(xlsx, cursor, report_id, report_date, sheet_name='会員
     
     df = pd.read_excel(xlsx, sheet_name=target_sheet, header=None)
     
-    # ヘッダー行を探す
+    # ヘッダー行を探す(全列を検索)
     header_row_idx = None
     for i, row in df.iterrows():
-        if pd.notna(row[1]) and '学校名' in str(row[1]):
-            header_row_idx = i
+        for col_idx in range(len(row)):
+            if pd.notna(row[col_idx]) and '学校名' in str(row[col_idx]):
+                header_row_idx = i
+                break
+        if header_row_idx is not None:
             break
     
     if header_row_idx is None:
         print(f"  警告: {target_sheet} でヘッダー行が見つかりません")
         return {'count': 0, 'unmatched_schools': []}
     
+    # シート名から取得日を抽出
+    snapshot_date = report_date  # デフォルトは報告書日付
+    # 「■会員率（12月27日現在）」のような形式から日付を抽出
+    date_match = re.search(r'(\d{1,2})月(\d{1,2})日', target_sheet)
+    if date_match:
+        month = int(date_match.group(1))
+        day = int(date_match.group(2))
+        # 年度を推定(4月以降ならreport_dateの年、それ以前なら翌年)
+        year = report_date.year
+        if month < 4 and report_date.month >= 4:
+            year += 1
+        elif month >= 4 and report_date.month < 4:
+            year -= 1
+        try:
+            from datetime import date
+            snapshot_date = date(year, month, day)
+        except:
+            snapshot_date = report_date
+    
     # ヘッダー解析
     header = df.iloc[header_row_idx]
-    col_mapping = {'school': None, 'grades': []}
+    col_mapping = {
+        'school_id': None,
+        'school': None,
+        'grade': None,
+        'total_students': None,
+        'member_count': None
+    }
     
     for col_idx, val in enumerate(header):
         if pd.isna(val):
             continue
         val_str = str(val)
         
-        if '学校名' in val_str:
+        if '学校ID' in val_str:
+            col_mapping['school_id'] = col_idx
+        elif '学校名' in val_str:
             col_mapping['school'] = col_idx
-        elif ('年' in val_str or '歳' in val_str) and '会員率' in val_str:
-            # 学年名を抽出
-            grade = val_str.replace('会員率', '').strip()
-            col_mapping['grades'].append((col_idx, grade))
+        elif '学年' in val_str:
+            col_mapping['grade'] = col_idx
+        elif '生徒数' in val_str:
+            col_mapping['total_students'] = col_idx
+        elif '会員' in val_str and '登録' in val_str:
+            col_mapping['member_count'] = col_idx
     
     stats = {'count': 0, 'unmatched_schools': []}
+    
+    # 会員率シートから学校情報を収集し、未登録学校を自動追加
+    if col_mapping['school_id'] and col_mapping['school']:
+        schools_to_add = {}
+        
+        # 学校情報を収集(重複除去)
+        for i in range(header_row_idx + 1, len(df)):
+            row = df.iloc[i]
+            school_id_val = row[col_mapping['school_id']]
+            school_name_val = row[col_mapping['school']]
+            
+            if pd.notna(school_id_val) and pd.notna(school_name_val):
+                school_id = int(school_id_val)
+                school_name = str(school_name_val).strip()
+                if school_id not in schools_to_add:
+                    schools_to_add[school_id] = school_name
+        
+        # schools_masterに未登録の学校を追加
+        cursor.execute('SELECT MAX(logical_school_id) FROM schools_master')
+        next_logical_id = (cursor.fetchone()[0] or 0) + 1
+        
+        added_count = 0
+        for school_id, school_name in schools_to_add.items():
+            cursor.execute('SELECT school_id FROM schools_master WHERE school_id = ?', (school_id,))
+            if not cursor.fetchone():
+                cursor.execute('''
+                    INSERT INTO schools_master 
+                    (school_id, logical_school_id, school_name, base_school_name, 
+                     fiscal_year, region, attribute, studio, manager, updated_at)
+                    VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, CURRENT_TIMESTAMP)
+                ''', (school_id, next_logical_id, school_name, school_name))
+                next_logical_id += 1
+                added_count += 1
+        
+        cursor.connection.commit()
+        if added_count > 0:
+            print(f"  会員率シートから{added_count}校をschools_masterに自動追加しました")
     
     # データ行を処理
     for i in range(header_row_idx + 1, len(df)):
         row = df.iloc[i]
         
-        school_name = row[col_mapping['school']]
+        school_name = row[col_mapping['school']] if col_mapping['school'] else None
         if pd.isna(school_name) or str(school_name).strip() == '':
             continue
         
@@ -526,25 +606,34 @@ def import_member_rates(xlsx, cursor, report_id, report_date, sheet_name='会員
                 stats['unmatched_schools'].append(school_name)
             continue
         
-        # 各学年の会員率を登録
-        for col_idx, grade in col_mapping['grades']:
-            member_rate = row[col_idx]
-            if pd.notna(member_rate):
-                # パーセント値を小数に変換(100% → 1.0)
-                if isinstance(member_rate, str) and '%' in member_rate:
-                    member_rate = float(member_rate.replace('%', '')) / 100
-                elif isinstance(member_rate, (int, float)):
-                    # 既に小数の場合はそのまま、100以上なら/100
-                    if member_rate > 1:
-                        member_rate = member_rate / 100
-                
-                cursor.execute('''
-                    INSERT OR REPLACE INTO member_rates
-                    (report_id, snapshot_date, school_id, grade, member_rate, 
-                     total_students, member_count)
-                    VALUES (?, ?, ?, ?, ?, NULL, NULL)
-                ''', (report_id, report_date, school_id, grade, float(member_rate)))
-                stats['count'] += 1
+        # 学年
+        grade = row[col_mapping['grade']] if col_mapping['grade'] else None
+        if pd.isna(grade):
+            continue
+        grade = str(grade).strip()
+        
+        # 生徒数と会員数
+        total_students = row[col_mapping['total_students']] if col_mapping['total_students'] else None
+        member_count = row[col_mapping['member_count']] if col_mapping['member_count'] else None
+        
+        # 会員率を計算
+        member_rate = None
+        if pd.notna(total_students) and pd.notna(member_count):
+            total_students = float(total_students)
+            member_count = float(member_count)
+            if total_students > 0:
+                member_rate = member_count / total_students
+        
+        # データを登録
+        cursor.execute('''
+            INSERT OR REPLACE INTO member_rates
+            (report_id, snapshot_date, school_id, grade, member_rate, 
+             total_students, member_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (report_id, snapshot_date, school_id, grade, member_rate,
+              int(total_students) if pd.notna(total_students) else None,
+              int(member_count) if pd.notna(member_count) else None))
+        stats['count'] += 1
     
     return stats
 
