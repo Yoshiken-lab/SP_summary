@@ -724,17 +724,17 @@ def generate_dashboard(db_path=None, output_dir=None):
                         </select>
                     </div>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <div>
-                        <label style="margin-right: 16px;"><input type="radio" name="memberGradeDisplay" value="all" checked> 全学年</label>
-                        <label><input type="radio" name="memberGradeDisplay" value="byGrade"> 学年ごと</label>
-                    </div>
-                    <div>
-                        <button onclick="searchMemberRate()" style="padding: 8px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-right: 8px;">検索</button>
-                        <button onclick="resetMemberRateFilters()" style="padding: 8px 24px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-right: 8px;">リセット</button>
-                        <button onclick="downloadMemberRateCSV()" style="padding: 8px 24px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">CSVダウンロード</button>
-                    </div>
-                </div>
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                    <label style="font-size: 12px; color: #666; font-weight: 600;">表示:</label>
+                    <label style="font-size: 14px; cursor: pointer;">
+                        <input type="radio" name="gradeDisplay" value="all" checked> 全学年
+                    </label>
+                    <label style="font-size: 14px; cursor: pointer;">
+                        <input type="radio" name="gradeDisplay" value="grade"> 学年ごと
+                    </label>
+                    <button onclick="searchMemberRate()" style="padding: 8px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-left: auto;">検索</button>
+                    <button onclick="resetMemberRate()" style="padding: 8px 24px; background: #94a3b8; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">リセット</button>
+                </div>        <button onclick="downloadMemberRateCSV()" style="padding: 8px 24px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">CSVダウンロード</button>
                 <canvas id="memberRateTrendChart"></canvas>
             </div>
             
@@ -1572,6 +1572,8 @@ def generate_dashboard(db_path=None, output_dir=None):
         // 会員率推移検索
         function searchMemberRate() {{
             const schoolId = document.getElementById('memberSchoolFilter').value;
+            const year = parseInt(document.getElementById('memberYearFilter').value);
+            
             if (!schoolId) {{
                 alert('学校を選択してください');
                 return;
@@ -1583,36 +1585,45 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return;
             }}
             
-            const gradeDisplay = document.querySelector('input[name="memberGradeDisplay"]:checked').value;
-            renderMemberRateTrend(schoolData.member_rates, gradeDisplay);
+            const gradeDisplay = document.querySelector('input[name="gradeDisplay"]:checked').value;
+            renderMemberRateTrend(schoolData.member_rates, gradeDisplay, year);
         }}
         
-        // 会員率推移グラフ描画（月単位集約+年度順ソート）
-        function renderMemberRateTrend(memberRateData, gradeDisplay) {{
+        // 会員率推移グラフ描画（月単位集約+年度順ソート+年度フィルター）
+        function renderMemberRateTrend(memberRateData, gradeDisplay, selectedYear) {{
             if (!memberRateData || Object.keys(memberRateData).length === 0) return;
             
             // 月ごとに集約（最新のデータを採用）
             const monthlyData = {{}};
             Object.keys(memberRateData).forEach(snapshotDate => {{
                 const yearMonth = snapshotDate.substring(0, 7); // "2025-11-28" -> "2025-11"
-                if (!monthlyData[yearMonth] || snapshotDate > monthlyData[yearMonth].date) {{
-                    monthlyData[yearMonth] = {{
-                        date: snapshotDate,
-                        data: memberRateData[snapshotDate]
-                    }};
+                const [year, month] = yearMonth.split('-').map(Number);
+                
+                // 年度を計算
+                const fiscalYear = month >= 4 ? year : year - 1;
+                
+                // 選択された年度のデータのみを集約
+                if (fiscalYear === selectedYear) {{
+                    if (!monthlyData[yearMonth] || snapshotDate > monthlyData[yearMonth].date) {{
+                        monthlyData[yearMonth] = {{
+                            date: snapshotDate,
+                            data: memberRateData[snapshotDate]
+                        }};
+                    }}
                 }}
             }});
+            
+            // データがない場合は警告
+            if (Object.keys(monthlyData).length === 0) {{
+                alert(`${{selectedYear}}年度の会員率データがありません`);
+                if (memberRateTrendChart) memberRateTrendChart.destroy();
+                return;
+            }}
             
             // 年度順にソート（4月始まり）
             const sortedMonths = Object.keys(monthlyData).sort((a, b) => {{
                 const [yearA, monthA] = a.split('-').map(Number);
                 const [yearB, monthB] = b.split('-').map(Number);
-                
-                // 年度の計算: 4月以降は同年度、1-3月は前年度
-                const fiscalYearA = monthA >= 4 ? yearA : yearA - 1;
-                const fiscalYearB = monthB >= 4 ? yearB : yearB - 1;
-                
-                if (fiscalYearA !== fiscalYearB) return fiscalYearA - fiscalYearB;
                 
                 // 同一年度内では月順（月を年度順に変換: 4->1, 5->2, ..., 3->12）
                 const fiscalMonthA = monthA >= 4 ? monthA - 3 : monthA + 9;
@@ -1627,13 +1638,16 @@ def generate_dashboard(db_path=None, output_dir=None):
             }});
             
             let datasets = [];
+            let maxRate = 0;  // 最大値を追跡
             
             if (gradeDisplay === 'all') {{
                 // 全学年の平均
                 const avgRates = sortedMonths.map(ym => {{
                     const grades = monthlyData[ym].data;
                     const sum = grades.reduce((acc, g) => acc + (g.rate || 0), 0);
-                    return grades.length > 0 ? sum / grades.length : 0;
+                    const avg = grades.length > 0 ? sum / grades.length : 0;
+                    maxRate = Math.max(maxRate, avg);
+                    return avg;
                 }});
                 
                 datasets = [{{
@@ -1651,6 +1665,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                         const grade = item.grade;
                         if (!gradeData[grade]) gradeData[grade] = [];
                         gradeData[grade].push(item.rate);
+                        maxRate = Math.max(maxRate, item.rate);
                     }});
                 }});
                 
@@ -1674,6 +1689,9 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             if (memberRateTrendChart) memberRateTrendChart.destroy();
             
+            // Y軸の最大値を計算（データの最大値の1.1倍、最低でも1.0）
+            const yMax = Math.max(1.0, maxRate * 1.1);
+            
             memberRateTrendChart = new Chart(document.getElementById('memberRateTrendChart'), {{
                 type: 'line',
                 data: {{ labels: labels, datasets: datasets }},
@@ -1684,7 +1702,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                     scales: {{
                         y: {{
                             min: 0,
-                            max: 1,
+                            max: yMax,
                             ticks: {{ callback: function(value) {{ return (value * 100).toFixed(0) + '%'; }} }}
                         }}
                     }}
@@ -1723,11 +1741,35 @@ def generate_dashboard(db_path=None, output_dir=None):
             }}
             
             // データを年度順にソート（4月始まり）
-            const sortedCurrent = [...currentData].sort((a, b) => {{
+            // 売上がある月のみに絞り込み（0円の月は除外）
+            // かつ、選択した年度に属する月のみを表示
+            const filteredCurrent = currentData.filter(d => {{
+                if (d.sales <= 0) return false;  // 0円の月を除外
+                
+                // 月が選択した年度に属するかチェック
+                // 4-12月は同年度、1-3月は次年度
+                const fiscalYearOfMonth = d.month >= 4 ? year : year + 1;
+                const currentDate = new Date();
+                const currentYear = currentDate.getFullYear();
+                const currentMonth = currentDate.getMonth() + 1;  // 0-11を使用
+                
+                // 未来の月を除外
+                if (fiscalYearOfMonth > currentYear) return false;
+                if (fiscalYearOfMonth === currentYear && d.month > currentMonth) return false;
+                
+                return true;
+            }});
+            
+            const sortedCurrent = [...filteredCurrent].sort((a, b) => {{
                 const monthA = a.month >= 4 ? a.month - 3 : a.month + 9;
                 const monthB = b.month >= 4 ? b.month - 3 : b.month + 9;
                 return monthA - monthB;
             }});
+            
+            if (sortedCurrent.length === 0) {{
+                alert(`${{year}}年度の売上データがありません（全て0円）`);
+                return;
+            }}
             
             const labels = sortedCurrent.map(d => `${{d.month}}月`);
             
