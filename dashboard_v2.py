@@ -2293,7 +2293,8 @@ def generate_dashboard(db_path=None, output_dir=None):
                 }}
                 alertsData['no_events'] = data;
             }} else if (alertType === 'decline') {{
-                const memberRateThreshold = parseFloat(document.getElementById('declineMemberRateFilter').value) / 100;
+                // member_rateは既にパーセント形式（63.0 = 63.0%）なので変換不要
+                const memberRateThreshold = parseFloat(document.getElementById('declineMemberRateFilter').value);
                 const salesMin = parseFloat(document.getElementById('declineSalesMin').value) / 100;
                 const salesMax = parseFloat(document.getElementById('declineSalesMax').value) / 100;
                 
@@ -2354,8 +2355,9 @@ def generate_dashboard(db_path=None, output_dir=None):
                 if (alertType === 'no_events') {{
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'decline') {{
-                    const rateColor = row.member_rate < 0.2 ? '#ef4444' : '#f97316';
-                    html += `<td style="padding: 12px; text-align: right; color: ${{rateColor}}; font-weight: bold;">${{(row.member_rate * 100).toFixed(1)}}%</td>`;
+                    // member_rateは既にパーセント形式（63.0 = 63.0%）
+                    const rateColor = row.member_rate < 20 ? '#ef4444' : '#f97316';
+                    html += `<td style="padding: 12px; text-align: right; color: ${{rateColor}}; font-weight: bold;">${{row.member_rate.toFixed(1)}}%</td>`;
                     html += `<td style="padding: 12px; text-align: right; color: #ef4444; font-weight: bold;">${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;

@@ -508,7 +508,7 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
                 school_id,
                 COALESCE(SUM(sales), 0) as total_sales
             FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ?
+            WHERE fiscal_year = ?
             GROUP BY school_id
         ),
         prev_sales AS (
@@ -516,23 +516,40 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
                 school_id,
                 COALESCE(SUM(sales), 0) as total_sales
             FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ?
+            WHERE fiscal_year = ?
             GROUP BY school_id
         ),
         latest_rates AS (
+            -- 各学校の最新snapshot_dateを取得し、そのsnapshotの最新report_idからデータを取得
             SELECT 
-                school_id,
+                m.school_id,
                 ROUND(
                     CASE 
-                        WHEN COALESCE(SUM(total_students), 0) > 0 
-                        THEN CAST(COALESCE(SUM(member_count), 0) AS REAL) / SUM(total_students) * 100
+                        WHEN COALESCE(SUM(m.total_students), 0) > 0 
+                        THEN CAST(COALESCE(SUM(m.member_count), 0) AS REAL) / SUM(m.total_students) * 100
                         ELSE 0 
                     END,
                     1
                 ) as member_rate
-            FROM member_rates
-            WHERE report_id = ? AND grade != '全学年'
-            GROUP BY school_id
+            FROM member_rates m
+            JOIN (
+                SELECT 
+                    m2.school_id,
+                    m2.snapshot_date,
+                    MAX(m2.report_id) as latest_report
+                FROM member_rates m2
+                JOIN (
+                    SELECT school_id, MAX(snapshot_date) as max_snapshot
+                    FROM member_rates
+                    GROUP BY school_id
+                ) latest_snap ON m2.school_id = latest_snap.school_id 
+                    AND m2.snapshot_date = latest_snap.max_snapshot
+                GROUP BY m2.school_id, m2.snapshot_date
+            ) ls ON m.school_id = ls.school_id 
+                AND m.snapshot_date = ls.snapshot_date 
+                AND m.report_id = ls.latest_report
+            WHERE m.grade != '全学年'
+            GROUP BY m.school_id
         )
         SELECT
             s.school_id,
@@ -560,7 +577,7 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
     # 閾値は正の値で渡されるので、減少率としてはマイナスにする
     decline_limit = -sales_decline_threshold
     
-    params = [current_fy, report_id, prev_fy, report_id, report_id, decline_limit, member_rate_threshold]
+    params = [current_fy, prev_fy, decline_limit, member_rate_threshold]
     
     cursor.execute(query, params)
     
