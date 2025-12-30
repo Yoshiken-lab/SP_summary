@@ -467,7 +467,7 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
                 school_id,
                 COUNT(*) as event_count
             FROM event_sales
-            WHERE fiscal_year = ?
+            WHERE fiscal_year = ? AND report_id = ?
             GROUP BY school_id
         )
         SELECT
@@ -491,7 +491,7 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
         ORDER BY prev.total_sales DESC
     '''
     
-    query_params = [current_fy, report_id] + params + [prev_fy, report_id] + params + [prev_fy]
+    query_params = [current_fy, report_id] + params + [prev_fy, report_id] + params + [prev_fy, report_id]
     
     cursor.execute(query, query_params)
     
