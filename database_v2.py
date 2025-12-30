@@ -451,7 +451,12 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
                 school_id,
                 COUNT(*) as event_count
             FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ? {month_condition}
+            WHERE report_id = ?
+              AND (
+                (strftime('%Y', event_date) = CAST(? AS TEXT) AND strftime('%m', event_date) >= '04')
+                OR
+                (strftime('%Y', event_date) = CAST(? + 1 AS TEXT) AND strftime('%m', event_date) <= '03')
+              )
             GROUP BY school_id
         ),
         prev_events AS (
@@ -459,7 +464,12 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
                 school_id,
                 COUNT(*) as event_count
             FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ? {month_condition}
+            WHERE report_id = ?
+              AND (
+                (strftime('%Y', event_date) = CAST(? AS TEXT) AND strftime('%m', event_date) >= '04')
+                OR
+                (strftime('%Y', event_date) = CAST(? + 1 AS TEXT) AND strftime('%m', event_date) <= '03')
+              )
             GROUP BY school_id
         ),
         prev_sales AS (
@@ -467,7 +477,7 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
                 school_id,
                 COALESCE(SUM(sales), 0) as total_sales
             FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ? {month_condition}
+            WHERE fiscal_year = ? AND report_id = ?
             GROUP BY school_id
         )
         SELECT
@@ -491,7 +501,14 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
         ORDER BY COALESCE(prev.total_sales, 0) DESC
     '''
     
-    query_params = [current_fy, report_id] + params + [prev_fy, report_id] + params + [prev_fy, report_id] + params
+    # パラメータ構築
+    query_params = [
+        report_id, current_fy, current_fy,     # current_events用
+        report_id, prev_fy, prev_fy,           # prev_events用
+        prev_fy, report_id                     # prev_sales用
+    ]
+    if target_month:
+        query_params.append(target_month)
     
     cursor.execute(query, query_params)
     
