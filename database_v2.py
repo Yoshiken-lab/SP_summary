@@ -394,7 +394,7 @@ def get_new_schools(db_path=None, target_fy=None, target_month=None):
         if first_date:
             try:
                 date_obj = datetime.strptime(first_date, '%Y-%m-%d')
-                formatted_date = date_obj.strftime('%Y年%m月%d日')
+                formatted_date = date_obj.strftime('%Y-%m-%d')
             except:
                 formatted_date = first_date
         else:

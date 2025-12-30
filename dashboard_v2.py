@@ -2142,11 +2142,11 @@ def generate_dashboard(db_path=None, output_dir=None):
     </script>
     
     <!-- 条件別集計セクション -->
-    <div class="alert-section" style="margin: 40px 0; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <div class="alert-section" style="margin: 40px auto; max-width: 1400px; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <h2 style="font-size: 24px; margin-bottom: 30px; color: #333;">条件別集計</h2>
         
         <!-- カテゴリコンテナ -->
-        <div class="alert-category-container" style="display: flex; gap: 20px; margin-bottom: 30px;">
+        <div class="alert-category-container" style="display: flex; gap: 20px; margin-bottom: 30px; flex-wrap: wrap;">
             <!-- 売上・実績カテゴリ -->
             <div class="alert-category" style="flex: 1; padding: 20px; background: #f0fdf4; border-radius: 8px; border: 2px solid #86efac;">
                 <div class="alert-category-title" style="font-weight: bold; color: #166534; margin-bottom: 15px; font-size: 16px;">📊 売上・実績</div>
@@ -2201,6 +2201,9 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <label style="font-weight: bold; color: #374151; margin-left: 10px;">開始月:</label>
                 <select id="newSchoolsMonthFilter" onchange="renderAlertTable('new_schools', 1)" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; background: white;">
                     <option value="">全ての月</option>
+                    <option value="01">1月</option>
+                    <option value="02">2月</option>
+                    <option value="03">3月</option>
                     <option value="04">4月</option>
                     <option value="05">5月</option>
                     <option value="06">6月</option>
@@ -2210,9 +2213,6 @@ def generate_dashboard(db_path=None, output_dir=None):
                     <option value="10">10月</option>
                     <option value="11">11月</option>
                     <option value="12">12月</option>
-                    <option value="01">1月</option>
-                    <option value="02">2月</option>
-                    <option value="03">3月</option>
                 </select>
                 <div style="flex-grow: 1;"></div>
                 <button class="csv-download-btn" onclick="downloadAlertCSV('new_schools')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
@@ -2381,6 +2381,10 @@ def generate_dashboard(db_path=None, output_dir=None):
                 // データ変換
                 const transform = (val) => {{
                     if (typeof val === 'string') {{
+                        // 日付 (YYYY-MM-DD)
+                        if (val.match(/^\d{4}-\d{2}-\d{2}$/)) {{
+                            return new Date(val).getTime();
+                        }}
                         // 日付 (YYYY年MM月DD日)
                         if (val.match(/^\d{4}年\d{1,2}月\d{1,2}日$/)) {{
                              return new Date(val.replace(/年|月/g, '/').replace(/日/, '')).getTime();
@@ -2432,7 +2436,11 @@ def generate_dashboard(db_path=None, output_dir=None):
             }}
             
             // ソート状態をリセット
-            currentSort = {{ column: null, order: 'desc' }};
+            if (alertType === 'event_sales_by_date') {{
+                currentSort = {{ column: 'event_date', order: 'asc' }};
+            }} else {{
+                currentSort = {{ column: null, order: 'desc' }};
+            }}
             
             // データをレンダリング
             renderAlertTable(alertType, 1);
@@ -2446,8 +2454,20 @@ def generate_dashboard(db_path=None, output_dir=None):
             let data = [];
             if (alertType === 'new_schools') {{
                 const year = document.getElementById('newSchoolsYearFilter').value;
+                const month = document.getElementById('newSchoolsMonthFilter').value;
                 if (year && newSchoolsAllData[year]) {{
                     data = newSchoolsAllData[year];
+                    // 月フィルタ適用
+                    if (month) {{
+                        data = data.filter(row => {{
+                            const date = row.first_event_date; // YYYY-MM-DD形式
+                            if (date && date.length >= 7) {{
+                                const rowMonth = date.substring(5, 7); // MM部分を取得
+                                return rowMonth === month;
+                            }}
+                            return false;
+                        }});
+                    }}
                 }}
                 alertsData['new_schools'] = data; // CSV出力用に保存
             }} else if (alertType === 'no_events') {{
@@ -2492,7 +2512,19 @@ def generate_dashboard(db_path=None, output_dir=None):
             const endIdx = startIdx + alertPageSize;
             const pageData = data.slice(startIdx, endIdx);
             
-            // テーブル生成
+            // テーブル生成（固定レイアウト）
+            const tableStyle = 'width: 100%; table-layout: fixed; border-collapse: collapse;';
+            
+            // カラム幅の設定（alertTypeに応じて最適化）
+            const getColgroup = () => {{
+                if (alertType === 'event_sales_by_date') {{
+                    return '<colgroup><col style="width: 20%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 30%;"><col style="width: 12%;"><col style="width: 10%;"><col style="width: 10%;"></colgroup>';
+                }} else if (alertType === 'new_schools') {{
+                    return '<colgroup><col style="width: 25%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 15%;"></colgroup>';
+                }} else {{
+                    return '<colgroup><col style="width: 22%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"></colgroup>';
+                }}
+            }};
             const getHeader = (label, key, align='left') => {{
                 let icon = '';
                 // data-column属性を追加してデバッグしやすくする
@@ -2506,8 +2538,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return `<th style="${{style}}" onclick="handleSort('${{key}}')">${{label}}${{icon}}</th>`;
             }};
 
-            let html = '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">';
-            html += '<thead><tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">';
+            let html = `<table style="${{tableStyle}}">${{getColgroup()}}<thead><tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">`;
             html += getHeader('学校名', 'school_name');
             html += getHeader('属性', 'attribute');
             html += getHeader('事業所', 'region');
@@ -2731,15 +2762,15 @@ def generate_dashboard(db_path=None, output_dir=None):
                 filtered = filtered.filter(d => d.day === day);
             }}
             
-             if (filtered.length === 0) {{
+            if (filtered.length === 0) {{
                 alert('該当するイベントがありません');
             }}
             
             // データをセット
             alertsData['event_sales_by_date'] = filtered;
             
-            // ソートリセット
-            currentSort = {{ column: 'sales', order: 'desc' }};
+            // ソートリセット（日付昇順）
+            currentSort = {{ column: 'event_date', order: 'asc' }};
             
             // 描画
             renderAlertTable('event_sales_by_date', 1);
