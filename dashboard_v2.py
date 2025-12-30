@@ -340,19 +340,42 @@ def get_schools_list(db_path=None):
 
 
 def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
-    """特定学校の会員率推移を取得（全報告書から各月の最新データを取得）"""
+    """特定学校の会員率推移を取得（指定年度の全月データ）"""
     if school_id is None:
         return []
     
     conn = get_connection(db_path)
     cursor = conn.cursor()
     
-    # 各snapshot_dateごとの最新report_idを使用してデータを取得（重複を避ける）
+    # 年度未指定の場合は最新年度を取得
+    if fiscal_year is None:
+        cursor.execute('''
+            SELECT MAX(
+                CASE 
+                    WHEN CAST(strftime('%m', snapshot_date) AS INTEGER) >= 4 
+                    THEN CAST(strftime('%Y', snapshot_date) AS INTEGER)
+                    ELSE CAST(strftime('%Y', snapshot_date) AS INTEGER) - 1
+                END
+            ) as max_fy
+            FROM member_rates
+            WHERE school_id = ?
+        ''', (school_id,))
+        result = cursor.fetchone()
+        fiscal_year = result[0] if result and result[0] else 2025
+    
+    # 各snapshot_dateごとの最新report_idを使用（指定年度のみ）
     cursor.execute('''
         WITH latest_snapshots AS (
             SELECT snapshot_date, MAX(report_id) as max_report_id
             FROM member_rates
             WHERE school_id = ?
+              AND (
+                CASE 
+                    WHEN CAST(strftime('%m', snapshot_date) AS INTEGER) >= 4 
+                    THEN CAST(strftime('%Y', snapshot_date) AS INTEGER)
+                    ELSE CAST(strftime('%Y', snapshot_date) AS INTEGER) - 1
+                END
+              ) = ?
             GROUP BY snapshot_date
         )
         SELECT m.snapshot_date, m.grade, m.member_rate, m.total_students, m.member_count
@@ -360,16 +383,23 @@ def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
         JOIN latest_snapshots ls ON m.snapshot_date = ls.snapshot_date AND m.report_id = ls.max_report_id
         WHERE m.school_id = ? AND m.grade != '全学年'
         ORDER BY m.snapshot_date, m.grade
-    ''', (school_id, school_id))
+    ''', (school_id, fiscal_year, school_id))
     
     grade_results = cursor.fetchall()
     
-    # 全学年合計データをSQL内で計算（各snapshot_dateごと）
+    # 全学年合計データをSQL内で計算（指定年度のみ）
     cursor.execute('''
         WITH latest_snapshots AS (
             SELECT snapshot_date, MAX(report_id) as max_report_id
             FROM member_rates
             WHERE school_id = ?
+              AND (
+                CASE 
+                    WHEN CAST(strftime('%m', snapshot_date) AS INTEGER) >= 4 
+                    THEN CAST(strftime('%Y', snapshot_date) AS INTEGER)
+                    ELSE CAST(strftime('%Y', snapshot_date) AS INTEGER) - 1
+                END
+              ) = ?
             GROUP BY snapshot_date
         )
         SELECT 
@@ -382,7 +412,7 @@ def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
         WHERE m.school_id = ? AND m.grade != '全学年'
         GROUP BY m.snapshot_date
         ORDER BY m.snapshot_date
-    ''', (school_id, school_id))
+    ''', (school_id, fiscal_year, school_id))
     
     all_grade_results = cursor.fetchall()
     conn.close()
@@ -395,9 +425,11 @@ def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
         snapshot_date, grade, rate, total_students, member_count = row
         if snapshot_date not in data:
             data[snapshot_date] = []
+        # DB内のrateは小数形式（0.862）なので100倍してパーセント形式に変換
+        rate_percent = round(rate * 100, 1) if rate is not None else 0
         data[snapshot_date].append({
             'grade': grade,
-            'rate': rate,
+            'rate': rate_percent,
             'total_students': total_students,
             'member_count': member_count
         })
@@ -1794,18 +1826,21 @@ def generate_dashboard(db_path=None, output_dir=None):
                 }});
                 
                 datasets = [{{
-                    label: '全学年平均',
+                    label: '全学年',
                     data: avgRates,
                     borderColor: 'rgb(59, 130, 246)',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     tension: 0.4
                 }}];
             }} else {{
-                // 学年ごと
+                // 学年ごと（全学年を除外）
                 const gradeData = {{}};
                 sortedMonths.forEach(ym => {{
                     monthlyData[ym].data.forEach(item => {{
                         const grade = item.grade;
+                        // '全学年'は除外（学年別表示では不要）
+                        if (grade === '全学年') return;
+                        
                         if (!gradeData[grade]) gradeData[grade] = [];
                         gradeData[grade].push(item.rate);
                         maxRate = Math.max(maxRate, item.rate);
