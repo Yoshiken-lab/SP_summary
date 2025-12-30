@@ -649,6 +649,83 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
     return results
 
 
+def get_events_for_date_filter(db_path=None, years_back=3):
+    """
+    イベント開始日別売上分析用の全イベントデータを取得する
+    直近N年分を取得
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    current_fy = get_current_fiscal_year()
+    start_fy = current_fy - years_back + 1
+    
+    report_id = get_latest_report_id(conn)
+    if not report_id:
+        conn.close()
+        return []
+    
+    query = f'''
+        WITH latest_rates AS (
+            -- 最新の会員率（全学年合算の平均的な率を算出）
+            SELECT 
+                school_id,
+                ROUND(
+                    CASE 
+                        WHEN COALESCE(SUM(total_students), 0) > 0 
+                        THEN CAST(COALESCE(SUM(member_count), 0) AS REAL) / SUM(total_students) * 100
+                        ELSE 0 
+                    END,
+                    1
+                ) as member_rate
+            FROM member_rates
+            WHERE report_id = ?
+            GROUP BY school_id
+        )
+        SELECT
+            e.fiscal_year,
+            strftime('%Y', e.event_date) as year,
+            strftime('%m', e.event_date) as month,
+            strftime('%d', e.event_date) as day,
+            e.event_date,
+            s.school_name,
+            s.attribute,
+            s.region,
+            s.studio,
+            e.event_name,
+            e.sales,
+            mr.member_rate
+        FROM event_sales e
+        JOIN schools_master s ON e.school_id = s.school_id
+        LEFT JOIN latest_rates mr ON s.school_id = mr.school_id
+        WHERE e.report_id = ? 
+          AND e.fiscal_year >= ?
+        ORDER BY e.event_date DESC
+    '''
+    
+    cursor.execute(query, (report_id, report_id, start_fy))
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'fiscal_year': row[0],
+            'year': row[1],
+            'month': row[2],
+            'day': row[3],
+            'event_date': row[4],
+            'school_name': row[5],
+            'attribute': row[6],
+            'region': row[7],
+            'studio': row[8],
+            'event_name': row[9],
+            'sales': row[10],
+            'member_rate': row[11] if row[11] is not None else 0.0
+        })
+    
+    conn.close()
+    return results
+
+
 if __name__ == '__main__':
     # テスト実行: データベース初期化
     init_database()

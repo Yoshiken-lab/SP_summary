@@ -10,7 +10,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 from database_v2 import (
-    get_connection, get_rapid_growth_schools, get_new_schools, get_no_events_schools, get_declining_schools
+    get_connection, get_rapid_growth_schools, get_new_schools, get_no_events_schools, get_declining_schools,
+    get_events_for_date_filter
 )    
 
 
@@ -673,6 +674,30 @@ def generate_dashboard(db_path=None, output_dir=None):
         }
         for r in decline_data_raw
     ]
+
+    # イベント開始日別売上データの取得（全期間・JSでフィルタリング）
+    print("   イベント開始日別データを取得中...")
+    event_sales_by_date_raw = get_events_for_date_filter(db_path, years_back=3)
+    event_sales_by_date = [
+        {
+            'year': r['year'],
+            'month': r['month'],
+            'day': r['day'],
+            'event_date': r['event_date'],
+            'school_name': r['school_name'],
+            'attribute': r['attribute'],
+            'region': r['region'],
+            'studio': r['studio'],
+            'event_name': r['event_name'],
+            'sales': r['sales'],
+            'member_rate': r['member_rate']
+        }
+        for r in event_sales_by_date_raw
+    ]
+    
+    # JS用にJSON変換
+    import json
+    event_sales_by_date_json = json.dumps(event_sales_by_date, ensure_ascii=False)
 
     # HTMLファイル名
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -2139,6 +2164,22 @@ def generate_dashboard(db_path=None, output_dir=None):
                     <button onclick="showAlert('decline')" id="tab-decline" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">会員率・売上低下</button>
                 </div>
             </div>
+            <!-- トレンド分析カテゴリ -->
+            <div class="alert-category" style="flex: 1; padding: 20px; background: #eff6ff; border-radius: 8px; border: 2px solid #bfdbfe;">
+                <div class="alert-category-title" style="font-weight: bold; color: #1e40af; margin-bottom: 15px; font-size: 16px;">📈 トレンド分析</div>
+                <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <!-- 今後追加 -->
+                    <span style="font-size: 12px; color: #6b7280;">(準備中)</span>
+                </div>
+            </div>
+
+            <!-- イベント関連カテゴリ -->
+            <div class="alert-category" style="flex: 1; padding: 20px; background: #fdf4ff; border-radius: 8px; border: 2px solid #f0abfc;">
+                <div class="alert-category-title" style="font-weight: bold; color: #86198f; margin-bottom: 15px; font-size: 16px;">📅 イベント関連</div>
+                <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button onclick="showAlert('event_sales_by_date')" id="tab-event_sales_by_date" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">イベント開始日別売上</button>
+                </div>
+            </div>
         </div>
         
         <!-- 売上好調校タブコンテンツ -->
@@ -2157,8 +2198,23 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <select id="newSchoolsYearFilter" onchange="renderAlertTable('new_schools', 1)" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white;">
                     <!-- JSで生成 -->
                 </select>
-            </div>
-            <div class="alert-header" style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                <label style="font-weight: bold; color: #374151; margin-left: 10px;">開始月:</label>
+                <select id="newSchoolsMonthFilter" onchange="renderAlertTable('new_schools', 1)" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; background: white;">
+                    <option value="">全ての月</option>
+                    <option value="04">4月</option>
+                    <option value="05">5月</option>
+                    <option value="06">6月</option>
+                    <option value="07">7月</option>
+                    <option value="08">8月</option>
+                    <option value="09">9月</option>
+                    <option value="10">10月</option>
+                    <option value="11">11月</option>
+                    <option value="12">12月</option>
+                    <option value="01">1月</option>
+                    <option value="02">2月</option>
+                    <option value="03">3月</option>
+                </select>
+                <div style="flex-grow: 1;"></div>
                 <button class="csv-download-btn" onclick="downloadAlertCSV('new_schools')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
             </div>
             <div id="new_schools-table-container"></div>
@@ -2232,6 +2288,44 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div id="decline-table-container"></div>
             <div id="decline-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
         </div>
+
+        <!-- イベント開始日別売上タブコンテンツ -->
+        <div id="alert-event_sales_by_date" class="alert-content" style="display: none;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <div style="font-weight: bold; color: #374151;">年:</div>
+                <select id="eventSalesYear" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px;">
+                    <option value="">年</option>
+                </select>
+                <div style="font-weight: bold; color: #374151;">月:</div>
+                <select id="eventSalesMonth" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 80px;">
+                    <option value="">月</option>
+                    <option value="01">1月</option>
+                    <option value="02">2月</option>
+                    <option value="03">3月</option>
+                    <option value="04">4月</option>
+                    <option value="05">5月</option>
+                    <option value="06">6月</option>
+                    <option value="07">7月</option>
+                    <option value="08">8月</option>
+                    <option value="09">9月</option>
+                    <option value="10">10月</option>
+                    <option value="11">11月</option>
+                    <option value="12">12月</option>
+                </select>
+                <div style="font-weight: bold; color: #374151;">日:</div>
+                <select id="eventSalesDay" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 80px;">
+                    <option value="">日</option>
+                </select>
+                <div style="color: #374151;">に公開したイベントを</div>
+                <button onclick="filterEventSalesByDate()" style="padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer;">表示する</button>
+                <div style="flex-grow: 1;"></div>
+                <button class="csv-download-btn" onclick="downloadAlertCSV('event_sales_by_date')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+            </div>
+            <div id="event_sales_by_date-table-container">
+                <div style="text-align: center; color: #6b7280; padding: 40px;">年を選択して「表示する」をクリックしてください</div>
+            </div>
+            <div id="event_sales_by_date-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
+        </div>
     </div>
     
     <script>
@@ -2240,16 +2334,79 @@ def generate_dashboard(db_path=None, output_dir=None):
         const newSchoolsAllData = {json.dumps(new_schools_all, ensure_ascii=False)};
         const noEventsAllData = {json.dumps(no_events_all, ensure_ascii=False)};
         const declineBaseData = {json.dumps(decline_data, ensure_ascii=False)};
-        
+        const eventSalesDataFull = {json.dumps(event_sales_by_date, ensure_ascii=False)};
+
         const alertsData = {{
             'rapid_growth': rapidGrowthData,
             'new_schools': [], // 初期値は空、ロード時に設定
             'no_events': [],
-            'decline': declineBaseData
+            'decline': declineBaseData,
+            'event_sales_by_date': []
         }};
+        
         
         let currentAlertPage = 1;
         const alertPageSize = 30;
+        
+        // ソート状態
+        let currentSort = {{
+            column: null,
+            order: 'desc'
+        }};
+
+        // ソートハンドラ
+        function handleSort(column) {{
+            if (currentSort.column === column) {{
+                currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+            }} else {{
+                currentSort.column = column;
+                currentSort.order = 'desc';
+            }}
+            // 現在アクティブなタブを再描画
+            const activeTab = document.querySelector('.alert-tab.active');
+            if (activeTab) {{
+                const alertType = activeTab.id.replace('tab-', '');
+                renderAlertTable(alertType, 1);
+            }}
+        }}
+        
+        // ソート関数
+        function sortData(data, column, order) {{
+            if (!column) return data;
+            
+            return [...data].sort((a, b) => {{
+                let valA = a[column];
+                let valB = b[column];
+                
+                // データ変換
+                const transform = (val) => {{
+                    if (typeof val === 'string') {{
+                        // 日付 (YYYY年MM月DD日)
+                        if (val.match(/^\d{4}年\d{1,2}月\d{1,2}日$/)) {{
+                             return new Date(val.replace(/年|月/g, '/').replace(/日/, '')).getTime();
+                        }}
+                        // 金額や数値 (カンマ除去)
+                        const num = parseFloat(val.replace(/[¥,]/g, ''));
+                        if (!isNaN(num)) return num;
+                    }}
+                    return val;
+                }};
+
+                valA = transform(valA);
+                valB = transform(valB);
+
+                // null/undefined/空文字対応（常に末尾へ）
+                const isEmpty = (v) => v === null || v === undefined || v === '';
+                if (isEmpty(valA) && isEmpty(valB)) return 0;
+                if (isEmpty(valA)) return 1;
+                if (isEmpty(valB)) return -1;
+                
+                if (valA < valB) return order === 'asc' ? -1 : 1;
+                if (valA > valB) return order === 'asc' ? 1 : -1;
+                return 0;
+            }});
+        }}
+
         
         // タブ切り替え
         function showAlert(alertType) {{
@@ -2273,6 +2430,9 @@ def generate_dashboard(db_path=None, output_dir=None):
                 tabEl.style.background = '#22c55e';
                 tabEl.style.color = 'white';
             }}
+            
+            // ソート状態をリセット
+            currentSort = {{ column: null, order: 'desc' }};
             
             // データをレンダリング
             renderAlertTable(alertType, 1);
@@ -2314,6 +2474,11 @@ def generate_dashboard(db_path=None, output_dir=None):
                 data = alertsData[alertType] || [];
             }}
             
+            // ソート適用
+            if (currentSort.column) {{
+                data = sortData(data, currentSort.column, currentSort.order);
+            }}
+            
             const container = document.getElementById(`${{alertType}}-table-container`);
             if (!container) return;
             
@@ -2328,28 +2493,46 @@ def generate_dashboard(db_path=None, output_dir=None):
             const pageData = data.slice(startIdx, endIdx);
             
             // テーブル生成
+            const getHeader = (label, key, align='left') => {{
+                let icon = '';
+                // data-column属性を追加してデバッグしやすくする
+                const style = `padding: 12px; text-align: ${{align}}; cursor: pointer; user-select: none; white-space: nowrap;`;
+                
+                if (currentSort.column === key) {{
+                    icon = currentSort.order === 'asc' ? ' <span style="color:#2563eb">▲</span>' : ' <span style="color:#2563eb">▼</span>';
+                }} else {{
+                    icon = ' <span style="color:#9ca3af; font-size: 0.8em;">⇅</span>';
+                }}
+                return `<th style="${{style}}" onclick="handleSort('${{key}}')">${{label}}${{icon}}</th>`;
+            }};
+
             let html = '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">';
             html += '<thead><tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">';
-            html += '<th style="padding: 12px; text-align: left;">学校名</th>';
-            html += '<th style="padding: 12px; text-align: left;">属性</th>';
-            html += '<th style="padding: 12px; text-align: left;">事業所</th>';
-            html += '<th style="padding: 12px; text-align: left;">写真館</th>';
+            html += getHeader('学校名', 'school_name');
+            html += getHeader('属性', 'attribute');
+            html += getHeader('事業所', 'region');
+            html += getHeader('写真館', 'studio');
             
             if (alertType === 'new_schools') {{
-                html += '<th style="padding: 12px; text-align: left;">初回開始日</th>';
-                html += '<th style="padding: 12px; text-align: right;">売上</th>';
+                html += getHeader('初回開始日', 'first_event_date');
+                html += getHeader('売上', 'current_sales', 'right');
             }} else if (alertType === 'no_events') {{
-                html += '<th style="padding: 12px; text-align: right;">前年度イベント数</th>';
-                html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
+                html += getHeader('前年度イベント数', 'prev_event_count', 'right');
+                html += getHeader('前年度売上', 'prev_sales', 'right');
             }} else if (alertType === 'decline') {{
-                html += '<th style="padding: 12px; text-align: right;">会員率</th>';
-                html += '<th style="padding: 12px; text-align: right;">売上変化率</th>';
-                html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
-                html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
+                html += getHeader('会員率', 'member_rate', 'right');
+                html += getHeader('売上変化率', 'growth_rate', 'right'); // declineではgrowth_rateが変化率
+                html += getHeader('今年度売上', 'current_sales', 'right');
+                html += getHeader('前年度売上', 'prev_sales', 'right');
+            }} else if (alertType === 'event_sales_by_date') {{
+                html += getHeader('イベント名', 'event_name');
+                html += getHeader('開始日', 'event_date');
+                html += getHeader('会員率', 'member_rate', 'right');
+                html += getHeader('売上', 'sales', 'right');
             }} else {{
-                html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
-                html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
-                html += '<th style="padding: 12px; text-align: right;">成長率</th>';
+                html += getHeader('今年度売上', 'current_sales', 'right');
+                html += getHeader('前年度売上', 'prev_sales', 'right');
+                html += getHeader('成長率', 'growth_rate', 'right');
             }}
             html += '</tr></thead><tbody>';
             
@@ -2374,6 +2557,11 @@ def generate_dashboard(db_path=None, output_dir=None):
                     html += `<td style="padding: 12px; text-align: right; color: #ef4444; font-weight: bold;">${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                }} else if (alertType === 'event_sales_by_date') {{
+                    html += `<td style="padding: 12px;">${{row.event_name}}</td>`;
+                    html += `<td style="padding: 12px;">${{row.event_date}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right;">${{row.member_rate > 0 ? row.member_rate.toFixed(1) + '%' : '-'}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right;">¥${{row.sales.toLocaleString()}}</td>`;
                 }} else {{
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
                     if (alertType !== 'new_schools') {{
@@ -2494,11 +2682,71 @@ def generate_dashboard(db_path=None, output_dir=None):
             if (alertType === 'new_schools') link.download = '新規開始校.csv';
             else if (alertType === 'no_events') link.download = '今年度未実施校.csv';
             else if (alertType === 'decline') link.download = '会員率・売上低下校.csv';
+            else if (alertType === 'event_sales_by_date') link.download = 'イベント開始日別売上.csv';
             else link.download = '売上好調校.csv';
             link.click();
         }}
         
+        // イベント開始日別売上フィルター
+        function initializeEventSalesFilters() {{
+            const yearSelect = document.getElementById('eventSalesYear');
+            if (!yearSelect) return;
+            
+            // データからユニークな年を取得
+            const years = [...new Set(eventSalesDataFull.map(d => d.year))].sort().reverse();
+            years.forEach(year => {{
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year + '年';
+                yearSelect.appendChild(option);
+            }});
+            
+            // 日のプルダウン生成 (1-31)
+            const daySelect = document.getElementById('eventSalesDay');
+            for (let i = 1; i <= 31; i++) {{
+                const d = i.toString().padStart(2, '0');
+                const option = document.createElement('option');
+                option.value = d;
+                option.textContent = i + '日';
+                daySelect.appendChild(option);
+            }}
+        }}
+
+        function filterEventSalesByDate() {{
+            const year = document.getElementById('eventSalesYear').value;
+            const month = document.getElementById('eventSalesMonth').value;
+            const day = document.getElementById('eventSalesDay').value;
+            
+            if (!year) {{
+                alert('年を選択してください');
+                return;
+            }}
+            
+            // フィルタリング
+            let filtered = eventSalesDataFull.filter(d => d.year === year);
+            if (month) {{
+                filtered = filtered.filter(d => d.month === month);
+            }}
+            if (day) {{
+                filtered = filtered.filter(d => d.day === day);
+            }}
+            
+             if (filtered.length === 0) {{
+                alert('該当するイベントがありません');
+            }}
+            
+            // データをセット
+            alertsData['event_sales_by_date'] = filtered;
+            
+            // ソートリセット
+            currentSort = {{ column: 'sales', order: 'desc' }};
+            
+            // 描画
+            renderAlertTable('event_sales_by_date', 1);
+        }}
+        
         // 初期表示
+        initializeEventSalesFilters();
         
         // 新規開始校用年度フィルター初期化(Available Yearsを使用)
         const newSchoolsYearSelect = document.getElementById('newSchoolsYearFilter');
