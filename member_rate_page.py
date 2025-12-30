@@ -507,6 +507,16 @@ def generate_member_rate_page(db_path=None, output_path=None):
                 }});
             }}
 
+            # 日付をソートして重複除去 (Python側で処理した日付リストを使う)
+            # allDates変数はJS内で構築されたものだが、確実性のためにPython側で用意した日付を使いたいが、
+            # ここではJS内のallDatesをソートするロジックをより堅牢にする
+            const uniqueDates = [...new Set(allDates)];
+            // 日付文字列(YYYY-MM-DD)としてソート
+            const sortedDates = uniqueDates.sort((a, b) => {{
+                return a.localeCompare(b);
+            }});
+            console.log("Sorted dates:", sortedDates);
+
             // チャート描画
             const ctx = document.getElementById('memberRateChart').getContext('2d');
 
@@ -516,7 +526,7 @@ def generate_member_rate_page(db_path=None, output_path=None):
 
             chart = new Chart(ctx, {{
                 type: 'line',
-                data: {{ datasets }},
+                data: {{ labels: sortedDates, datasets: datasets }},
                 options: {{
                     responsive: true,
                     maintainAspectRatio: false,

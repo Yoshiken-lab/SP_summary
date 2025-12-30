@@ -522,9 +522,14 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
         latest_rates AS (
             SELECT 
                 school_id,
-                member_rate
+                CASE 
+                    WHEN COALESCE(SUM(total_students), 0) > 0 
+                    THEN CAST(COALESCE(SUM(member_count), 0) AS REAL) / SUM(total_students)
+                    ELSE 0 
+                END as member_rate
             FROM member_rates
-            WHERE report_id = ? AND grade = '全学年'
+            WHERE report_id = ?
+            GROUP BY school_id
         )
         SELECT
             s.school_id,

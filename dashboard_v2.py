@@ -365,12 +365,41 @@ def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
         report_date, snapshot_date, grade, rate, total_students, member_count = row
         if snapshot_date not in data:
             data[snapshot_date] = []
+        # '全学年' は除外して後で再計算するか、あるいはそのまま追加するか
+        # ここではすべて追加し、最後に全学年を再計算して上書きする
         data[snapshot_date].append({
             'grade': grade,
             'rate': rate,
             'total_students': total_students,
             'member_count': member_count
         })
+
+    # '全学年' のレートを再計算 (SUM(member_count) / SUM(total_students))
+    for snapshot_date, items in data.items():
+        # 全学年以外のデータを集計
+        valid_items = [i for i in items if i['grade'] != '全学年']
+        if not valid_items:
+            continue
+            
+        sum_total = sum(i['total_students'] for i in valid_items if i['total_students'])
+        sum_member = sum(i['member_count'] for i in valid_items if i['member_count'])
+        
+        recalc_rate = (sum_member / sum_total * 100) if sum_total > 0 else 0
+        recalc_rate = round(recalc_rate, 1)
+
+        # 全学年データの更新または追加
+        all_grade_item = next((i for i in items if i['grade'] == '全学年'), None)
+        if all_grade_item:
+            all_grade_item['rate'] = recalc_rate
+            all_grade_item['total_students'] = sum_total
+            all_grade_item['member_count'] = sum_member
+        else:
+            items.append({
+                'grade': '全学年',
+                'rate': recalc_rate,
+                'total_students': sum_total,
+                'member_count': sum_member
+            })
     
     return data
 
@@ -2399,7 +2428,13 @@ def generate_dashboard(db_path=None, output_dir=None):
     return str(output_file)
 
 
+from member_rate_page import generate_member_rate_page
+
 if __name__ == '__main__':
     output_file = generate_dashboard()
     print(f"\n生成されたファイルをブラウザで開いてください:")
     print(f"  {output_file}")
+    
+    # 会員率推移グラフページも更新
+    chart_page = generate_member_rate_page()
+    print(f"  {chart_page}")
