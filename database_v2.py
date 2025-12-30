@@ -337,33 +337,23 @@ def get_new_schools(db_path=None, target_fy=None, target_month=None):
     params = [current_fy, report_id]
     if target_month:
         params.append(target_month)
-    
     # 前年度のパラメータ
-    params.extend([prev_fy, report_id])
+    # params.extend([prev_fy, report_id]) # This line is removed as the logic changes
 
     query = f'''
-        WITH current_sales AS (
+        WITH first_events AS (
+            SELECT
+                school_id,
+                MIN(event_date) as first_event_date
+            FROM event_sales
+            GROUP BY school_id
+        ),
+        current_sales AS (
             SELECT
                 school_id,
                 COALESCE(SUM(sales), 0) as total_sales
             FROM event_sales
             WHERE fiscal_year = ? AND report_id = ? {month_condition}
-            GROUP BY school_id
-            HAVING total_sales > 0
-        ),
-        prev_sales AS (
-            SELECT
-                school_id,
-                COALESCE(SUM(sales), 0) as total_sales
-            FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ?
-            GROUP BY school_id
-        ),
-        first_events AS (
-            SELECT
-                school_id,
-                MIN(event_date) as first_event_date
-            FROM event_sales
             GROUP BY school_id
         )
         SELECT
@@ -375,15 +365,25 @@ def get_new_schools(db_path=None, target_fy=None, target_month=None):
             s.manager,
             s.region,
             fe.first_event_date,
-            curr.total_sales,
-            COALESCE(prev.total_sales, 0) as prev_sales
-        FROM current_sales curr
-        JOIN schools_master s ON s.school_id = curr.school_id
-        LEFT JOIN prev_sales prev ON prev.school_id = curr.school_id
-        LEFT JOIN first_events fe ON fe.school_id = s.school_id
-        WHERE prev.total_sales IS NULL OR prev.total_sales = 0
-        ORDER BY curr.total_sales DESC
+            COALESCE(curr.total_sales, 0) as current_sales,
+            0 as prev_sales
+        FROM first_events fe
+        JOIN schools_master s ON s.school_id = fe.school_id
+        LEFT JOIN current_sales curr ON curr.school_id = fe.school_id
+        WHERE (
+            -- 初回イベント日が対象年度内（4月1日～翌年3月31日）
+            (strftime('%Y', fe.first_event_date) = CAST(? AS TEXT) AND strftime('%m', fe.first_event_date) >= '04')
+            OR
+            (strftime('%Y', fe.first_event_date) = CAST(? + 1 AS TEXT) AND strftime('%m', fe.first_event_date) <= '03')
+        )
+        ORDER BY COALESCE(curr.total_sales, 0) DESC
     '''
+    
+    # パラメータ: current_fy, report_id, [target_month], current_fy, current_fy
+    params = [current_fy, report_id]
+    if target_month:
+        params.append(target_month)
+    params.extend([current_fy, current_fy])
     
     cursor.execute(query, params)
     
@@ -446,10 +446,18 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
     params = [target_month] if target_month else []
 
     query = f'''
-        WITH current_sales AS (
+        WITH current_events AS (
             SELECT
                 school_id,
-                COALESCE(SUM(sales), 0) as total_sales
+                COUNT(*) as event_count
+            FROM event_sales
+            WHERE fiscal_year = ? AND report_id = ? {month_condition}
+            GROUP BY school_id
+        ),
+        prev_events AS (
+            SELECT
+                school_id,
+                COUNT(*) as event_count
             FROM event_sales
             WHERE fiscal_year = ? AND report_id = ? {month_condition}
             GROUP BY school_id
@@ -461,14 +469,6 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
             FROM event_sales
             WHERE fiscal_year = ? AND report_id = ? {month_condition}
             GROUP BY school_id
-        ),
-        prev_event_counts AS (
-            SELECT
-                school_id,
-                COUNT(*) as event_count
-            FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ?
-            GROUP BY school_id
         )
         SELECT
             s.school_id,
@@ -478,20 +478,20 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
             s.studio,
             s.manager,
             s.region,
-            COALESCE(pec.event_count, 0) as prev_event_count,
-            COALESCE(curr.total_sales, 0) as current_sales,
+            COALESCE(pe.event_count, 0) as prev_event_count,
+            0 as current_sales,
             COALESCE(prev.total_sales, 0) as prev_sales,
             -1.0 as growth_rate  -- 未実施なので -100%
         FROM schools_master s
-        LEFT JOIN current_sales curr ON curr.school_id = s.school_id
-        JOIN prev_sales prev ON prev.school_id = s.school_id
-        LEFT JOIN prev_event_counts pec ON pec.school_id = s.school_id
-        WHERE prev.total_sales > 0
-          AND COALESCE(curr.total_sales, 0) == 0
-        ORDER BY prev.total_sales DESC
+        JOIN prev_events pe ON pe.school_id = s.school_id
+        LEFT JOIN current_events ce ON ce.school_id = s.school_id
+        LEFT JOIN prev_sales prev ON prev.school_id = s.school_id
+        WHERE pe.event_count > 0
+          AND (ce.event_count IS NULL OR ce.event_count = 0)
+        ORDER BY COALESCE(prev.total_sales, 0) DESC
     '''
     
-    query_params = [current_fy, report_id] + params + [prev_fy, report_id] + params + [prev_fy, report_id]
+    query_params = [current_fy, report_id] + params + [prev_fy, report_id] + params + [prev_fy, report_id] + params
     
     cursor.execute(query, query_params)
     
