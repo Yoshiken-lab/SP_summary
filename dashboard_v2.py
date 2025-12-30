@@ -340,21 +340,25 @@ def get_schools_list(db_path=None):
 
 
 def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
-    """特定学校の会員率推移を取得（全報告書から）"""
+    """特定学校の会員率推移を取得（最新報告書から）"""
     if school_id is None:
         return []
     
     conn = get_connection(db_path)
     cursor = conn.cursor()
     
-    # 全報告書から学年別データを取得
+    # 最新の報告書IDを取得
+    cursor.execute('SELECT MAX(id) FROM reports')
+    latest_report_id = cursor.fetchone()[0]
+    
+    # 最新報告書から学年別データを取得
     cursor.execute('''
         SELECT r.report_date, m.snapshot_date, m.grade, m.member_rate, m.total_students, m.member_count
         FROM member_rates m
         JOIN reports r ON m.report_id = r.id
-        WHERE m.school_id = ?
+        WHERE m.school_id = ? AND m.report_id = ?
         ORDER BY m.snapshot_date, m.grade
-    ''', (school_id,))
+    ''', (school_id, latest_report_id))
     
     results = cursor.fetchall()
     conn.close()
