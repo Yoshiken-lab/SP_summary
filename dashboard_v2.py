@@ -2379,7 +2379,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             renderPagination(alertType, totalCount, page);
         }}
         
-        // ページネーション
+        // ページネーション（数字付き）
         function renderPagination(alertType, totalCount, currentPage) {{
             const totalPages = Math.ceil(totalCount / alertPageSize);
             const paginationEl = document.getElementById(`${{alertType}}-pagination`);
@@ -2388,14 +2388,65 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return;
             }}
             
-            let html = '';
+            let html = '<div style="display: flex; gap: 4px; align-items: center; justify-content: center;">';
+            
+            // 前へボタン
             if (currentPage > 1) {{
-                html += `<button onclick="renderAlertTable('${{alertType}}', ${{currentPage - 1}})" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">前へ</button>`;
+                html += `<button onclick="renderAlertTable('${{alertType}}', ${{currentPage - 1}})" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">&lt;</button>`;
+            }} else {{
+                html += `<button disabled style="padding: 6px 12px; background: #e5e7eb; color: #9ca3af; border: none; border-radius: 4px; cursor: not-allowed;">&lt;</button>`;
             }}
-            html += `<span style="padding: 6px 12px; color: #666;">${{currentPage}} / ${{totalPages}}</span>`;
+            
+            // ページ番号ボタン（最大7個表示: 1 ... 3 4 [5] 6 7 ... 10）
+            const maxButtons = 7;
+            let startPage = 1;
+            let endPage = totalPages;
+            
+            if (totalPages > maxButtons) {{
+                const halfButtons = Math.floor(maxButtons / 2);
+                if (currentPage <= halfButtons + 1) {{
+                    endPage = maxButtons - 1;
+                }} else if (currentPage >= totalPages - halfButtons) {{
+                    startPage = totalPages - maxButtons + 2;
+                }} else {{
+                    startPage = currentPage - halfButtons + 1;
+                    endPage = currentPage + halfButtons - 1;
+                }}
+            }}
+            
+            // 最初のページ
+            if (startPage > 1) {{
+                html += `<button onclick="renderAlertTable('${{alertType}}', 1)" style="padding: 6px 12px; background: white; color: #374151; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer;">1</button>`;
+                if (startPage > 2) {{
+                    html += `<span style="padding: 6px 8px; color: #9ca3af;">...</span>`;
+                }}
+            }}
+            
+            // 中間ページ
+            for (let i = startPage; i <= endPage; i++) {{
+                if (i === currentPage) {{
+                    html += `<button style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-weight: bold;">${{i}}</button>`;
+                }} else {{
+                    html += `<button onclick="renderAlertTable('${{alertType}}', ${{i}})" style="padding: 6px 12px; background: white; color: #374151; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer;">${{i}}</button>`;
+                }}
+            }}
+            
+            // 最後のページ
+            if (endPage < totalPages) {{
+                if (endPage < totalPages - 1) {{
+                    html += `<span style="padding: 6px 8px; color: #9ca3af;">...</span>`;
+                }}
+                html += `<button onclick="renderAlertTable('${{alertType}}', ${{totalPages}})" style="padding: 6px 12px; background: white; color: #374151; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer;">${{totalPages}}</button>`;
+            }}
+            
+            // 次へボタン
             if (currentPage < totalPages) {{
-                html += `<button onclick="renderAlertTable('${{alertType}}', ${{currentPage + 1}})" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">次へ</button>`;
+                html += `<button onclick="renderAlertTable('${{alertType}}', ${{currentPage + 1}})" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">&gt;</button>`;
+            }} else {{
+                html += `<button disabled style="padding: 6px 12px; background: #e5e7eb; color: #9ca3af; border: none; border-radius: 4px; cursor: not-allowed;">&gt;</button>`;
             }}
+            
+            html += '</div>';
             paginationEl.innerHTML = html;
         }}
         
