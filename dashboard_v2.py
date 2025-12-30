@@ -602,6 +602,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         {
             'school_name': r['school_name'],
             'attribute': r['attribute'],
+            'region': r['region'],
             'studio': r['studio'],
             'manager': r['manager'],
             'region': r['region'],
@@ -618,10 +619,12 @@ def generate_dashboard(db_path=None, output_dir=None):
     for y in available_years:
         schools = get_new_schools(db_path, target_fy=y)
         new_schools_all[y] = [
-            {
+         {
                 'school_name': r['school_name'],
                 'attribute': r['attribute'],
+                'region': r['region'],
                 'studio': r['studio'],
+                'first_event_date': r['first_event_date'],
                 'manager': r['manager'],
                 'region': r['region'],
                 'current_sales': r['current_sales'],
@@ -640,7 +643,9 @@ def generate_dashboard(db_path=None, output_dir=None):
             {
                 'school_name': r['school_name'],
                 'attribute': r['attribute'],
+                'region': r['region'],
                 'studio': r['studio'],
+                'prev_event_count': r['prev_event_count'],
                 'manager': r['manager'],
                 'region': r['region'],
                 'current_sales': r['current_sales'],
@@ -2327,11 +2332,14 @@ def generate_dashboard(db_path=None, output_dir=None):
             html += '<thead><tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">';
             html += '<th style="padding: 12px; text-align: left;">学校名</th>';
             html += '<th style="padding: 12px; text-align: left;">属性</th>';
+            html += '<th style="padding: 12px; text-align: left;">事業所</th>';
             html += '<th style="padding: 12px; text-align: left;">写真館</th>';
             
             if (alertType === 'new_schools') {{
-                html += '<th style="padding: 12px; text-align: right;">今年度売上</th>';
+                html += '<th style="padding: 12px; text-align: left;">初回開始日</th>';
+                html += '<th style="padding: 12px; text-align: right;">売上</th>';
             }} else if (alertType === 'no_events') {{
+                html += '<th style="padding: 12px; text-align: right;">前年度イベント数</th>';
                 html += '<th style="padding: 12px; text-align: right;">前年度売上</th>';
             }} else if (alertType === 'decline') {{
                 html += '<th style="padding: 12px; text-align: right;">会員率</th>';
@@ -2350,9 +2358,14 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += `<tr style="background: ${{bgColor}}; border-bottom: 1px solid #e5e7eb;">`;
                 html += `<td style="padding: 12px;">${{row.school_name}}</td>`;
                 html += `<td style="padding: 12px;">${{row.attribute || '-'}}</td>`;
+                html += `<td style="padding: 12px;">${{row.region || '-'}}</td>`;
                 html += `<td style="padding: 12px;">${{row.studio || '-'}}</td>`;
                 
-                if (alertType === 'no_events') {{
+                if (alertType === 'new_schools') {{
+                    html += `<td style="padding: 12px;">${{row.first_event_date || '-'}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                }} else if (alertType === 'no_events') {{
+                    html += `<td style="padding: 12px; text-align: right;">${{row.prev_event_count || 0}}件</td>`;
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'decline') {{
                     // member_rateは既にパーセント形式（63.0 = 63.0%）

@@ -236,7 +236,7 @@ def get_rapid_growth_schools(db_path=None, target_fy=None):
         target_fy: 対象年度（Noneの場合は現在年度）
     
     Returns:
-        list: [{school_id, school_name, attribute, studio, current_sales, prev_sales, growth_rate}, ...]
+        list: [{school_id, school_name, attribute, branch, studio, current_sales, prev_sales, growth_rate}, ...]
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
@@ -271,6 +271,7 @@ def get_rapid_growth_schools(db_path=None, target_fy=None):
             s.school_id,
             s.school_name,
             s.attribute,
+            s.region,
             s.studio,
             s.manager,
             s.region,
@@ -293,12 +294,13 @@ def get_rapid_growth_schools(db_path=None, target_fy=None):
             'school_id': row[0],
             'school_name': row[1],
             'attribute': row[2] or '',
-            'studio': row[3] or '',
-            'manager': row[4] or '',
-            'region': row[5] or '',
-            'current_sales': row[6],
-            'prev_sales': row[7],
-            'growth_rate': row[8]
+            'region': row[3] or '',
+            'studio': row[4] or '',
+            'manager': row[5] or '',
+            'region': row[6] or '',
+            'current_sales': row[7],
+            'prev_sales': row[8],
+            'growth_rate': row[9]
         })
     
     conn.close()
@@ -315,7 +317,7 @@ def get_new_schools(db_path=None, target_fy=None, target_month=None):
         target_month: 対象月（Noneの場合は全月）
     
     Returns:
-        list: [{school_id, school_name, attribute, studio, current_sales, prev_sales, growth_rate}, ...]
+        list: [{school_id, school_name, attribute, branch, studio, first_event_date, current_sales, prev_sales, growth_rate}, ...]
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
@@ -356,19 +358,29 @@ def get_new_schools(db_path=None, target_fy=None, target_month=None):
             FROM event_sales
             WHERE fiscal_year = ? AND report_id = ?
             GROUP BY school_id
+        ),
+        first_events AS (
+            SELECT
+                school_id,
+                MIN(event_date) as first_event_date
+            FROM event_sales
+            GROUP BY school_id
         )
         SELECT
             s.school_id,
             s.school_name,
             s.attribute,
+            s.region,
             s.studio,
             s.manager,
             s.region,
+            fe.first_event_date,
             curr.total_sales,
             COALESCE(prev.total_sales, 0) as prev_sales
         FROM current_sales curr
         JOIN schools_master s ON s.school_id = curr.school_id
         LEFT JOIN prev_sales prev ON prev.school_id = curr.school_id
+        LEFT JOIN first_events fe ON fe.school_id = s.school_id
         WHERE prev.total_sales IS NULL OR prev.total_sales = 0
         ORDER BY curr.total_sales DESC
     '''
@@ -377,15 +389,28 @@ def get_new_schools(db_path=None, target_fy=None, target_month=None):
     
     results = []
     for row in cursor.fetchall():
+        # 日付フォーマット：YYYY年MM月DD日
+        first_date = row[7]
+        if first_date:
+            try:
+                date_obj = datetime.strptime(first_date, '%Y-%m-%d')
+                formatted_date = date_obj.strftime('%Y年%m月%d日')
+            except:
+                formatted_date = first_date
+        else:
+            formatted_date = ''
+            
         results.append({
             'school_id': row[0],
             'school_name': row[1],
             'attribute': row[2] or '',
-            'studio': row[3] or '',
-            'manager': row[4] or '',
-            'region': row[5] or '',
-            'current_sales': row[6],
-            'prev_sales': row[7],
+            'region': row[3] or '',
+            'studio': row[4] or '',
+            'manager': row[5] or '',
+            'region': row[6] or '',
+            'first_event_date': formatted_date,
+            'current_sales': row[8],
+            'prev_sales': row[9],
             'growth_rate': 1.0  # 新規なので100%（便宜上）
         })
     
@@ -403,7 +428,7 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
         target_month: 対象月（Noneの場合は全月）
     
     Returns:
-        list: [{school_id, school_name, attribute, studio, current_sales, prev_sales, growth_rate}, ...]
+        list: [{school_id, school_name, attribute, branch, studio, prev_event_count, current_sales, prev_sales, growth_rate}, ...]
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
@@ -436,26 +461,37 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
             FROM event_sales
             WHERE fiscal_year = ? AND report_id = ? {month_condition}
             GROUP BY school_id
+        ),
+        prev_event_counts AS (
+            SELECT
+                school_id,
+                COUNT(*) as event_count
+            FROM event_sales
+            WHERE fiscal_year = ?
+            GROUP BY school_id
         )
         SELECT
             s.school_id,
             s.school_name,
             s.attribute,
+            s.region,
             s.studio,
             s.manager,
             s.region,
+            COALESCE(pec.event_count, 0) as prev_event_count,
             COALESCE(curr.total_sales, 0) as current_sales,
             COALESCE(prev.total_sales, 0) as prev_sales,
             -1.0 as growth_rate  -- 未実施なので -100%
         FROM schools_master s
         LEFT JOIN current_sales curr ON curr.school_id = s.school_id
         JOIN prev_sales prev ON prev.school_id = s.school_id
+        LEFT JOIN prev_event_counts pec ON pec.school_id = s.school_id
         WHERE prev.total_sales > 0
           AND COALESCE(curr.total_sales, 0) == 0
         ORDER BY prev.total_sales DESC
     '''
     
-    query_params = [current_fy, report_id] + params + [prev_fy, report_id] + params
+    query_params = [current_fy, report_id] + params + [prev_fy, report_id] + params + [prev_fy]
     
     cursor.execute(query, query_params)
     
@@ -465,12 +501,14 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
             'school_id': row[0],
             'school_name': row[1],
             'attribute': row[2] or '',
-            'studio': row[3] or '',
-            'manager': row[4] or '',
-            'region': row[5] or '',
-            'current_sales': row[6],
-            'prev_sales': row[7],
-            'growth_rate': row[8]
+            'region': row[3] or '',
+            'studio': row[4] or '',
+            'manager': row[5] or '',
+            'region': row[6] or '',
+            'prev_event_count': row[7],
+            'current_sales': row[8],
+            'prev_sales': row[9],
+            'growth_rate': row[10]
         })
     
     conn.close()
