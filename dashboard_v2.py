@@ -340,39 +340,49 @@ def get_schools_list(db_path=None):
 
 
 def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
-    """特定学校の会員率推移を取得（最新報告書から、SQL内で全学年集計）"""
+    """特定学校の会員率推移を取得（全報告書から各月の最新データを取得）"""
     if school_id is None:
         return []
     
     conn = get_connection(db_path)
     cursor = conn.cursor()
     
-    # 最新の報告書IDを取得
-    cursor.execute('SELECT MAX(id) FROM reports')
-    latest_report_id = cursor.fetchone()[0]
-    
-    # 学年別データを取得（全学年を除く）
+    # 各snapshot_dateごとの最新report_idを使用してデータを取得（重複を避ける）
     cursor.execute('''
-        SELECT snapshot_date, grade, member_rate, total_students, member_count
-        FROM member_rates
-        WHERE school_id = ? AND report_id = ? AND grade != '全学年'
-        ORDER BY snapshot_date, grade
-    ''', (school_id, latest_report_id))
+        WITH latest_snapshots AS (
+            SELECT snapshot_date, MAX(report_id) as max_report_id
+            FROM member_rates
+            WHERE school_id = ?
+            GROUP BY snapshot_date
+        )
+        SELECT m.snapshot_date, m.grade, m.member_rate, m.total_students, m.member_count
+        FROM member_rates m
+        JOIN latest_snapshots ls ON m.snapshot_date = ls.snapshot_date AND m.report_id = ls.max_report_id
+        WHERE m.school_id = ? AND m.grade != '全学年'
+        ORDER BY m.snapshot_date, m.grade
+    ''', (school_id, school_id))
     
     grade_results = cursor.fetchall()
     
-    # 全学年合計データをSQL内で計算
+    # 全学年合計データをSQL内で計算（各snapshot_dateごと）
     cursor.execute('''
+        WITH latest_snapshots AS (
+            SELECT snapshot_date, MAX(report_id) as max_report_id
+            FROM member_rates
+            WHERE school_id = ?
+            GROUP BY snapshot_date
+        )
         SELECT 
-            snapshot_date,
-            SUM(total_students) as sum_total,
-            SUM(member_count) as sum_member,
-            ROUND(CAST(SUM(member_count) AS FLOAT) / NULLIF(SUM(total_students), 0) * 100, 1) as calc_rate
-        FROM member_rates
-        WHERE school_id = ? AND report_id = ? AND grade != '全学年'
-        GROUP BY snapshot_date
-        ORDER BY snapshot_date
-    ''', (school_id, latest_report_id))
+            m.snapshot_date,
+            SUM(m.total_students) as sum_total,
+            SUM(m.member_count) as sum_member,
+            ROUND(CAST(SUM(m.member_count) AS FLOAT) / NULLIF(SUM(m.total_students), 0) * 100, 1) as calc_rate
+        FROM member_rates m
+        JOIN latest_snapshots ls ON m.snapshot_date = ls.snapshot_date AND m.report_id = ls.max_report_id
+        WHERE m.school_id = ? AND m.grade != '全学年'
+        GROUP BY m.snapshot_date
+        ORDER BY m.snapshot_date
+    ''', (school_id, school_id))
     
     all_grade_results = cursor.fetchall()
     conn.close()
