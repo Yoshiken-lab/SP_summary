@@ -340,7 +340,7 @@ def get_schools_list(db_path=None):
 
 
 def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
-    """特定学校の会員率推移を取得（最新報告書から）"""
+    """特定学校の会員率推移を取得（最新報告書から、SQL内で全学年集計）"""
     if school_id is None:
         return []
     
@@ -351,59 +351,58 @@ def get_member_rates_by_school(db_path=None, school_id=None, fiscal_year=None):
     cursor.execute('SELECT MAX(id) FROM reports')
     latest_report_id = cursor.fetchone()[0]
     
-    # 最新報告書から学年別データを取得
+    # 学年別データを取得（全学年を除く）
     cursor.execute('''
-        SELECT r.report_date, m.snapshot_date, m.grade, m.member_rate, m.total_students, m.member_count
-        FROM member_rates m
-        JOIN reports r ON m.report_id = r.id
-        WHERE m.school_id = ? AND m.report_id = ?
-        ORDER BY m.snapshot_date, m.grade
+        SELECT snapshot_date, grade, member_rate, total_students, member_count
+        FROM member_rates
+        WHERE school_id = ? AND report_id = ? AND grade != '全学年'
+        ORDER BY snapshot_date, grade
     ''', (school_id, latest_report_id))
     
-    results = cursor.fetchall()
+    grade_results = cursor.fetchall()
+    
+    # 全学年合計データをSQL内で計算
+    cursor.execute('''
+        SELECT 
+            snapshot_date,
+            SUM(total_students) as sum_total,
+            SUM(member_count) as sum_member,
+            ROUND(CAST(SUM(member_count) AS FLOAT) / NULLIF(SUM(total_students), 0) * 100, 1) as calc_rate
+        FROM member_rates
+        WHERE school_id = ? AND report_id = ? AND grade != '全学年'
+        GROUP BY snapshot_date
+        ORDER BY snapshot_date
+    ''', (school_id, latest_report_id))
+    
+    all_grade_results = cursor.fetchall()
     conn.close()
     
     # データを整形 (snapshot_date毎にグループ化)
     data = {}
-    for row in results:
-        report_date, snapshot_date, grade, rate, total_students, member_count = row
+    
+    # 学年別データを追加
+    for row in grade_results:
+        snapshot_date, grade, rate, total_students, member_count = row
         if snapshot_date not in data:
             data[snapshot_date] = []
-        # '全学年' は除外して後で再計算するか、あるいはそのまま追加するか
-        # ここではすべて追加し、最後に全学年を再計算して上書きする
         data[snapshot_date].append({
             'grade': grade,
             'rate': rate,
             'total_students': total_students,
             'member_count': member_count
         })
-
-    # '全学年' のレートを再計算 (SUM(member_count) / SUM(total_students))
-    for snapshot_date, items in data.items():
-        # 全学年以外のデータを集計
-        valid_items = [i for i in items if i['grade'] != '全学年']
-        if not valid_items:
-            continue
-            
-        sum_total = sum(i['total_students'] for i in valid_items if i['total_students'])
-        sum_member = sum(i['member_count'] for i in valid_items if i['member_count'])
-        
-        recalc_rate = (sum_member / sum_total * 100) if sum_total > 0 else 0
-        recalc_rate = round(recalc_rate, 1)
-
-        # 全学年データの更新または追加
-        all_grade_item = next((i for i in items if i['grade'] == '全学年'), None)
-        if all_grade_item:
-            all_grade_item['rate'] = recalc_rate
-            all_grade_item['total_students'] = sum_total
-            all_grade_item['member_count'] = sum_member
-        else:
-            items.append({
-                'grade': '全学年',
-                'rate': recalc_rate,
-                'total_students': sum_total,
-                'member_count': sum_member
-            })
+    
+    # 全学年合計データを追加（SQL側で計算済み）
+    for row in all_grade_results:
+        snapshot_date, sum_total, sum_member, calc_rate = row
+        if snapshot_date not in data:
+            data[snapshot_date] = []
+        data[snapshot_date].append({
+            'grade': '全学年',
+            'rate': calc_rate or 0,
+            'total_students': sum_total,
+            'member_count': sum_member
+        })
     
     return data
 
@@ -1771,13 +1770,17 @@ def generate_dashboard(db_path=None, output_dir=None):
             let maxRate = 0;  // 最大値を追跡
             
             if (gradeDisplay === 'all') {{
-                // 全学年の平均
+                // 全学年データを使用（SQL側で正しく計算済み）
                 const avgRates = sortedMonths.map(ym => {{
                     const grades = monthlyData[ym].data;
-                    const sum = grades.reduce((acc, g) => acc + (g.rate || 0), 0);
-                    const avg = grades.length > 0 ? sum / grades.length : 0;
-                    maxRate = Math.max(maxRate, avg);
-                    return avg;
+                    // '全学年'というgradeのデータを探す
+                    const allGradeData = grades.find(g => g.grade === '全学年');
+                    if (allGradeData) {{
+                        maxRate = Math.max(maxRate, allGradeData.rate);
+                        return allGradeData.rate;
+                    }}
+                    // '全学年'がない場合は0（エラー回避）
+                    return 0;
                 }});
                 
                 datasets = [{{
@@ -1822,8 +1825,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             if (memberRateTrendChart) memberRateTrendChart.destroy();
             
-            // Y軸の最大値を計算（データの最大値の1.1倍、最低でも1.0）
-            const yMax = Math.max(1.0, maxRate * 1.1);
+            // Y軸の最大値を計算（データの最大値の1.1倍、最低でも100%）
+            const yMax = Math.max(100, maxRate * 1.1);
             
             memberRateTrendChart = new Chart(document.getElementById('memberRateTrendChart'), {{
                 type: 'line',
@@ -1838,7 +1841,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                                 label: function(context) {{
                                     const label = context.dataset.label || '';
                                     const value = context.parsed.y;
-                                    return label + ': ' + (value * 100).toFixed(1) + '%';
+                                    return label + ': ' + value.toFixed(1) + '%';
                                 }}
                             }}
                         }}
@@ -1847,7 +1850,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                         y: {{
                             min: 0,
                             max: yMax,
-                            ticks: {{ callback: function(value) {{ return (value * 100).toFixed(0) + '%'; }} }}
+                            ticks: {{ callback: function(value) {{ return value.toFixed(0) + '%'; }} }}
                         }}
                     }}
                 }}
