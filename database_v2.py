@@ -548,7 +548,7 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
             ) ls ON m.school_id = ls.school_id 
                 AND m.snapshot_date = ls.snapshot_date 
                 AND m.report_id = ls.latest_report
-            WHERE m.grade != '全学年'
+            WHERE m.grade != '全学年' AND m.total_students > 0
             GROUP BY m.school_id
         )
         SELECT
@@ -567,17 +567,11 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
         JOIN prev_sales prev ON prev.school_id = s.school_id
         LEFT JOIN latest_rates r ON r.school_id = s.school_id
         WHERE prev.total_sales > 0
-          -- 売上減少率判定: (curr - prev) / prev <= -threshold
-          AND (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales <= ?
-          -- 会員率判定
-          AND COALESCE(r.member_rate, 0) < ?
         ORDER BY (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales ASC
     '''
     
-    # 閾値は正の値で渡されるので、減少率としてはマイナスにする
-    decline_limit = -sales_decline_threshold
-    
-    params = [current_fy, prev_fy, decline_limit, member_rate_threshold]
+    # SQL側ではフィルタしない（JavaScript側で全フィルタリングを行う）
+    params = [current_fy, prev_fy]
     
     cursor.execute(query, params)
     
