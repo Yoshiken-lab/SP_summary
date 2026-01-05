@@ -1163,19 +1163,19 @@ def get_studio_decline_analysis(db_path=None, target_fy=None):
     prev_fy = target_fy - 1
     
     # 今年度の写真館別集計
+    # 写真館名でユニークにするため、regionは結合し、集計単位をstudioのみにする
     query = '''
         WITH current_year AS (
             SELECT 
                 s.studio,
-                s.attribute,
-                s.region,
+                GROUP_CONCAT(DISTINCT s.region) as region,
                 COUNT(DISTINCT s.school_id) as school_count,
                 COALESCE(SUM(e.sales), 0) as current_sales
             FROM schools_master s
             LEFT JOIN event_sales e ON s.school_id = e.school_id 
                 AND e.fiscal_year = ? AND e.report_id = ?
             WHERE s.studio IS NOT NULL AND s.studio != ''
-            GROUP BY s.studio, s.attribute, s.region
+            GROUP BY s.studio
         ),
         prev_year AS (
             SELECT 
@@ -1189,7 +1189,7 @@ def get_studio_decline_analysis(db_path=None, target_fy=None):
         )
         SELECT 
             c.studio,
-            c.attribute,
+            '', -- attribute placeholder (no longer used)
             c.region,
             c.current_sales,
             COALESCE(p.prev_sales, 0) as prev_sales,

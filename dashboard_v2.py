@@ -2749,6 +2749,10 @@ def generate_dashboard(db_path=None, output_dir=None):
                     // 9カラム: 学校名, 属性, 写真館, 会員率, 売上, 会員数, 単価, 属性平均, 平均比
                     // 合計100%になるように調整
                     return '<colgroup><col style="width: 20%;"><col style="width: 6%;"><col style="width: 11%;"><col style="width: 8%;"><col style="width: 9%;"><col style="width: 7%;"><col style="width: 13%;"><col style="width: 13%;"><col style="width: 13%;"></colgroup>';
+                }} else if (alertType === 'studio_decline') {{
+                    // 6カラム: 写真館名, 事業所, 今年度売上, 前年度売上, 変化率, 担当校数
+                    // 合計100%になるように調整
+                    return '<colgroup><col style="width: 25%;"><col style="width: 15%;"><col style="width: 15%;"><col style="width: 15%;"><col style="width: 15%;"><col style="width: 15%;"></colgroup>';
                 }} else {{
                     // 7カラム (rapid_growth): 学校名, 属性, 事業所, 写真館, 今年度売上, 前年度売上, 成長率
                     return '<colgroup><col style="width: 24%;"><col style="width: 9%;"><col style="width: 11%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"></colgroup>';
