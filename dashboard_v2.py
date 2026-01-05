@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from database_v2 import (
     get_connection, get_rapid_growth_schools, get_new_schools, get_no_events_schools, get_declining_schools,
-    get_events_for_date_filter
+    get_events_for_date_filter, get_all_schools
 )    
 
 
@@ -678,8 +678,9 @@ def generate_dashboard(db_path=None, output_dir=None):
     # イベント開始日別売上データの取得（全期間・JSでフィルタリング）
     print("   イベント開始日別データを取得中...")
     event_sales_by_date_raw = get_events_for_date_filter(db_path, years_back=3)
-    event_sales_by_date = [
+    event_sales_by_date_data = [
         {
+            'fiscal_year': r['fiscal_year'],
             'year': r['year'],
             'month': r['month'],
             'day': r['day'],
@@ -695,9 +696,14 @@ def generate_dashboard(db_path=None, output_dir=None):
         for r in event_sales_by_date_raw
     ]
     
+    # 年度別イベント比較用の学校一覧を取得
+    print("   学校一覧データを取得中...")
+    all_schools_data = get_all_schools(db_path)
+    
     # JS用にJSON変換
     import json
-    event_sales_by_date_json = json.dumps(event_sales_by_date, ensure_ascii=False)
+    event_sales_by_date_json = json.dumps(event_sales_by_date_data, ensure_ascii=False)
+    all_schools_json = json.dumps(all_schools_data, ensure_ascii=False)
 
     # HTMLファイル名
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -2177,6 +2183,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div class="alert-category" style="flex: 1; padding: 20px; background: #fdf4ff; border-radius: 8px; border: 2px solid #f0abfc;">
                 <div class="alert-category-title" style="font-weight: bold; color: #86198f; margin-bottom: 15px; font-size: 16px;">📅 イベント関連</div>
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button onclick="showAlert('yearly_comparison')" id="tab-yearly_comparison" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">年度別イベント比較</button>
                     <button onclick="showAlert('event_sales_by_date')" id="tab-event_sales_by_date" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">イベント開始日別売上</button>
                 </div>
             </div>
@@ -2334,7 +2341,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         const newSchoolsAllData = {json.dumps(new_schools_all, ensure_ascii=False)};
         const noEventsAllData = {json.dumps(no_events_all, ensure_ascii=False)};
         const declineBaseData = {json.dumps(decline_data, ensure_ascii=False)};
-        const eventSalesDataFull = {json.dumps(event_sales_by_date, ensure_ascii=False)};
+        const eventSalesDataFull = {json.dumps(event_sales_by_date_data, ensure_ascii=False)};
 
         const alertsData = {{
             'rapid_growth': rapidGrowthData,

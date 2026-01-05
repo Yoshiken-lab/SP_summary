@@ -726,6 +726,176 @@ def get_events_for_date_filter(db_path=None, years_back=3):
     return results
 
 
+def get_all_schools(db_path=None):
+    """
+    全学校の一覧を取得（フィルター用）
+    
+    Args:
+        db_path: データベースパス
+    
+    Returns:
+        list: [{school_id, school_name, attribute, region, studio}, ...]
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    query = '''
+        SELECT DISTINCT
+            school_id,
+            school_name,
+            attribute,
+            region,
+            studio
+        FROM schools_master
+        ORDER BY school_name
+    '''
+    
+    cursor.execute(query)
+    schools = []
+    for row in cursor.fetchall():
+        schools.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': row[2] or '',
+            'region': row[3] or '',
+            'studio': row[4] or ''
+        })
+    
+    conn.close()
+    return schools
+
+
+def get_yearly_event_comparison(db_path=None, school_id=None, year1=None, year2=None):
+    """
+    指定学校の2つの年度のイベント一覧を取得して比較
+    
+    Args:
+        db_path: データベースパス
+        school_id: 学校ID
+        year1: 比較年度1
+        year2: 比較年度2
+    
+    Returns:
+        dict: {
+            'year1_events': [{event_name, event_date, sales, publish_date}, ...],
+            'year2_events': [...],
+            'year1_total': 合計売上,
+            'year2_total': 合計売上,
+            'school_info': {school_name, attribute, region, studio}
+        }
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    if not school_id:
+        conn.close()
+        return {
+            'year1_events': [],
+            'year2_events': [],
+            'year1_total': 0,
+            'year2_total': 0,
+            'school_info': {}
+        }
+    
+    current_fy = year1 if year1 else get_current_fiscal_year()
+    compare_fy = year2 if year2 else current_fy - 1
+    
+    report_id = get_latest_report_id(conn)
+    if not report_id:
+        conn.close()
+        return {
+            'year1_events': [],
+            'year2_events': [],
+            'year1_total': 0,
+            'year2_total': 0,
+            'school_info': {}
+        }
+    
+    # 学校情報取得
+    cursor.execute('''
+        SELECT school_name, attribute, region, studio
+        FROM schools_master
+        WHERE school_id = ?
+    ''', (school_id,))
+    
+    school_row = cursor.fetchone()
+    school_info = {
+        'school_name': school_row[0] if school_row else '',
+        'attribute': school_row[1] if school_row else '',
+        'region': school_row[2] if school_row else '',
+        'studio': school_row[3] if school_row else ''
+    }
+    
+    # 年度1のイベント取得
+    query = '''
+        SELECT 
+            event_name,
+            event_date,
+            sales
+        FROM event_sales
+        WHERE school_id = ? AND fiscal_year = ? AND report_id = ?
+        ORDER BY event_date ASC
+    '''
+    
+    cursor.execute(query, (school_id, current_fy, report_id))
+    year1_events = []
+    year1_total = 0
+    
+    for row in cursor.fetchall():
+        event_date = row[1]
+        # 公開日をフォーマット (YYYY-MM-DD -> MM月DD日)
+        if event_date:
+            try:
+                date_obj = datetime.strptime(event_date, '%Y-%m-%d')
+                publish_date = f"{date_obj.month}月{date_obj.day}日"
+            except:
+                publish_date = event_date
+        else:
+            publish_date = ''
+        
+        year1_events.append({
+            'event_name': row[0],
+            'event_date': event_date,
+            'sales': row[2],
+            'publish_date': publish_date
+        })
+        year1_total += row[2]
+    
+    # 年度2のイベント取得
+    cursor.execute(query, (school_id, compare_fy, report_id))
+    year2_events = []
+    year2_total = 0
+    
+    for row in cursor.fetchall():
+        event_date = row[1]
+        if event_date:
+            try:
+                date_obj = datetime.strptime(event_date, '%Y-%m-%d')
+                publish_date = f"{date_obj.month}月{date_obj.day}日"
+            except:
+                publish_date = event_date
+        else:
+            publish_date = ''
+        
+        year2_events.append({
+            'event_name': row[0],
+            'event_date': event_date,
+            'sales': row[2],
+            'publish_date': publish_date
+        })
+        year2_total += row[2]
+    
+    conn.close()
+    
+    return {
+        'year1_events': year1_events,
+        'year2_events': year2_events,
+        'year1_total': year1_total,
+        'year2_total': year2_total,
+        'school_info': school_info
+    }
+
+
 if __name__ == '__main__':
     # テスト実行: データベース初期化
     init_database()
