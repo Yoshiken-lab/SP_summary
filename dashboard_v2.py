@@ -742,6 +742,7 @@ def generate_dashboard(db_path=None, output_dir=None):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>スクールフォト売上分析ダッシュボード V2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
@@ -815,6 +816,94 @@ def generate_dashboard(db_path=None, output_dir=None):
             color: #1a1a2e;
             cursor: pointer;
             background: white;
+        }}
+
+        /* Proposal D: Vibrant Header Cards */
+        .alert-card-grid {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-bottom: 30px;
+        }}
+        .alert-card {{
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+            border: 1px solid #e2e8f0;
+        }}
+        .alert-card:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }}
+        .alert-card-header {{
+            padding: 16px;
+            color: white;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+        }}
+        .alert-card-header.green {{
+            background: linear-gradient(135deg, #10b981, #059669);
+        }}
+        .alert-card-header.orange {{
+            background: linear-gradient(135deg, #f97316, #ea580c);
+        }}
+        .alert-card-header.blue {{
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+        }}
+        .alert-card-header.purple {{
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        }}
+        .alert-card-body {{
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+        .alert-card-body button {{
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 10px 12px;
+            border-radius: 6px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+            color: #475569;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .alert-card-body button::after {{
+            content: '\f054';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 10px;
+            color: #cbd5e1;
+        }}
+        .alert-card-body button:hover {{
+            background: #f1f5f9;
+            color: #1e293b;
+            border-color: #cbd5e1;
+        }}
+        .alert-card-body button.active {{
+            border-left: 3px solid #3b82f6;
+            background: #eff6ff;
+            color: #1d4ed8;
+        }}
+        @media (max-width: 1200px) {{
+            .alert-card-grid {{
+                grid-template-columns: repeat(2, 1fr);
+            }}
+        }}
+        @media (max-width: 768px) {{
+            .alert-card-grid {{
+                grid-template-columns: 1fr;
+            }}
         }}
     </style>
 </head>
@@ -2178,41 +2267,50 @@ def generate_dashboard(db_path=None, output_dir=None):
     <div class="alert-section" style="max-width: 1600px; margin: 40px auto; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <h2 style="font-size: 24px; margin-bottom: 30px; color: #333;">条件別集計</h2>
         
-        <!-- カテゴリコンテナ -->
-        <div class="alert-category-container" style="display: flex; gap: 20px; margin-bottom: 30px; flex-wrap: wrap;">
+        <!-- カテゴリコンテナ (Proposal D: Vibrant Header Cards) -->
+        <div class="alert-card-grid">
             <!-- 売上・実績カテゴリ -->
-            <div class="alert-category" style="flex: 1; padding: 20px; background: #f0fdf4; border-radius: 8px; border: 2px solid #86efac;">
-                <div class="alert-category-title" style="font-weight: bold; color: #166534; margin-bottom: 15px; font-size: 16px;">📊 売上・実績</div>
-                <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="showAlert('rapid_growth')" id="tab-rapid_growth" class="alert-tab active" style="padding: 10px 18px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">売上好調校</button>
-                    <button onclick="showAlert('new_schools')" id="tab-new_schools" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">新規開始校</button>
+            <div class="alert-card">
+                <div class="alert-card-header green">
+                    <i class="fa-solid fa-chart-line"></i> 売上・実績
+                </div>
+                <div class="alert-card-body">
+                    <button onclick="showAlert('rapid_growth')" id="tab-rapid_growth" class="alert-tab active">売上好調校</button>
+                    <button onclick="showAlert('new_schools')" id="tab-new_schools" class="alert-tab">新規開始校</button>
                 </div>
             </div>
-            
+
             <!-- 要注意・改善カテゴリ -->
-            <div class="alert-category" style="flex: 1; padding: 20px; background: #fff7ed; border-radius: 8px; border: 2px solid #fed7aa;">
-                <div class="alert-category-title" style="font-weight: bold; color: #9a3412; margin-bottom: 15px; font-size: 16px;">⚠️ 要注意・改善</div>
-                <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="showAlert('no_events')" id="tab-no_events" class=" alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">今年度未実施校</button>
-                    <button onclick="showAlert('decline')" id="tab-decline" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">会員率・売上低下</button>
-                    <button onclick="showAlert('studio_decline')" id="tab-studio_decline" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">写真館別低下</button>
+            <div class="alert-card">
+                <div class="alert-card-header orange">
+                    <i class="fa-solid fa-triangle-exclamation"></i> 要注意・改善
+                </div>
+                <div class="alert-card-body">
+                    <button onclick="showAlert('no_events')" id="tab-no_events" class="alert-tab">今年度未実施校</button>
+                    <button onclick="showAlert('decline')" id="tab-decline" class="alert-tab">会員率・売上低下</button>
+                    <button onclick="showAlert('studio_decline')" id="tab-studio_decline" class="alert-tab">写真館別低下</button>
                 </div>
             </div>
+
             <!-- トレンド分析カテゴリ -->
-            <div class="alert-category" style="flex: 1; padding: 20px; background: #eff6ff; border-radius: 8px; border: 2px solid #bfdbfe;">
-                <div class="alert-category-title" style="font-weight: bold; color: #1e40af; margin-bottom: 15px; font-size: 16px;">📈 トレンド分析</div>
-                <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="showAlert('improved')" id="tab-improved" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">会員率改善</button>
-                    <button onclick="showAlert('unit_price')" id="tab-unit_price" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">販売単価分析</button>
+            <div class="alert-card">
+                <div class="alert-card-header blue">
+                    <i class="fa-solid fa-arrow-trend-up"></i> トレンド分析
+                </div>
+                <div class="alert-card-body">
+                    <button onclick="showAlert('improved')" id="tab-improved" class="alert-tab">会員率改善</button>
+                    <button onclick="showAlert('unit_price')" id="tab-unit_price" class="alert-tab">販売単価分析</button>
                 </div>
             </div>
 
             <!-- イベント関連カテゴリ -->
-            <div class="alert-category" style="flex: 1; padding: 20px; background: #fdf4ff; border-radius: 8px; border: 2px solid #f0abfc;">
-                <div class="alert-category-title" style="font-weight: bold; color: #86198f; margin-bottom: 15px; font-size: 16px;">📅 イベント関連</div>
-                <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="showAlert('yearly_comparison')" id="tab-yearly_comparison" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">年度別イベント比較</button>
-                    <button onclick="showAlert('event_sales_by_date')" id="tab-event_sales_by_date" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">イベント開始日別売上</button>
+            <div class="alert-card">
+                <div class="alert-card-header purple">
+                    <i class="fa-regular fa-calendar-check"></i> イベント関連
+                </div>
+                <div class="alert-card-body">
+                    <button onclick="showAlert('yearly_comparison')" id="tab-yearly_comparison" class="alert-tab">年度別イベント比較</button>
+                    <button onclick="showAlert('event_sales_by_date')" id="tab-event_sales_by_date" class="alert-tab">イベント開始日別売上</button>
                 </div>
             </div>
         </div>
