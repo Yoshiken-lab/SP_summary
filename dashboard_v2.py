@@ -2994,73 +2994,69 @@ def generate_dashboard(db_path=None, output_dir=None):
             const container = document.getElementById('yearly_comparison-table-container');
             
             let html = `
-                \u003cdiv style="margin-bottom: 20px; padding: 15px; background: #f9fafb; border-radius: 8px;"\u003e
-                    \u003cdiv style="font-weight: bold; font-size: 16px; margin-bottom: 10px;"\u003e${{school.school_name}}\u003c/div\u003e
-                    \u003cdiv style="color: #6b7280; font-size: 14px;"\u003e属性: ${{school.attribute || '-'}} | 事業所: ${{school.region || '-'}} | 写真館: ${{school.studio || '-'}}\u003c/div\u003e
+                \u003cdiv style="margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;"\u003e
+                    \u003cdiv style="font-weight: bold; font-size: 18px; margin-bottom: 6px;"\u003e${{school.school_name}}\u003c/div\u003e
+                    \u003cdiv style="color: #6b7280; font-size: 13px;"\u003e${{school.attribute || '-'}} / ${{school.studio || '-'}}\u003c/div\u003e
                 \u003c/div\u003e
-                \u003ctable style="width: 100%; border-collapse: collapse; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"\u003e
-                    \u003cthead\u003e
-                        \u003ctr style="background: #8b5cf6; color: white;"\u003e
-                            \u003cth style="width: 50%; padding: 12px; text-align: left; border-right: 2px solid white;"\u003e${{year1}}年度\u003c/th\u003e
-                            \u003cth style="width: 50%; padding: 12px; text-align: left;"\u003e${{year2}}年度\u003c/th\u003e
-                        \u003c/tr\u003e
-                    \u003c/thead\u003e
-                    \u003ctbody\u003e
+                \u003cdiv style="display: flex; gap: 20px;"\u003e
+                    \u003c!-- 左側: 年度1（青） --\u003e
+                    \u003cdiv style="flex: 1;"\u003e
+                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #3b82f6; margin-bottom: 12px; font-weight: 600; color: #1f2937;"\u003e${{year1}}年度\u003c/div\u003e
             `;
             
-            // イベント行を生成
-            const maxRows = Math.max(year1Events.length, year2Events.length);
-            for (let i = 0; i < maxRows; i++) {{
-                const e1 = year1Events[i];
-                const e2 = year2Events[i];
-                
-                // 年度1のセル
-                let cell1 = '';
-                if (e1) {{
-                    const publishDate = e1.event_date ? formatPublishDate(e1.event_date) : '';
-                    const salesFormatted = formatCurrency(e1.sales);
-                    // デバッグ用: fiscal_yearを表示
-                    cell1 = `
-                        \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e1.event_name || '-'}} \u003cspan style="font-size: 11px; color: #9ca3af;"\u003e(FY:${{e1.fiscal_year}})\u003c/span\u003e\u003c/div\u003e
-                        \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
-                        \u003cdiv style="color: #059669; font-weight: 500; margin-top: 4px;"\u003e${{salesFormatted}}\u003c/div\u003e
-                    `;
-                }}
-                
-                // 年度2のセル
-                let cell2 = '';
-                if (e2) {{
-                    const publishDate = e2.event_date ? formatPublishDate(e2.event_date) : '';
-                    const salesFormatted = formatCurrency(e2.sales);
-                    // デバッグ用: fiscal_yearを表示
-                    cell2 = `
-                        \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e2.event_name || '-'}} \u003cspan style="font-size: 11px; color: #9ca3af;"\u003e(FY:${{e2.fiscal_year}})\u003c/span\u003e\u003c/div\u003e
-                        \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
-                        \u003cdiv style="color: #059669; font-weight: 500; margin-top: 4px;"\u003e${{salesFormatted}}\u003c/div\u003e
-                    `;
-                }}
-                
-                const bgColor = i % 2 === 0 ? '#ffffff' : '#f9fafb';
+            // 年度1のイベント
+            year1Events.forEach((e, index) => {{
+                const publishDate = e.event_date ? formatPublishDate(e.event_date) : '';
+                const salesFormatted = formatCurrency(e.sales);
+                const bgColor = index % 2 === 0 ? '#ffffff' : '#f9fafb';
                 html += `
-                    \u003ctr style="background: ${{bgColor}};"\u003e
-                        \u003ctd style="padding: 12px; border-right: 1px solid #e5e7eb; vertical-align: top;"\u003e${{cell1}}\u003c/td\u003e
-                        \u003ctd style="padding: 12px; vertical-align: top;"\u003e${{cell2}}\u003c/td\u003e
-                    \u003c/tr\u003e
+                    \u003cdiv style="padding: 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
+                        \u003cdiv\u003e
+                            \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
+                            \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                        \u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 15px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                    \u003c/div\u003e
                 `;
-            }}
+            }});
             
-            // 合計行
+            // 年度1のフッター
             html += `
-                        \u003ctr style="background: #8b5cf6; color: white; font-weight: bold;"\u003e
-                            \u003ctd style="padding: 12px; border-right: 2px solid white;"\u003e
-                                計: ${{year1Events.length}}件 | 合計: ${{formatCurrency(year1Total)}}
-                            \u003c/td\u003e
-                            \u003ctd style="padding: 12px;"\u003e
-                                計: ${{year2Events.length}}件 | 合計: ${{formatCurrency(year2Total)}}
-                            \u003c/td\u003e
-                        \u003c/tr\u003e
-                    \u003c/tbody\u003e
-                \u003c/table\u003e
+                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937;"\u003e
+                            \u003cdiv\u003e計: ${{year1Events.length}}件\u003c/div\u003e
+                            \u003cdiv\u003e合計: ${{formatCurrency(year1Total)}}\u003c/div\u003e
+                        \u003c/div\u003e
+                    \u003c/div\u003e
+                    
+                    \u003c!-- 右側: 年度2（紫） --\u003e
+                    \u003cdiv style="flex: 1;"\u003e
+                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #8b5cf6; margin-bottom: 12px; font-weight: 600; color: #1f2937;"\u003e${{year2}}年度\u003c/div\u003e
+            `;
+            
+            // 年度2のイベント
+            year2Events.forEach((e, index) => {{
+                const publishDate = e.event_date ? formatPublishDate(e.event_date) : '';
+                const salesFormatted = formatCurrency(e.sales);
+                const bgColor = index % 2 === 0 ? '#ffffff' : '#f9fafb';
+                html += `
+                    \u003cdiv style="padding: 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
+                        \u003cdiv\u003e
+                            \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
+                            \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                        \u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 15px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                    \u003c/div\u003e
+                `;
+            }});
+            
+            // 年度2のフッター
+            html += `
+                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937;"\u003e
+                            \u003cdiv\u003e計: ${{year2Events.length}}件\u003c/div\u003e
+                            \u003cdiv\u003e合計: ${{formatCurrency(year2Total)}}\u003c/div\u003e
+                        \u003c/div\u003e
+                    \u003c/div\u003e
+                \u003c/div\u003e
             `;
             
             container.innerHTML = html;
