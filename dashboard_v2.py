@@ -2930,6 +2930,12 @@ def generate_dashboard(db_path=None, output_dir=None):
             updateSchoolList();
         }}
         
+        // 通貨フォーマット関数
+        function formatCurrency(value) {{
+            if (value == null || value === '') return '-';
+            return '¥' + Number(value).toLocaleString();
+        }}
+        
         // 年度別イベント比較実行
         async function compareYearlyEvents() {{
             const schoolId = parseInt(document.getElementById('yearlyComparisonSchool').value);
@@ -2954,6 +2960,9 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return;
             }}
             
+            console.log('選択された学校:', school.school_name);
+            console.log('比較年度:', year1, 'vs', year2);
+            
             // eventSalesDataFullから該当学校のデータを抽出
             let year1Events = eventSalesDataFull.filter(e => 
                 e.school_name === school.school_name && e.fiscal_year === year1
@@ -2961,6 +2970,11 @@ def generate_dashboard(db_path=None, output_dir=None):
             let year2Events = eventSalesDataFull.filter(e => 
                 e.school_name === school.school_name && e.fiscal_year === year2
             );
+            
+            console.log(`${{year1}}年度イベント:`, year1Events.length, '件');
+            console.log(`${{year2}}年度イベント:`, year2Events.length, '件');
+            console.log('サンプル year1Events:', year1Events.slice(0, 2));
+            console.log('サンプル year2Events:', year2Events.slice(0, 2));
             
             // 月フィルタ適用
             if (selectedMonth) {{
@@ -3005,8 +3019,9 @@ def generate_dashboard(db_path=None, output_dir=None):
                 if (e1) {{
                     const publishDate = e1.event_date ? formatPublishDate(e1.event_date) : '';
                     const salesFormatted = formatCurrency(e1.sales);
+                    // デバッグ用: fiscal_yearを表示
                     cell1 = `
-                        \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e1.event_name || '-'}}\u003c/div\u003e
+                        \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e1.event_name || '-'}} \u003cspan style="font-size: 11px; color: #9ca3af;"\u003e(FY:${{e1.fiscal_year}})\u003c/span\u003e\u003c/div\u003e
                         \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
                         \u003cdiv style="color: #059669; font-weight: 500; margin-top: 4px;"\u003e${{salesFormatted}}\u003c/div\u003e
                     `;
@@ -3017,8 +3032,9 @@ def generate_dashboard(db_path=None, output_dir=None):
                 if (e2) {{
                     const publishDate = e2.event_date ? formatPublishDate(e2.event_date) : '';
                     const salesFormatted = formatCurrency(e2.sales);
+                    // デバッグ用: fiscal_yearを表示
                     cell2 = `
-                        \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e2.event_name || '-'}}\u003c/div\u003e
+                        \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e2.event_name || '-'}} \u003cspan style="font-size: 11px; color: #9ca3af;"\u003e(FY:${{e2.fiscal_year}})\u003c/span\u003e\u003c/div\u003e
                         \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
                         \u003cdiv style="color: #059669; font-weight: 500; margin-top: 4px;"\u003e${{salesFormatted}}\u003c/div\u003e
                     `;

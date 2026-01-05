@@ -617,32 +617,11 @@ def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year, report_
             year, month = parse_month_column(val_str)
             if month:
                 # 年が明示されている場合は年度を計算、なければfiscal_yearを使用
-                fy_before = fiscal_year
-                year_parsed = year
                 if year:
                     fy = calculate_fiscal_year(year, month)
-                    fy_before = fy
                 else:
                     fy = fiscal_year
                 
-                # 未来日付チェックと補正
-                # 例: 報告書が2025年12月で、fy=2025, month=2の場合、それは2026年2月(未来)になる
-                # その場合、前年度(2025年2月)のデータである可能性が高いので補正する
-                corrected = False
-                if report_date:
-                    if month >= 4:
-                        calc_year = fy
-                    else:
-                        calc_year = fy + 1
-                    
-                    calc_date = datetime(calc_year, month, 1).date()
-                    # 報告書日付の翌月末までを許容範囲とする(多少の未来はあり得ると仮定しても、1年はあり得ない)
-                    # ここでは単純に「報告書日付より後の2月3月」は前年度とみなす
-                    rep_first_day = report_date.replace(day=1)
-                    if calc_date > rep_first_day + pd.Timedelta(days=60): # 2ヶ月以上の未来
-                         fy = fy - 1
-                         corrected = True
-
                 month_cols.append((col_idx, fy, month))
     
     stats = {'count': 0, 'unmatched_schools': []}
@@ -660,10 +639,12 @@ def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year, report_
         event_name = str(row[col_mapping.get('event', 3)]).strip() if pd.notna(row[col_mapping.get('event', 3)]) else None
         event_date = row[col_mapping.get('event_date', 4)] if 'event_date' in col_mapping else None
         
-        # イベント日付を文字列に変換
+        # イベント日付を文字列に変換し、年度計算用の日付オブジェクトを保持
+        event_date_obj = None
         if pd.notna(event_date):
             if isinstance(event_date, datetime):
-                event_date = event_date.date()
+                event_date_obj = event_date.date()
+                event_date = event_date_obj
             else:
                 event_date = str(event_date)
         else:
@@ -677,15 +658,21 @@ def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year, report_
             continue
         
         # 月別売上を登録
-        for col_idx, fy, month in month_cols:
+        for col_idx, fy_from_header, month in month_cols:
             sales = row[col_idx]
             if pd.notna(sales) and float(sales) != 0:
+                # event_dateがある場合は、そこから年度を計算し直す（より正確）
+                if event_date_obj:
+                    actual_fy = calculate_fiscal_year(event_date_obj.year, event_date_obj.month)
+                else:
+                    actual_fy = fy_from_header
+                
                 cursor.execute('''
                     INSERT OR REPLACE INTO event_sales
                     (report_id, fiscal_year, month, branch, school_id, 
                      event_name, event_date, sales)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (report_id, fy, month, branch, school_id, event_name, event_date, float(sales)))
+                ''', (report_id, actual_fy, month, branch, school_id, event_name, event_date, float(sales)))
                 stats['count'] += 1
     
     return stats
