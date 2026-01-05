@@ -2694,6 +2694,13 @@ def generate_dashboard(db_path=None, output_dir=None):
                     }});
                 }}
                 alertsData['unit_price'] = data;
+            }} else if (alertType === 'studio_decline') {{
+                const year = document.getElementById('studioDeclineYearFilter').value;
+                
+                if (year && studioDeclineAllData[year]) {{
+                    data = studioDeclineAllData[year];
+                }}
+                alertsData['studio_decline'] = data;
             }} else {{
                 data = alertsData[alertType] || [];
             }}
@@ -2798,6 +2805,13 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += getHeader('単価', 'avg_price', 'right');
                 html += getHeader('属性平均', 'attr_avg_price', 'right');
                 html += getHeader('平均比', 'price_ratio', 'right');
+            }} else if (alertType === 'studio_decline') {{
+                html += getHeader('写真館名', 'studio', 'left');
+                html += getHeader('事業所', 'region');
+                html += getHeader('今年度売上', 'current_sales', 'right');
+                html += getHeader('前年度売上', 'prev_sales', 'right');
+                html += getHeader('変化率', 'change_rate', 'right');
+                html += getHeader('担当校数', 'school_count', 'right');
             }} else if (alertType === 'event_sales_by_date') {{
                 html += getHeader('イベント名', 'event_name');
                 html += getHeader('開始日', 'event_date');
@@ -2813,6 +2827,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             pageData.forEach((row, idx) => {{
                 const bgColor = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
                 html += `<tr style="background: ${{bgColor}}; border-bottom: 1px solid #e5e7eb;">`;
+                // studio_decline以外は学校名から始まる
+                if (alertType !== 'studio_decline') {{
                 html += `<td style="padding: 12px; font-size: 13px;">${{row.school_name}}</td>`;
                 
                 if (alertType === 'improved' || alertType === 'unit_price') {{
@@ -2826,6 +2842,8 @@ def generate_dashboard(db_path=None, output_dir=None):
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.studio || '-'}}</td>`;
                 }}
                 
+
+                }}
                 if (alertType === 'new_schools') {{
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.first_event_date || '-'}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
@@ -2854,6 +2872,15 @@ def generate_dashboard(db_path=None, output_dir=None):
                     html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: #2563eb; font-size: 13px;">¥${{Math.round(row.avg_price).toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{Math.round(row.attr_avg_price).toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: ${{ratioColor}}; font-size: 13px;">${{row.price_ratio.toFixed(1)}}%</td>`;
+                }} else if (alertType === 'studio_decline') {{
+                    // studio_decline: 写真館名, 事業所, 今年度売上, 前年度売上, 変化率, 担当校数
+                    const changePercent = (row.change_rate * 100).toFixed(1);
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.studio || '-'}}</td>`;
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.region || '-'}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: #ef4444; font-size: 13px;">${{changePercent}}%</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.school_count}}校</td>`;
                 }} else if (alertType === 'event_sales_by_date') {{
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.event_name}}</td>`;
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.event_date}}</td>`;
@@ -3611,6 +3638,16 @@ def generate_dashboard(db_path=None, output_dir=None):
                 unitPriceYearSelect.appendChild(option);
             }});
             if (unitPriceYearSelect.options.length > 0) unitPriceYearSelect.selectedIndex = 0;
+            
+            // studio_decline用年度プルダウン
+            const studioDeclineYearSelect = document.getElementById('studioDeclineYearFilter');
+            Object.keys(studioDeclineAllData).sort((a,b) => b-a).forEach(year => {{
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year + '年度';
+                studioDeclineYearSelect.appendChild(option);
+            }});
+            if (studioDeclineYearSelect.options.length > 0) studioDeclineYearSelect.selectedIndex = 0;
         }}
         
         // Trend Analysisフィルタを初期化

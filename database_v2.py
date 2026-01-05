@@ -1167,6 +1167,7 @@ def get_studio_decline_analysis(db_path=None, target_fy=None):
         WITH current_year AS (
             SELECT 
                 s.studio,
+                s.attribute,
                 s.region,
                 COUNT(DISTINCT s.school_id) as school_count,
                 COALESCE(SUM(e.sales), 0) as current_sales
@@ -1174,7 +1175,7 @@ def get_studio_decline_analysis(db_path=None, target_fy=None):
             LEFT JOIN event_sales e ON s.school_id = e.school_id 
                 AND e.fiscal_year = ? AND e.report_id = ?
             WHERE s.studio IS NOT NULL AND s.studio != ''
-            GROUP BY s.studio, s.region
+            GROUP BY s.studio, s.attribute, s.region
         ),
         prev_year AS (
             SELECT 
@@ -1188,6 +1189,7 @@ def get_studio_decline_analysis(db_path=None, target_fy=None):
         )
         SELECT 
             c.studio,
+            c.attribute,
             c.region,
             c.current_sales,
             COALESCE(p.prev_sales, 0) as prev_sales,
@@ -1207,11 +1209,12 @@ def get_studio_decline_analysis(db_path=None, target_fy=None):
     for row in cursor.fetchall():
         results.append({
             'studio': row[0] or '',
-            'region': row[1] or '',
-            'current_sales': row[2] or 0,
-            'prev_sales': row[3] or 0,
-            'school_count': row[4] or 0,
-            'change_rate': row[5] or 0
+            'attribute': row[1] or '',
+            'region': row[2] or '',
+            'current_sales': row[3] or 0,
+            'prev_sales': row[4] or 0,
+            'school_count': row[5] or 0,
+            'change_rate': row[6] or 0
         })
     
     conn.close()
