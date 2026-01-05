@@ -2576,8 +2576,9 @@ def generate_dashboard(db_path=None, output_dir=None):
             // カラム幅の設定（alertTypeに応じて最適化）
             const getColgroup = () => {{
                 if (alertType === 'event_sales_by_date') {{
-                    // 8カラム: 学校名, 属性, 事業所, 写真館, イベント名, 開始日, 会員率, 売上
-                    return '<colgroup><col style="width: 18%;"><col style="width: 7%;"><col style="width: 9%;"><col style="width: 28%;"><col style="width: 11%;"><col style="width: 9%;"><col style="width: 9%;"><col style="width: 9%;"></colgroup>';
+                    // 8カラム: 学校名(17%), 属性(6%), 事業所(7%), 写真館(16%), イベント名(35%), 開始日(7%), 会員率(6%), 売上(6%)
+                    // イベント名を大きく広げ、他を調整
+                    return '<colgroup><col style="width: 17%;"><col style="width: 6%;"><col style="width: 7%;"><col style="width: 16%;"><col style="width: 35%;"><col style="width: 7%;"><col style="width: 6%;"><col style="width: 6%;"></colgroup>';
                 }} else if (alertType === 'new_schools') {{
                     // 6カラム: 学校名, 属性, 事業所, 写真館, 初回開始日, 売上
                     return '<colgroup><col style="width: 26%;"><col style="width: 9%;"><col style="width: 11%;"><col style="width: 14%;"><col style="width: 16%;"><col style="width: 24%;"></colgroup>';
