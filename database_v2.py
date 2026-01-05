@@ -1164,26 +1164,27 @@ def get_studio_decline_analysis(db_path=None, target_fy=None):
     
     # 今年度の写真館別集計
     # 写真館名でユニークにするため、regionは結合し、集計単位をstudioのみにする
+    # 売上は「発生ベース」で集計するため、event_sales（イベント年度）ではなくschool_monthly_sales（計上年度）を使用
     query = '''
         WITH current_year AS (
             SELECT 
                 s.studio,
                 GROUP_CONCAT(DISTINCT s.region) as region,
                 COUNT(DISTINCT s.school_id) as school_count,
-                COALESCE(SUM(e.sales), 0) as current_sales
+                COALESCE(SUM(sms.sales), 0) as current_sales
             FROM schools_master s
-            LEFT JOIN event_sales e ON s.school_id = e.school_id 
-                AND e.fiscal_year = ? AND e.report_id = ?
+            LEFT JOIN school_monthly_sales sms ON s.school_id = sms.school_id 
+                AND sms.fiscal_year = ? AND sms.report_id = ?
             WHERE s.studio IS NOT NULL AND s.studio != ''
             GROUP BY s.studio
         ),
         prev_year AS (
             SELECT 
                 s.studio,
-                COALESCE(SUM(e.sales), 0) as prev_sales
+                COALESCE(SUM(sms.sales), 0) as prev_sales
             FROM schools_master s
-            LEFT JOIN event_sales e ON s.school_id = e.school_id 
-                AND e.fiscal_year = ? AND e.report_id = ?
+            LEFT JOIN school_monthly_sales sms ON s.school_id = sms.school_id 
+                AND sms.fiscal_year = ? AND sms.report_id = ?
             WHERE s.studio IS NOT NULL AND s.studio != ''
             GROUP BY s.studio
         )
