@@ -2698,7 +2698,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                 const year = document.getElementById('studioDeclineYearFilter').value;
                 
                 if (year && studioDeclineAllData[year]) {{
-                    data = studioDeclineAllData[year];
+                    data = studioDeclineAllData[year].filter(item => item.change_rate < 0);
                 }}
                 alertsData['studio_decline'] = data;
             }} else {{
