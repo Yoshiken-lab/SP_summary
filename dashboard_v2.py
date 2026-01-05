@@ -2336,21 +2336,21 @@ def generate_dashboard(db_path=None, output_dir=None):
         
         <!-- 年度別イベント比較タブコンテンツ -->
         <div id="alert-yearly_comparison" class="alert-content" style="display: none;">
-            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap;">
+            <div class="alert-filters" style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap; font-size: 13px;">
                 <div style="font-weight: bold; color: #374151;">属性:</div>
-                <select id="yearlyComparisonAttribute" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px;">
+                <select id="yearlyComparisonAttribute" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 13px;">
                     <option value="">全て</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">写真館:</div>
-                <select id="yearlyComparisonStudio" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 150px;">
+                <select id="yearlyComparisonStudio" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 13px;">
                     <option value="">全て</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">学校:</div>
-                <select id="yearlyComparisonSchool" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 250px;">
+                <select id="yearlyComparisonSchool" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 220px; font-size: 13px;">
                     <option value="">-- 学校を選択 --</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">で 月:</div>
-                <select id="yearlyComparisonMonth" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 80px;">
+                <select id="yearlyComparisonMonth" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 70px; font-size: 13px;">
                     <option value="">全て</option>
                     <option value="01">1月</option>
                     <option value="02">2月</option>
@@ -2366,15 +2366,15 @@ def generate_dashboard(db_path=None, output_dir=None):
                     <option value="12">12月</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">に</div>
-                <select id="yearlyComparisonYear1" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px;">
+                <select id="yearlyComparisonYear1" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 90px; font-size: 13px;">
                 </select>
                 <div style="font-weight: bold; color: #374151;">と</div>
-                <select id="yearlyComparisonYear2" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px;">
+                <select id="yearlyComparisonYear2" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 90px; font-size: 13px;">
                 </select>
                 <div style="color: #374151;">で公開したイベントを</div>
-                <button onclick="compareYearlyEvents()" style="padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer;">比較する</button>
+                <button onclick="compareYearlyEvents()" style="padding: 6px 14px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">比較する</button>
                 <div style="flex-grow: 1;"></div>
-                <button class="csv-download-btn" onclick="downloadYearlyComparisonCSV()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+                <button class="csv-download-btn" onclick="downloadYearlyComparisonCSV()" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
             </div>
             <div id="yearly_comparison-table-container">
                 <div style="text-align: center; color: #6b7280; padding: 40px;">学校を選択して「比較する」をクリックしてください</div>
@@ -2995,13 +2995,13 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             let html = `
                 \u003cdiv style="margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;"\u003e
-                    \u003cdiv style="font-weight: bold; font-size: 18px; margin-bottom: 6px;"\u003e${{school.school_name}}\u003c/div\u003e
-                    \u003cdiv style="color: #6b7280; font-size: 13px;"\u003e${{school.attribute || '-'}} / ${{school.studio || '-'}}\u003c/div\u003e
+                    \u003cdiv style="font-weight: bold; font-size: 16px; margin-bottom: 6px;"\u003e${{school.school_name}}\u003c/div\u003e
+                    \u003cdiv style="color: #6b7280; font-size: 11px;"\u003e${{school.attribute || '-'}} / ${{school.studio || '-'}}\u003c/div\u003e
                 \u003c/div\u003e
                 \u003cdiv style="display: flex; gap: 20px;"\u003e
                     \u003c!-- 左側: 年度1（青） --\u003e
                     \u003cdiv style="flex: 1;"\u003e
-                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #3b82f6; margin-bottom: 12px; font-weight: 600; color: #1f2937;"\u003e${{year1}}年度\u003c/div\u003e
+                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #3b82f6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 14px;"\u003e${{year1}}年度\u003c/div\u003e
             `;
             
             // 年度1のイベント
@@ -3010,19 +3010,19 @@ def generate_dashboard(db_path=None, output_dir=None):
                 const salesFormatted = formatCurrency(e.sales);
                 const bgColor = index % 2 === 0 ? '#ffffff' : '#f9fafb';
                 html += `
-                    \u003cdiv style="padding: 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
+                    \u003cdiv style="padding: 8px 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
                         \u003cdiv\u003e
-                            \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
-                            \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 13px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
+                            \u003cdiv style="font-size: 11px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
                         \u003c/div\u003e
-                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 15px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 13px;"\u003e${{salesFormatted}}\u003c/div\u003e
                     \u003c/div\u003e
                 `;
             }});
             
             // 年度1のフッター
             html += `
-                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937;"\u003e
+                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 13px;"\u003e
                             \u003cdiv\u003e計: ${{year1Events.length}}件\u003c/div\u003e
                             \u003cdiv\u003e合計: ${{formatCurrency(year1Total)}}\u003c/div\u003e
                         \u003c/div\u003e
@@ -3030,7 +3030,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                     
                     \u003c!-- 右側: 年度2（紫） --\u003e
                     \u003cdiv style="flex: 1;"\u003e
-                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #8b5cf6; margin-bottom: 12px; font-weight: 600; color: #1f2937;"\u003e${{year2}}年度\u003c/div\u003e
+                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #8b5cf6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 14px;"\u003e${{year2}}年度\u003c/div\u003e
             `;
             
             // 年度2のイベント
@@ -3039,19 +3039,19 @@ def generate_dashboard(db_path=None, output_dir=None):
                 const salesFormatted = formatCurrency(e.sales);
                 const bgColor = index % 2 === 0 ? '#ffffff' : '#f9fafb';
                 html += `
-                    \u003cdiv style="padding: 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
+                    \u003cdiv style="padding: 8px 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
                         \u003cdiv\u003e
-                            \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
-                            \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 13px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
+                            \u003cdiv style="font-size: 11px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
                         \u003c/div\u003e
-                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 15px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 13px;"\u003e${{salesFormatted}}\u003c/div\u003e
                     \u003c/div\u003e
                 `;
             }});
             
             // 年度2のフッター
             html += `
-                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937;"\u003e
+                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 13px;"\u003e
                             \u003cdiv\u003e計: ${{year2Events.length}}件\u003c/div\u003e
                             \u003cdiv\u003e合計: ${{formatCurrency(year2Total)}}\u003c/div\u003e
                         \u003c/div\u003e
