@@ -11,7 +11,8 @@ from datetime import datetime
 from pathlib import Path
 from database_v2 import (
     get_connection, get_rapid_growth_schools, get_new_schools, get_no_events_schools, get_declining_schools,
-    get_events_for_date_filter, get_all_schools
+    get_events_for_date_filter, get_all_schools, get_improved_member_rate_schools, get_yearly_event_comparison,
+    get_sales_unit_price_analysis
 )    
 
 
@@ -675,6 +676,20 @@ def generate_dashboard(db_path=None, output_dir=None):
         for r in decline_data_raw
     ]
 
+    # 会員率改善校データの取得（全年度）
+    print("   会員率改善校データを取得中...")
+    improved_all = {}
+    for y in available_years:
+        improved_schools = get_improved_member_rate_schools(db_path, target_fy=y)
+        improved_all[y] = improved_schools
+
+    # イベント平均単価分析データの取得（全年度）
+    print("   販売単価分析データを取得中...")
+    unit_price_all = {}
+    for y in available_years:
+        unit_price_data = get_sales_unit_price_analysis(db_path, target_fy=y)
+        unit_price_all[y] = unit_price_data
+
     # イベント開始日別売上データの取得（全期間・JSでフィルタリング）
     print("   イベント開始日別データを取得中...")
     event_sales_by_date_raw = get_events_for_date_filter(db_path, years_back=3)
@@ -704,6 +719,8 @@ def generate_dashboard(db_path=None, output_dir=None):
     import json
     event_sales_by_date_json = json.dumps(event_sales_by_date_data, ensure_ascii=False)
     all_schools_json = json.dumps(all_schools_data, ensure_ascii=False)
+    improved_all_json = json.dumps(improved_all, ensure_ascii=False)
+    unit_price_all_json = json.dumps(unit_price_all, ensure_ascii=False)
 
     # HTMLファイル名
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -975,6 +992,8 @@ def generate_dashboard(db_path=None, output_dir=None):
         const allYearsData = {json.dumps(all_years_data, ensure_ascii=False, indent=2)};
         const schoolDetails = {json.dumps(school_details, ensure_ascii=False)};
         const schoolsList = {json.dumps(schools_list, ensure_ascii=False)};
+        const improvedAllData = {improved_all_json};
+        const unitPriceAllData = {unit_price_all_json};
         
         let monthlyChart, branchChart, schoolChart, branchMonthlyChart, managerChart, eventChart, memberChart;
         let currentMonthlySalesYear = {default_year};
@@ -2174,8 +2193,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div class="alert-category" style="flex: 1; padding: 20px; background: #eff6ff; border-radius: 8px; border: 2px solid #bfdbfe;">
                 <div class="alert-category-title" style="font-weight: bold; color: #1e40af; margin-bottom: 15px; font-size: 16px;">📈 トレンド分析</div>
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <!-- 今後追加 -->
-                    <span style="font-size: 14px; color: #6b7280;">(準備中)</span>
+                    <button onclick="showAlert('improved')" id="tab-improved" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">会員率改善</button>
+                    <button onclick="showAlert('unit_price')" id="tab-unit_price" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">販売単価分析</button>
                 </div>
             </div>
 
@@ -2296,6 +2315,54 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div id="decline-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
         </div>
 
+        <!-- 会員率改善校タブコンテンツ -->
+        <div id="alert-improved" class="alert-content" style="display: none;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
+                <label style="font-weight: bold; color: #374151;">対象年度:</label>
+                <select id="improvedYearFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white; font-size: 12px;">
+                    <!-- JSで生成 -->
+                </select>
+                <div style="display: flex; align-items: center; gap: 5px; margin-left: 10px;">
+                    <label style="font-weight: bold; color: #374151;">改善ポイント:</label>
+                    <select id="improvedPointFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
+                        <option value="0">0pt以上（全て）</option>
+                        <option value="1">1pt以上</option>
+                        <option value="3">3pt以上</option>
+                        <option value="5">5pt以上</option>
+                        <option value="10">10pt以上</option>
+                        <option value="20">20pt以上</option>
+                    </select>
+                </div>
+                <div style="flex-grow: 1;"></div>
+                <button class="csv-download-btn" onclick="downloadAlertCSV('improved')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
+            </div>
+            <div id="improved-table-container"></div>
+            <div id="improved-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
+        </div>
+
+        <!-- 販売単価分析タブコンテンツ -->
+        <div id="alert-unit_price" class="alert-content" style="display: none;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
+                <label style="font-weight: bold; color: #374151;">対象年度:</label>
+                <select id="unitPriceYearFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white; font-size: 12px;">
+                    <!-- JSで生成 -->
+                </select>
+                <div style="display: flex; align-items: center; gap: 5px; margin-left: 10px;">
+                    <label style="font-weight: bold; color: #374151;">最低イベント回数:</label>
+                    <select id="unitPriceCountFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
+                        <option value="1">1回以上</option>
+                        <option value="3" selected>3回以上</option>
+                        <option value="5">5回以上</option>
+                        <option value="10">10回以上</option>
+                    </select>
+                </div>
+                <div style="flex-grow: 1;"></div>
+                <button class="csv-download-btn" onclick="downloadAlertCSV('unit_price')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
+            </div>
+            <div id="unit_price-table-container"></div>
+            <div id="unit_price-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
+        </div>
+
         <!-- イベント開始日別売上タブコンテンツ -->
         <div id="alert-event_sales_by_date" class="alert-content" style="display: none;">
             <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
@@ -2397,6 +2464,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             'new_schools': [], // 初期値は空、ロード時に設定
             'no_events': [],
             'decline': declineBaseData,
+            'improved': [],
+            'unit_price': [],
             'event_sales_by_date': []
         }};
         
@@ -2548,6 +2617,28 @@ def generate_dashboard(db_path=None, output_dir=None):
                     }});
                 }}
                 alertsData['decline'] = data;
+            }} else if (alertType === 'improved') {{
+                const yearElement = document.getElementById('improvedYearFilter');
+                const year = yearElement ? yearElement.value : null;
+                const pointThreshold = parseFloat(document.getElementById('improvedPointFilter').value);
+                
+                if (year && improvedAllData[year]) {{
+                    data = improvedAllData[year].filter(row => {{
+                        return row.improvement_point >= pointThreshold;
+                    }});
+                }}
+                alertsData['improved'] = data;
+            }} else if (alertType === 'unit_price') {{
+                const yearElement = document.getElementById('unitPriceYearFilter');
+                const year = yearElement ? yearElement.value : null;
+                const minCount = parseInt(document.getElementById('unitPriceCountFilter').value);
+                
+                if (year && unitPriceAllData[year]) {{
+                    data = unitPriceAllData[year].filter(row => {{
+                        return row.event_count >= minCount;
+                    }});
+                }}
+                alertsData['unit_price'] = data;
             }} else {{
                 data = alertsData[alertType] || [];
             }}
@@ -2588,6 +2679,12 @@ def generate_dashboard(db_path=None, output_dir=None):
                 }} else if (alertType === 'decline') {{
                     // 8カラム: 学校名, 属性, 事業所, 写真館, 会員率, 売上変化率, 今年度売上, 前年度売上
                     return '<colgroup><col style="width: 22%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"></colgroup>';
+                }} else if (alertType === 'improved') {{
+                    // 8カラム: 学校名, 属性, 事業所, 写真館, 今年度会員率, 前年度会員率, 改善pt, 今年度売上
+                    return '<colgroup><col style="width: 22%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"></colgroup>';
+                }} else if (alertType === 'unit_price') {{
+                    // 7カラム: 学校名, 属性, 事業所, 写真館, イベント数, 合計売上, 平均単価
+                    return '<colgroup><col style="width: 24%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 14%;"><col style="width: 10%;"><col style="width: 16%;"><col style="width: 18%;"></colgroup>';
                 }} else {{
                     // 7カラム (rapid_growth): 学校名, 属性, 事業所, 写真館, 今年度売上, 前年度売上, 成長率
                     return '<colgroup><col style="width: 24%;"><col style="width: 9%;"><col style="width: 11%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"></colgroup>';
@@ -2623,6 +2720,15 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += getHeader('売上変化率', 'growth_rate', 'right'); // declineではgrowth_rateが変化率
                 html += getHeader('今年度売上', 'current_sales', 'right');
                 html += getHeader('前年度売上', 'prev_sales', 'right');
+            }} else if (alertType === 'improved') {{
+                html += getHeader('今年度会員率', 'current_rate', 'right');
+                html += getHeader('前年度会員率', 'prev_rate', 'right');
+                html += getHeader('改善Pt', 'improvement_point', 'right');
+                html += getHeader('今年度売上', 'current_sales', 'right');
+            }} else if (alertType === 'unit_price') {{
+                html += getHeader('平均単価', 'avg_price', 'right');
+                html += getHeader('イベント数', 'event_count', 'right');
+                html += getHeader('合計売上', 'total_sales', 'right');
             }} else if (alertType === 'event_sales_by_date') {{
                 html += getHeader('イベント名', 'event_name');
                 html += getHeader('開始日', 'event_date');
@@ -2656,6 +2762,15 @@ def generate_dashboard(db_path=None, output_dir=None):
                     html += `<td style="padding: 12px; text-align: right; color: #ef4444; font-weight: bold; font-size: 13px;">${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                }} else if (alertType === 'improved') {{
+                    html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold; font-size: 13px;">${{row.current_rate.toFixed(1)}}%</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.prev_rate.toFixed(1)}}%</td>`;
+                    html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold; font-size: 13px;">+${{row.improvement_point.toFixed(1)}}pt</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                }} else if (alertType === 'unit_price') {{
+                    html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: #2563eb; font-size: 13px;">¥${{Math.round(row.avg_price).toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.event_count}}回</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.total_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'event_sales_by_date') {{
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.event_name}}</td>`;
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.event_date}}</td>`;
@@ -2760,7 +2875,9 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             // CSVヘッダーとデータ生成
             let csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,成長率';
-            if (alertType === 'decline') csv += ',会員率';
+            if (alertType === 'decline') csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,成長率,会員率';
+            if (alertType === 'improved') csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,改善pt,今年度会員率,前年度会員率';
+            if (alertType === 'unit_price') csv = '学校名,属性,写真館,担当者,地区,平均単価,イベント数,合計売上';
             csv += '\\n';
             
             data.forEach(row => {{
@@ -2769,9 +2886,23 @@ def generate_dashboard(db_path=None, output_dir=None):
                 csv += `\"${{row.studio || ''}}\",`;
                 csv += `\"${{row.manager || ''}}\",`;
                 csv += `\"${{row.region || ''}}\",`;
-                csv += `${{row.current_sales}},`;
-                csv += `${{row.prev_sales}},`;
-                csv += `${{(row.growth_rate * 100).toFixed(1)}}%\\n`;
+                if (alertType === 'unit_price') {{
+                    csv += `${{Math.round(row.avg_price)}},`;
+                    csv += `${{row.event_count}},`;
+                    csv += `${{row.total_sales}}\\n`;
+                }} else {{
+                    csv += `${{row.current_sales || 0}},`;
+                    csv += `${{row.prev_sales || 0}},`;
+                    if (alertType === 'improved') {{
+                        csv += `${{row.improvement_point.toFixed(1)}},`;
+                        csv += `${{row.current_rate.toFixed(1)}},`;
+                        csv += `${{row.prev_rate.toFixed(1)}}\\n`;
+                    }} else {{
+                        csv += `${{(row.growth_rate * 100).toFixed(1)}}%`;
+                        if (alertType === 'decline') csv += `,${{row.member_rate.toFixed(1)}}`;
+                        csv += '\\n';
+                    }}
+                }}
             }});
             
             const bom = '\\uFEFF';
@@ -2781,6 +2912,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             if (alertType === 'new_schools') link.download = '新規開始校.csv';
             else if (alertType === 'no_events') link.download = '今年度未実施校.csv';
             else if (alertType === 'decline') link.download = '会員率・売上低下校.csv';
+            else if (alertType === 'improved') link.download = '会員率改善校.csv';
+            else if (alertType === 'unit_price') link.download = '販売単価分析.csv';
             else if (alertType === 'event_sales_by_date') link.download = 'イベント開始日別売上.csv';
             else link.download = '売上好調校.csv';
             link.click();
@@ -2789,6 +2922,37 @@ def generate_dashboard(db_path=None, output_dir=None):
         // イベント開始日別売上フィルター
         function initializeEventSalesFilters() {{
             const yearSelect = document.getElementById('eventSalesYear');
+            
+            // 会員率改善校の年度フィルター初期化（JSで動的に行う）
+            const improvedYearSelect = document.getElementById('improvedYearFilter');
+            if (improvedYearSelect) {{
+                improvedYearSelect.innerHTML = '';
+                availableYears.forEach(year => {{
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year + '年度';
+                    improvedYearSelect.appendChild(option);
+                }});
+                // デフォルトは最新年度
+                if (availableYears.length > 0) {{
+                    improvedYearSelect.value = availableYears[0];
+                }}
+            }}
+            
+            // 販売単価分析の年度フィルター初期化
+            const unitPriceYearSelect = document.getElementById('unitPriceYearFilter');
+            if (unitPriceYearSelect) {{
+                unitPriceYearSelect.innerHTML = '';
+                availableYears.forEach(year => {{
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year + '年度';
+                    unitPriceYearSelect.appendChild(option);
+                }});
+                if (availableYears.length > 0) {{
+                    unitPriceYearSelect.value = availableYears[0];
+                }}
+            }}
             if (!yearSelect) return;
             
             // データからユニークな年を取得

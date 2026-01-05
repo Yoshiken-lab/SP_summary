@@ -896,6 +896,182 @@ def get_yearly_event_comparison(db_path=None, school_id=None, year1=None, year2=
     }
 
 
+def get_improved_member_rate_schools(db_path=None, target_fy=None):
+    """
+    会員率改善校を取得（前年度と比較して会員率が向上している学校）
+    
+    Args:
+        db_path: データベースパス
+        target_fy: 対象年度（Noneの場合は現在年度）
+    
+    Returns:
+        list: [{school_id, school_name, attribute, studio, manager, region, 
+               current_rate, prev_rate, improvement_point, current_sales}, ...]
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    current_fy = target_fy if target_fy else get_current_fiscal_year()
+    prev_fy = current_fy - 1
+    
+    report_id = get_latest_report_id(conn)
+    if not report_id:
+        conn.close()
+        return []
+
+    # 今年度の売上も表示したいので取得しておく
+    # 会員率の計算ロジック:
+    # member_ratesテーブルから、対象年度と前年度それぞれの「最新スナップショット」を特定し、
+    # その時点での全学年合計の会員率を算出する。
+
+    query = '''
+        WITH fiscal_snapshots AS (
+            SELECT 
+                school_id,
+                snapshot_date,
+                (CASE 
+                    WHEN CAST(strftime('%m', snapshot_date) AS INTEGER) >= 4 
+                    THEN CAST(strftime('%Y', snapshot_date) AS INTEGER)
+                    ELSE CAST(strftime('%Y', snapshot_date) AS INTEGER) - 1
+                END) as fiscal_year
+            FROM member_rates
+            GROUP BY school_id, snapshot_date
+        ),
+        latest_snapshots AS (
+            SELECT
+                school_id,
+                fiscal_year,
+                MAX(snapshot_date) as max_date
+            FROM fiscal_snapshots
+            WHERE fiscal_year IN (?, ?)
+            GROUP BY school_id, fiscal_year
+        ),
+        calculated_rates AS (
+            SELECT
+                ls.school_id,
+                ls.fiscal_year,
+                CAST(SUM(m.member_count) AS REAL) / NULLIF(SUM(m.total_students), 0) * 100 as rate
+            FROM member_rates m
+            JOIN latest_snapshots ls ON m.school_id = ls.school_id AND m.snapshot_date = ls.max_date
+            WHERE m.grade != '全学年' AND m.total_students > 0
+            GROUP BY ls.school_id, ls.fiscal_year
+        ),
+        current_sales AS (
+            SELECT
+                school_id,
+                COALESCE(SUM(sales), 0) as sales
+            FROM event_sales
+            WHERE fiscal_year = ?
+            GROUP BY school_id
+        )
+        SELECT
+            s.school_id,
+            s.school_name,
+            s.attribute,
+            s.studio,
+            s.manager,
+            s.region,
+            COALESCE(curr.rate, 0) as current_rate,
+            COALESCE(prev.rate, 0) as prev_rate,
+            COALESCE(curr.rate, 0) - COALESCE(prev.rate, 0) as improvement,
+            COALESCE(cs.sales, 0) as current_sales
+        FROM schools_master s
+        JOIN calculated_rates curr ON s.school_id = curr.school_id AND curr.fiscal_year = ?
+        JOIN calculated_rates prev ON s.school_id = prev.school_id AND prev.fiscal_year = ?
+        LEFT JOIN current_sales cs ON s.school_id = cs.school_id
+        WHERE (COALESCE(curr.rate, 0) - COALESCE(prev.rate, 0)) > 0
+        ORDER BY improvement DESC
+    '''
+    
+    # パラメータ: current_fy, prev_fy (latest_snapshots用), current_fy (sales用), current_fy, prev_fy (join用)
+    params = [current_fy, prev_fy, current_fy, current_fy, prev_fy]
+    
+    cursor.execute(query, params)
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': row[2] or '',
+            'studio': row[3] or '',
+            'manager': row[4] or '',
+            'region': row[5] or '',
+            'current_rate': row[6],
+            'prev_rate': row[7],
+            'improvement_point': row[8],
+            'current_sales': row[9]
+        })
+    
+    conn.close()
+    return results
+
+
+def get_sales_unit_price_analysis(db_path=None, target_fy=None):
+    """
+    イベント平均単価（1イベントあたりの売上）が高い学校を取得
+    
+    Args:
+        db_path: データベースパス
+        target_fy: 対象年度（Noneの場合は現在年度）
+    
+    Returns:
+        list: [{school_id, school_name, attribute, studio, manager, region, 
+               total_sales, event_count, avg_price}, ...]
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    current_fy = target_fy if target_fy else get_current_fiscal_year()
+    
+    report_id = get_latest_report_id(conn)
+    if not report_id:
+        conn.close()
+        return []
+    
+    query = '''
+        SELECT
+            s.school_id,
+            s.school_name,
+            s.attribute,
+            s.studio,
+            s.manager,
+            s.region,
+            COALESCE(SUM(e.sales), 0) as total_sales,
+            COUNT(e.id) as event_count,
+            CASE 
+                WHEN COUNT(e.id) > 0 THEN CAST(SUM(e.sales) AS REAL) / COUNT(e.id)
+                ELSE 0 
+            END as avg_price
+        FROM schools_master s
+        JOIN event_sales e ON s.school_id = e.school_id
+        WHERE e.fiscal_year = ? AND e.report_id = ?
+        GROUP BY s.school_id, s.school_name, s.attribute, s.studio, s.manager, s.region
+        HAVING event_count > 0
+        ORDER BY avg_price DESC
+    '''
+    
+    cursor.execute(query, (current_fy, report_id))
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'school_id': row[0],
+            'school_name': row[1],
+            'attribute': row[2] or '',
+            'studio': row[3] or '',
+            'manager': row[4] or '',
+            'region': row[5] or '',
+            'total_sales': row[6],
+            'event_count': row[7],
+            'avg_price': row[8]
+        })
+    
+    conn.close()
+    return results
+
+
+
 if __name__ == '__main__':
     # テスト実行: データベース初期化
     init_database()
