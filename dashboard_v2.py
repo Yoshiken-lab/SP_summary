@@ -2381,13 +2381,19 @@ def generate_dashboard(db_path=None, output_dir=None):
                 // データ変換
                 const transform = (val) => {{
                     if (typeof val === 'string') {{
-                        // 日付 (YYYY-MM-DD)
-                        if (val.match(/^\d{4}-\d{2}-\d{2}$/)) {{
-                            return new Date(val).getTime();
+                        // 日付 (YYYY-MM-DD) - 正規表現を使わずに長さとハイフンで判定
+                        if (val.length === 10 && val[4] === '-' && val[7] === '-') {{
+                            const parsed = Date.parse(val);
+                            if (!isNaN(parsed)) {{
+                                return parsed;
+                            }}
                         }}
                         // 日付 (YYYY年MM月DD日)
-                        if (val.match(/^\d{4}年\d{1,2}月\d{1,2}日$/)) {{
-                             return new Date(val.replace(/年|月/g, '/').replace(/日/, '')).getTime();
+                        if (val.includes('年') && val.includes('月') && val.includes('日')) {{
+                             const parsed = Date.parse(val.replace(/年|月/g, '/').replace(/日/, ''));
+                             if (!isNaN(parsed)) {{
+                                 return parsed;
+                             }}
                         }}
                         // 金額や数値 (カンマ除去)
                         const num = parseFloat(val.replace(/[¥,]/g, ''));
