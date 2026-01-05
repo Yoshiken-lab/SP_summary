@@ -1032,24 +1032,27 @@ def get_sales_unit_price_analysis(db_path=None, target_fy=None):
         return []
     
     # イベントデータと会員データを結合して取得
-    # 会員データは grade='全学年' の最新スナップショットを使用
+    # 会員データは grade != '全学年' の合計を使用（'全学年'データが存在しない場合に対応）
     query = '''
-        WITH latest_member_counts AS (
+        WITH latest_snapshot AS (
+            SELECT 
+                school_id, 
+                MAX(snapshot_date) as max_snapshot
+            FROM member_rates
+            GROUP BY school_id
+        ),
+        latest_member_counts AS (
             SELECT 
                 m.school_id,
-                m.member_count,
+                COALESCE(SUM(m.member_count), 0) as member_count,
                  CASE 
-                    WHEN m.total_students > 0 THEN CAST(m.member_count AS REAL) / m.total_students * 100
+                    WHEN SUM(m.total_students) > 0 THEN CAST(SUM(m.member_count) AS REAL) / SUM(m.total_students) * 100
                     ELSE 0 
                 END as member_rate
             FROM member_rates m
-            JOIN (
-                SELECT school_id, MAX(snapshot_date) as max_snapshot
-                FROM member_rates
-                WHERE grade = '全学年'
-                GROUP BY school_id
-            ) latest ON m.school_id = latest.school_id AND m.snapshot_date = latest.max_snapshot
-            WHERE m.grade = '全学年'
+            JOIN latest_snapshot ls ON m.school_id = ls.school_id AND m.snapshot_date = ls.max_snapshot
+            WHERE m.grade != '全学年'
+            GROUP BY m.school_id
         )
         SELECT
             s.school_id,

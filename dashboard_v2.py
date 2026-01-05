@@ -2707,10 +2707,12 @@ def generate_dashboard(db_path=None, output_dir=None):
                     return '<colgroup><col style="width: 22%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"></colgroup>';
                 }} else if (alertType === 'improved') {{
                     // 7カラム: 学校名, 属性, 写真館, 事業所, 今年度会員率, 前年度会員率, 改善幅
-                    return '<colgroup><col style="width: 25%;"><col style="width: 8%;"><col style="width: 15%;"><col style="width: 8%;"><col style="width: 15%;"><col style="width: 15%;"><col style="width: 14%;"></colgroup>';
+                    // 合計100%になるように調整
+                    return '<colgroup><col style="width: 26%;"><col style="width: 8%;"><col style="width: 12%;"><col style="width: 8%;"><col style="width: 15%;"><col style="width: 15%;"><col style="width: 16%;"></colgroup>';
                 }} else if (alertType === 'unit_price') {{
                     // 9カラム: 学校名, 属性, 写真館, 会員率, 売上, 会員数, 単価, 属性平均, 平均比
-                    return '<colgroup><col style="width: 18%;"><col style="width: 8%;"><col style="width: 12%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 8%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"></colgroup>';
+                    // 合計100%になるように調整
+                    return '<colgroup><col style="width: 20%;"><col style="width: 6%;"><col style="width: 11%;"><col style="width: 8%;"><col style="width: 9%;"><col style="width: 7%;"><col style="width: 13%;"><col style="width: 13%;"><col style="width: 13%;"></colgroup>';
                 }} else {{
                     // 7カラム (rapid_growth): 学校名, 属性, 事業所, 写真館, 今年度売上, 前年度売上, 成長率
                     return '<colgroup><col style="width: 24%;"><col style="width: 9%;"><col style="width: 11%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"></colgroup>';
@@ -2729,11 +2731,20 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return `<th style="${{style}}" onclick="handleSort('${{key}}')">${{label}}${{icon}}</th>`;
             }};
 
-            let html = `<table style="${{tableStyle}}">${{getColgroup()}}<thead><tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">`;
-            html += getHeader('学校名', 'school_name');
-            html += getHeader('属性', 'attribute');
-            html += getHeader('事業所', 'region');
-            html += getHeader('写真館', 'studio');
+            // テーブルHTML生成
+            let html = '<div style="overflow-x: auto; width: 100%;">';
+            html += '<table style="width: 100%; table-layout: fixed; border-collapse: collapse; min-width: 900px;">';
+            html += getColgroup(alertType);
+            html += '<thead><tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">';
+            html += getHeader('学校名', 'school_name', 'left');
+            if (alertType === 'improved' || alertType === 'unit_price') {{
+                html += getHeader('属性', 'attribute');
+                html += getHeader('写真館', 'studio');
+            }} else {{
+                html += getHeader('属性', 'attribute');
+                html += getHeader('事業所', 'region');
+                html += getHeader('写真館', 'studio');
+            }}
             
             if (alertType === 'new_schools') {{
                 html += getHeader('初回開始日', 'first_event_date');
