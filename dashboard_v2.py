@@ -2333,6 +2333,53 @@ def generate_dashboard(db_path=None, output_dir=None):
             </div>
             <div id="event_sales_by_date-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
         </div>
+        
+        <!-- 年度別イベント比較タブコンテンツ -->
+        <div id="alert-yearly_comparison" class="alert-content" style="display: none;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap;">
+                <div style="font-weight: bold; color: #374151;">属性:</div>
+                <select id="yearlyComparisonAttribute" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px;">
+                    <option value="">全て</option>
+                </select>
+                <div style="font-weight: bold; color: #374151;">写真館:</div>
+                <select id="yearlyComparisonStudio" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 150px;">
+                    <option value="">全て</option>
+                </select>
+                <div style="font-weight: bold; color: #374151;">学校:</div>
+                <select id="yearlyComparisonSchool" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 250px;">
+                    <option value="">-- 学校を選択 --</option>
+                </select>
+                <div style="font-weight: bold; color: #374151;">で 月:</div>
+                <select id="yearlyComparisonMonth" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 80px;">
+                    <option value="">全て</option>
+                    <option value="01">1月</option>
+                    <option value="02">2月</option>
+                    <option value="03">3月</option>
+                    <option value="04">4月</option>
+                    <option value="05">5月</option>
+                    <option value="06">6月</option>
+                    <option value="07">7月</option>
+                    <option value="08">8月</option>
+                    <option value="09">9月</option>
+                    <option value="10">10月</option>
+                    <option value="11">11月</option>
+                    <option value="12">12月</option>
+                </select>
+                <div style="font-weight: bold; color: #374151;">に</div>
+                <select id="yearlyComparisonYear1" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px;">
+                </select>
+                <div style="font-weight: bold; color: #374151;">と</div>
+                <select id="yearlyComparisonYear2" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px;">
+                </select>
+                <div style="color: #374151;">で公開したイベントを</div>
+                <button onclick="compareYearlyEvents()" style="padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer;">比較する</button>
+                <div style="flex-grow: 1;"></div>
+                <button class="csv-download-btn" onclick="downloadYearlyComparisonCSV()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+            </div>
+            <div id="yearly_comparison-table-container">
+                <div style="text-align: center; color: #6b7280; padding: 40px;">学校を選択して「比較する」をクリックしてください</div>
+            </div>
+        </div>
     </div>
     
     <script>
@@ -2342,6 +2389,8 @@ def generate_dashboard(db_path=None, output_dir=None):
         const noEventsAllData = {json.dumps(no_events_all, ensure_ascii=False)};
         const declineBaseData = {json.dumps(decline_data, ensure_ascii=False)};
         const eventSalesDataFull = {json.dumps(event_sales_by_date_data, ensure_ascii=False)};
+        const allSchoolsData = {all_schools_json};
+        const availableYears = {json.dumps(available_years, ensure_ascii=False)};
 
         const alertsData = {{
             'rapid_growth': rapidGrowthData,
@@ -2799,6 +2848,124 @@ def generate_dashboard(db_path=None, output_dir=None):
         
         // 初期表示
         initializeEventSalesFilters();
+        
+        // 年度別イベント比較フィルター初期化
+        function initializeYearlyComparisonFilters() {{
+            // 属性フィルター
+            const attributeSelect = document.getElementById('yearlyComparisonAttribute');
+            const studioSelect = document.getElementById('yearlyComparisonStudio');
+            const schoolSelect = document.getElementById('yearlyComparisonSchool');
+            const year1Select = document.getElementById('yearlyComparisonYear1');
+            const year2Select = document.getElementById('yearlyComparisonYear2');
+            
+            if (!attributeSelect || !schoolSelect) return;
+            
+            // 属性の選択肢を追加
+            const attributes = [...new Set(allSchoolsData.map(s => s.attribute))].filter(a => a).sort();
+            attributes.forEach(attr => {{
+                const option = document.createElement('option');
+                option.value = attr;
+                option.textContent = attr;
+                attributeSelect.appendChild(option);
+            }});
+            
+            // 写真館の選択肢を追加
+            const studios = [...new Set(allSchoolsData.map(s => s.studio))].filter(s => s).sort();
+            studios.forEach(studio => {{
+                const option = document.createElement('option');
+                option.value = studio;
+                option.textContent = studio;
+                studioSelect.appendChild(option);
+            }});
+            
+            // 年度の選択肢を追加
+            availableYears.forEach((year, index) => {{
+                const option1 = document.createElement('option');
+                option1.value = year;
+                option1.textContent = year + '年度';
+                year1Select.appendChild(option1);
+                
+                const option2 = document.createElement('option');
+                option2.value = year;
+                option2.textContent = year + '年度';
+                year2Select.appendChild(option2);
+            }});
+            
+            // デフォルト年度を設定
+            if (availableYears.length >= 2) {{
+                year1Select.value = availableYears[0];
+                year2Select.value = availableYears[1];
+            }}
+            
+            // 属性・写真館変更時に学校リストを更新
+            const updateSchoolList = () => {{
+                const selectedAttr = attributeSelect.value;
+                const selectedStudio = studioSelect.value;
+                
+                // 学校リストをクリア
+                schoolSelect.innerHTML = '\u003coption value=""\u003e-- 学校を選択 --\u003c/option\u003e';
+                
+                // フィルタリング
+                let filtered = allSchoolsData;
+                if (selectedAttr) {{
+                    filtered = filtered.filter(s => s.attribute === selectedAttr);
+                }}
+                if (selectedStudio) {{
+                    filtered = filtered.filter(s => s.studio === selectedStudio);
+                }}
+                
+                // 学校リストを追加
+                filtered.forEach(school => {{
+                    const option = document.createElement('option');
+                    option.value = school.school_id;
+                    option.textContent = school.school_name;
+                    schoolSelect.appendChild(option);
+                }});
+            }};
+            
+            attributeSelect.addEventListener('change', updateSchoolList);
+            studioSelect.addEventListener('change', updateSchoolList);
+            
+            // 初期の学校リスト更新
+            updateSchoolList();
+        }}
+        
+        // 年度別イベント比較実行
+        async function compareYearlyEvents() {{
+            const schoolId = document.getElementById('yearlyComparisonSchool').value;
+            const year1 = parseInt(document.getElementById( 'yearlyComparisonYear1').value);
+            const year2 = parseInt(document.getElementById('yearlyComparisonYear2').value);
+            
+            if (!schoolId) {{
+                alert('学校を選択してください');
+                return;
+            }}
+            
+            if (!year1 || !year2) {{
+                alert('比較する年度を選択してください');
+                return;
+            }}
+            
+            // TODO: バックエンドからデータを取得する必要がある
+            // 現時点では、Pythonで生成したデータにアクセスできないため、
+            // ここではプレースホルダーとして表示する
+            const container = document.getElementById('yearly_comparison-table-container');
+            container.innerHTML = `
+                \u003cdiv style="text-align: center; padding: 40px; color: #888;"\u003e
+                    \u003cp\u003e年度別イベント比較機能は開発中です。\u003c/p\u003e
+                    \u003cp\u003e選択された学校: ID ${{schoolId}}\u003c/p\u003e
+                    \u003cp\u003e比較年度: ${{year1}}年度 vs ${{year2}}年度\u003c/p\u003e
+                \u003c/div\u003e
+            `;
+        }}
+        
+        // 年度別イベント比較CSV出力
+        function downloadYearlyComparisonCSV() {{
+            alert('CSV出力機能は開発中です');
+        }}
+        
+        // 年度別イベント比較フィルター初期化
+        initializeYearlyComparisonFilters();
         
         // 新規開始校用年度フィルター初期化(Available Yearsを使用)
         const newSchoolsYearSelect = document.getElementById('newSchoolsYearFilter');
