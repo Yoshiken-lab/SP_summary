@@ -2932,9 +2932,10 @@ def generate_dashboard(db_path=None, output_dir=None):
         
         // 年度別イベント比較実行
         async function compareYearlyEvents() {{
-            const schoolId = document.getElementById('yearlyComparisonSchool').value;
-            const year1 = parseInt(document.getElementById( 'yearlyComparisonYear1').value);
+            const schoolId = parseInt(document.getElementById('yearlyComparisonSchool').value);
+            const year1 = parseInt(document.getElementById('yearlyComparisonYear1').value);
             const year2 = parseInt(document.getElementById('yearlyComparisonYear2').value);
+            const selectedMonth = document.getElementById('yearlyComparisonMonth').value;
             
             if (!schoolId) {{
                 alert('学校を選択してください');
@@ -2946,22 +2947,189 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return;
             }}
             
-            // TODO: バックエンドからデータを取得する必要がある
-            // 現時点では、Pythonで生成したデータにアクセスできないため、
-            // ここではプレースホルダーとして表示する
+            // 学校名を取得
+            const school = allSchoolsData.find(s => s.school_id === schoolId);
+            if (!school) {{
+                alert('学校情報が見つかりません');
+                return;
+            }}
+            
+            // eventSalesDataFullから該当学校のデータを抽出
+            let year1Events = eventSalesDataFull.filter(e => 
+                e.school_name === school.school_name && e.fiscal_year === year1
+            );
+            let year2Events = eventSalesDataFull.filter(e => 
+                e.school_name === school.school_name && e.fiscal_year === year2
+            );
+            
+            // 月フィルタ適用
+            if (selectedMonth) {{
+                year1Events = year1Events.filter(e => e.month === selectedMonth);
+                year2Events = year2Events.filter(e => e.month === selectedMonth);
+            }}
+            
+            // イベント日付でソート
+            year1Events.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
+            year2Events.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
+            
+            // 合計売上計算
+            const year1Total = year1Events.reduce((sum, e) => sum + (e.sales || 0), 0);
+            const year2Total = year2Events.reduce((sum, e) => sum + (e.sales || 0), 0);
+            
+            // テーブルHTML生成
             const container = document.getElementById('yearly_comparison-table-container');
-            container.innerHTML = `
-                \u003cdiv style="text-align: center; padding: 40px; color: #888;"\u003e
-                    \u003cp\u003e年度別イベント比較機能は開発中です。\u003c/p\u003e
-                    \u003cp\u003e選択された学校: ID ${{schoolId}}\u003c/p\u003e
-                    \u003cp\u003e比較年度: ${{year1}}年度 vs ${{year2}}年度\u003c/p\u003e
+            
+            let html = `
+                \u003cdiv style="margin-bottom: 20px; padding: 15px; background: #f9fafb; border-radius: 8px;"\u003e
+                    \u003cdiv style="font-weight: bold; font-size: 16px; margin-bottom: 10px;"\u003e${{school.school_name}}\u003c/div\u003e
+                    \u003cdiv style="color: #6b7280; font-size: 14px;"\u003e属性: ${{school.attribute || '-'}} | 事業所: ${{school.region || '-'}} | 写真館: ${{school.studio || '-'}}\u003c/div\u003e
                 \u003c/div\u003e
+                \u003ctable style="width: 100%; border-collapse: collapse; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"\u003e
+                    \u003cthead\u003e
+                        \u003ctr style="background: #8b5cf6; color: white;"\u003e
+                            \u003cth style="width: 50%; padding: 12px; text-align: left; border-right: 2px solid white;"\u003e${{year1}}年度\u003c/th\u003e
+                            \u003cth style="width: 50%; padding: 12px; text-align: left;"\u003e${{year2}}年度\u003c/th\u003e
+                        \u003c/tr\u003e
+                    \u003c/thead\u003e
+                    \u003ctbody\u003e
             `;
+            
+            // イベント行を生成
+            const maxRows = Math.max(year1Events.length, year2Events.length);
+            for (let i = 0; i < maxRows; i++) {{
+                const e1 = year1Events[i];
+                const e2 = year2Events[i];
+                
+                // 年度1のセル
+                let cell1 = '';
+                if (e1) {{
+                    const publishDate = e1.event_date ? formatPublishDate(e1.event_date) : '';
+                    const salesFormatted = formatCurrency(e1.sales);
+                    cell1 = `
+                        \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e1.event_name || '-'}}\u003c/div\u003e
+                        \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 500; margin-top: 4px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                    `;
+                }}
+                
+                // 年度2のセル
+                let cell2 = '';
+                if (e2) {{
+                    const publishDate = e2.event_date ? formatPublishDate(e2.event_date) : '';
+                    const salesFormatted = formatCurrency(e2.sales);
+                    cell2 = `
+                        \u003cdiv style="font-weight: 500; margin-bottom: 4px;"\u003e${{e2.event_name || '-'}}\u003c/div\u003e
+                        \u003cdiv style="font-size: 12px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 500; margin-top: 4px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                    `;
+                }}
+                
+                const bgColor = i % 2 === 0 ? '#ffffff' : '#f9fafb';
+                html += `
+                    \u003ctr style="background: ${{bgColor}};"\u003e
+                        \u003ctd style="padding: 12px; border-right: 1px solid #e5e7eb; vertical-align: top;"\u003e${{cell1}}\u003c/td\u003e
+                        \u003ctd style="padding: 12px; vertical-align: top;"\u003e${{cell2}}\u003c/td\u003e
+                    \u003c/tr\u003e
+                `;
+            }}
+            
+            // 合計行
+            html += `
+                        \u003ctr style="background: #8b5cf6; color: white; font-weight: bold;"\u003e
+                            \u003ctd style="padding: 12px; border-right: 2px solid white;"\u003e
+                                計: ${{year1Events.length}}件 | 合計: ${{formatCurrency(year1Total)}}
+                            \u003c/td\u003e
+                            \u003ctd style="padding: 12px;"\u003e
+                                計: ${{year2Events.length}}件 | 合計: ${{formatCurrency(year2Total)}}
+                            \u003c/td\u003e
+                        \u003c/tr\u003e
+                    \u003c/tbody\u003e
+                \u003c/table\u003e
+            `;
+            
+            container.innerHTML = html;
+        }}
+        
+        // 公開日フォーマット (YYYY-MM-DD → MM月DD日)
+        function formatPublishDate(dateStr) {{
+            if (!dateStr) return '';
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {{
+                return `${{parseInt(parts[1])}}月${{parseInt(parts[2])}}日`;
+            }}
+            return dateStr;
         }}
         
         // 年度別イベント比較CSV出力
         function downloadYearlyComparisonCSV() {{
-            alert('CSV出力機能は開発中です');
+            const schoolId = parseInt(document.getElementById('yearlyComparisonSchool').value);
+            const year1 = parseInt(document.getElementById('yearlyComparisonYear1').value);
+            const year2 = parseInt(document.getElementById('yearlyComparisonYear2').value);
+            const selectedMonth = document.getElementById('yearlyComparisonMonth').value;
+            
+            if (!schoolId || !year1 || !year2) {{
+                alert('学校と年度を選択してください');
+                return;
+            }}
+            
+            // 学校情報を取得
+            const school = allSchoolsData.find(s => s.school_id === schoolId);
+            if (!school) {{
+                alert('学校情報が見つかりません');
+                return;
+            }}
+            
+            // データ抽出
+            let year1Events = eventSalesDataFull.filter(e => 
+                e.school_name === school.school_name && e.fiscal_year === year1
+            );
+            let year2Events = eventSalesDataFull.filter(e => 
+                e.school_name === school.school_name && e.fiscal_year === year2
+            );
+            
+            if (selectedMonth) {{
+                year1Events = year1Events.filter(e => e.month === selectedMonth);
+                year2Events = year2Events.filter(e => e.month === selectedMonth);
+            }}
+            
+            year1Events.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
+            year2Events.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
+            
+            // CSV生成
+            let csv = '\\uFEFF'; // BOM for UTF-8
+            csv += `年度別イベント比較,${{school.school_name}}\\n`;
+            csv += `属性,${{school.attribute || '-'}}\\n`;
+            csv += `事業所,${{school.region || '-'}}\\n`;
+            csv += `写真館,${{school.studio || '-'}}\\n\\n`;
+            csv += `${{year1}}年度,公開日,売上,${{year2}}年度,公開日,売上\\n`;
+            
+            const maxRows = Math.max(year1Events.length, year2Events.length);
+            for (let i = 0; i < maxRows; i++) {{
+                const e1 = year1Events[i];
+                const e2 = year2Events[i];
+                
+                const name1 = e1 ? (e1.event_name || '') : '';
+                const date1 = e1 && e1.event_date ? formatPublishDate(e1.event_date) : '';
+                const sales1 = e1 ? (e1.sales || 0) : '';
+                
+                const name2 = e2 ? (e2.event_name || '') : '';
+                const date2 = e2 && e2.event_date ? formatPublishDate(e2.event_date) : '';
+                const sales2 = e2 ? (e2.sales || 0) : '';
+                
+                csv += `${{name1}},${{date1}},${{sales1}},${{name2}},${{date2}},${{sales2}}\\n`;
+            }}
+            
+            // 合計行
+            const year1Total = year1Events.reduce((sum, e) => sum + (e.sales || 0), 0);
+            const year2Total = year2Events.reduce((sum, e) => sum + (e.sales || 0), 0);
+            csv += `\\n計: ${{year1Events.length}}件,,合計: ${{year1Total}},計: ${{year2Events.length}}件,,合計: ${{year2Total}}\\n`;
+            
+            // ダウンロード
+            const blob = new Blob([csv], {{ type: 'text/csv;charset=utf-8;' }});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `年度別イベント比較_${{school.school_name}}_${{year1}}_${{year2}}.csv`;
+            link.click();
         }}
         
         // 年度別イベント比較フィルター初期化
