@@ -2435,12 +2435,8 @@ def generate_dashboard(db_path=None, output_dir=None):
                 tabEl.style.color = 'white';
             }}
             
-            // ソート状態をリセット
-            if (alertType === 'event_sales_by_date') {{
-                currentSort = {{ column: 'event_date', order: 'asc' }};
-            }} else {{
-                currentSort = {{ column: null, order: 'desc' }};
-            }}
+            // ソート状態をリセット（タブ切り替え時のみ）
+            currentSort = {{ column: null, order: 'desc' }};
             
             // データをレンダリング
             renderAlertTable(alertType, 1);
@@ -2518,13 +2514,20 @@ def generate_dashboard(db_path=None, output_dir=None):
             // カラム幅の設定（alertTypeに応じて最適化）
             const getColgroup = () => {{
                 if (alertType === 'event_sales_by_date') {{
+                    // 8カラム: 学校名, 属性, 事業所, 写真館, イベント名, 開始日, 会員率, 売上
                     return '<colgroup><col style="width: 18%;"><col style="width: 7%;"><col style="width: 9%;"><col style="width: 28%;"><col style="width: 11%;"><col style="width: 9%;"><col style="width: 9%;"><col style="width: 9%;"></colgroup>';
                 }} else if (alertType === 'new_schools') {{
-                    // 7カラム: 学校名, 属性, 事業所, 写真館, 初回開始日, 担当者, 売上
-                    return '<colgroup><col style="width: 25%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 21%;"></colgroup>';
-                }} else {{
-                    // 8カラム: rapid_growth, no_events, decline用
+                    // 6カラム: 学校名, 属性, 事業所, 写真館, 初回開始日, 売上
+                    return '<colgroup><col style="width: 26%;"><col style="width: 9%;"><col style="width: 11%;"><col style="width: 14%;"><col style="width: 16%;"><col style="width: 24%;"></colgroup>';
+                }} else if (alertType === 'no_events') {{
+                    // 6カラム: 学校名, 属性, 事業所, 写真館, 前年度イベント数, 前年度売上
+                    return '<colgroup><col style="width: 24%;"><col style="width: 9%;"><col style="width: 11%;"><col style="width: 14%;"><col style="width: 18%;"><col style="width: 24%;"></colgroup>';
+                }} else if (alertType === 'decline') {{
+                    // 8カラム: 学校名, 属性, 事業所, 写真館, 会員率, 売上変化率, 今年度売上, 前年度売上
                     return '<colgroup><col style="width: 22%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"></colgroup>';
+                }} else {{
+                    // 7カラム (rapid_growth): 学校名, 属性, 事業所, 写真館, 今年度売上, 前年度売上, 成長率
+                    return '<colgroup><col style="width: 24%;"><col style="width: 9%;"><col style="width: 11%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"></colgroup>';
                 }}
             }};
             const getHeader = (label, key, align='left') => {{
@@ -2548,7 +2551,6 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             if (alertType === 'new_schools') {{
                 html += getHeader('初回開始日', 'first_event_date');
-                html += getHeader('担当者', 'manager');
                 html += getHeader('売上', 'current_sales', 'right');
             }} else if (alertType === 'no_events') {{
                 html += getHeader('前年度イベント数', 'prev_event_count', 'right');
@@ -2580,7 +2582,6 @@ def generate_dashboard(db_path=None, output_dir=None):
                 
                 if (alertType === 'new_schools') {{
                     html += `<td style="padding: 12px;">${{row.first_event_date || '-'}}</td>`;
-                    html += `<td style="padding: 12px;">${{row.manager || '-'}}</td>`;
                     html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'no_events') {{
                     html += `<td style="padding: 12px; text-align: right;">${{row.prev_event_count || 0}}件</td>`;
