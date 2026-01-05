@@ -2772,14 +2772,16 @@ def generate_dashboard(db_path=None, output_dir=None):
             html += '<table style="width: 100%; table-layout: fixed; border-collapse: collapse; min-width: 900px;">';
             html += getColgroup(alertType);
             html += '<thead><tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">';
-            html += getHeader('学校名', 'school_name', 'left');
-            if (alertType === 'improved' || alertType === 'unit_price') {{
-                html += getHeader('属性', 'attribute');
-                html += getHeader('写真館', 'studio');
-            }} else {{
-                html += getHeader('属性', 'attribute');
-                html += getHeader('事業所', 'region');
-                html += getHeader('写真館', 'studio');
+            if (alertType !== 'studio_decline') {{
+                html += getHeader('学校名', 'school_name', 'left');
+                if (alertType === 'improved' || alertType === 'unit_price') {{
+                    html += getHeader('属性', 'attribute');
+                    html += getHeader('写真館', 'studio');
+                }} else {{
+                    html += getHeader('属性', 'attribute');
+                    html += getHeader('事業所', 'region');
+                    html += getHeader('写真館', 'studio');
+                }}
             }}
             
             if (alertType === 'new_schools') {{
@@ -2827,6 +2829,19 @@ def generate_dashboard(db_path=None, output_dir=None):
             pageData.forEach((row, idx) => {{
                 const bgColor = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
                 html += `<tr style="background: ${{bgColor}}; border-bottom: 1px solid #e5e7eb;">`;
+                
+                // studio_declineは完全に独立した処理
+                if (alertType === 'studio_decline') {{
+                    const changePercent = (row.change_rate * 100).toFixed(1);
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.studio || '-'}}</td>`;
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.region || '-'}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: #ef4444; font-size: 13px;">${{changePercent}}%</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.school_count}}校</td>`;
+                    html += '</tr>';
+                    return;
+                }}
                 // studio_decline以外は学校名から始まる
                 if (alertType !== 'studio_decline') {{
                 html += `<td style="padding: 12px; font-size: 13px;">${{row.school_name}}</td>`;
@@ -2872,15 +2887,6 @@ def generate_dashboard(db_path=None, output_dir=None):
                     html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: #2563eb; font-size: 13px;">¥${{Math.round(row.avg_price).toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{Math.round(row.attr_avg_price).toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: ${{ratioColor}}; font-size: 13px;">${{row.price_ratio.toFixed(1)}}%</td>`;
-                }} else if (alertType === 'studio_decline') {{
-                    // studio_decline: 写真館名, 事業所, 今年度売上, 前年度売上, 変化率, 担当校数
-                    const changePercent = (row.change_rate * 100).toFixed(1);
-                    html += `<td style="padding: 12px; font-size: 13px;">${{row.studio || '-'}}</td>`;
-                    html += `<td style="padding: 12px; font-size: 13px;">${{row.region || '-'}}</td>`;
-                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
-                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
-                    html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: #ef4444; font-size: 13px;">${{changePercent}}%</td>`;
-                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.school_count}}校</td>`;
                 }} else if (alertType === 'event_sales_by_date') {{
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.event_name}}</td>`;
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.event_date}}</td>`;
