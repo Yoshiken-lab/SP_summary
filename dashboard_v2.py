@@ -865,8 +865,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             gap: 8px;
         }}
         .alert-card-body button {{
-            background: white;
-            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
             padding: 10px 12px;
             border-radius: 6px;
             text-align: left;
@@ -884,16 +884,48 @@ def generate_dashboard(db_path=None, output_dir=None):
             font-weight: 900;
             font-size: 10px;
             color: #cbd5e1;
+            transition: color 0.2s;
         }}
         .alert-card-body button:hover {{
-            background: #f1f5f9;
+            background: #f9fafb;
             color: #1e293b;
-            border-color: #cbd5e1;
+            border-color: #9ca3af;
         }}
-        .alert-card-body button.active {{
-            border-left: 3px solid #3b82f6;
-            background: #eff6ff;
-            color: #1d4ed8;
+        /* 売上・実績 (green) のアクティブ状態 */
+        .alert-card-green .alert-card-body button.active {{
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border-color: #059669;
+        }}
+        .alert-card-green .alert-card-body button.active::after {{
+            color: rgba(255, 255, 255, 0.7);
+        }}
+        /* 要注意・改善 (orange) のアクティブ状態 */
+        .alert-card-orange .alert-card-body button.active {{
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            color: white;
+            border-color: #ea580c;
+        }}
+        .alert-card-orange .alert-card-body button.active::after {{
+            color: rgba(255, 255, 255, 0.7);
+        }}
+        /* トレンド分析 (blue) のアクティブ状態 */
+        .alert-card-blue .alert-card-body button.active {{
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border-color: #2563eb;
+        }}
+        .alert-card-blue .alert-card-body button.active::after {{
+            color: rgba(255, 255, 255, 0.7);
+        }}
+        /* イベント関連 (purple) のアクティブ状態 */
+        .alert-card-purple .alert-card-body button.active {{
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+            border-color: #7c3aed;
+        }}
+        .alert-card-purple .alert-card-body button.active::after {{
+            color: rgba(255, 255, 255, 0.7);
         }}
         @media (max-width: 1200px) {{
             .alert-card-grid {{
@@ -2270,7 +2302,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         <!-- カテゴリコンテナ (Proposal D: Vibrant Header Cards) -->
         <div class="alert-card-grid">
             <!-- 売上・実績カテゴリ -->
-            <div class="alert-card">
+            <div class="alert-card alert-card-green">
                 <div class="alert-card-header green">
                     <i class="fa-solid fa-chart-line"></i> 売上・実績
                 </div>
@@ -2281,7 +2313,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             </div>
 
             <!-- 要注意・改善カテゴリ -->
-            <div class="alert-card">
+            <div class="alert-card alert-card-orange">
                 <div class="alert-card-header orange">
                     <i class="fa-solid fa-triangle-exclamation"></i> 要注意・改善
                 </div>
@@ -2293,7 +2325,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             </div>
 
             <!-- トレンド分析カテゴリ -->
-            <div class="alert-card">
+            <div class="alert-card alert-card-blue">
                 <div class="alert-card-header blue">
                     <i class="fa-solid fa-arrow-trend-up"></i> トレンド分析
                 </div>
@@ -2304,7 +2336,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             </div>
 
             <!-- イベント関連カテゴリ -->
-            <div class="alert-card">
+            <div class="alert-card alert-card-purple">
                 <div class="alert-card-header purple">
                     <i class="fa-regular fa-calendar-check"></i> イベント関連
                 </div>
@@ -2688,23 +2720,21 @@ def generate_dashboard(db_path=None, output_dir=None):
         function showAlert(alertType) {{
             // 全タブコンテンツを非表示
             document.querySelectorAll('.alert-content').forEach(el => el.style.display = 'none');
-            // 全タブボタンを非アクティブ化
+            // 全タブボタンを非アクティブ化（CSSクラスで制御）
             document.querySelectorAll('.alert-tab').forEach(el => {{
                 el.classList.remove('active');
-                el.style.background = '#e5e7eb';
-                el.style.color = '#374151';
+                el.style.background = '';
+                el.style.color = '';
             }});
-            
+
             // 選択タブを表示
             const contentEl = document.getElementById(`alert-${{alertType}}`);
             if (contentEl) contentEl.style.display = 'block';
-            
-            // 選択タブボタンをアクティブ化
+
+            // 選択タブボタンをアクティブ化（CSSクラスで色を制御）
             const tabEl = document.getElementById(`tab-${{alertType}}`);
             if (tabEl) {{
                 tabEl.classList.add('active');
-                tabEl.style.background = '#22c55e';
-                tabEl.style.color = 'white';
             }}
             
             // ソート状態をリセット（タブ切り替え時のみ）
