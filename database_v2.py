@@ -535,7 +535,7 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
 def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.5, sales_decline_threshold=0.1):
     """
     会員率・売上低下校を取得
-    
+
     Args:
         db_path: データベースパス
         target_fy: 対象年度
@@ -545,25 +545,31 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
-    
+
     current_fy = target_fy if target_fy else get_current_fiscal_year()
     prev_fy = current_fy - 1
-    
+
+    # event_dateベースで年度の範囲を計算（4月始まり）
+    current_fy_start = f'{current_fy}-04-01'
+    current_fy_end = f'{current_fy + 1}-04-01'
+    prev_fy_start = f'{prev_fy}-04-01'
+    prev_fy_end = f'{prev_fy + 1}-04-01'
+
     report_id = get_latest_report_id(conn)
     if not report_id:
         conn.close()
         return []
 
     # 最新の会員率スナップショットを取得(grade='全学年')
-    # event_salesから売上を集計
-    
+    # event_salesから売上を集計（event_dateベースで年度判定）
+
     query = f'''
         WITH current_sales AS (
             SELECT
                 school_id,
                 COALESCE(SUM(sales), 0) as total_sales
             FROM event_sales
-            WHERE fiscal_year = ?
+            WHERE event_date >= ? AND event_date < ?
             GROUP BY school_id
         ),
         prev_sales AS (
@@ -571,7 +577,7 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
                 school_id,
                 COALESCE(SUM(sales), 0) as total_sales
             FROM event_sales
-            WHERE fiscal_year = ?
+            WHERE event_date >= ? AND event_date < ?
             GROUP BY school_id
         ),
         latest_rates AS (
@@ -626,7 +632,8 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
     '''
     
     # SQL側ではフィルタしない（JavaScript側で全フィルタリングを行う）
-    params = [current_fy, prev_fy]
+    # パラメータ: 今年度開始日, 今年度終了日, 前年度開始日, 前年度終了日
+    params = [current_fy_start, current_fy_end, prev_fy_start, prev_fy_end]
     
     cursor.execute(query, params)
     
