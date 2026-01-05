@@ -700,7 +700,7 @@ def get_events_for_date_filter(db_path=None, years_back=3):
         LEFT JOIN latest_rates mr ON s.school_id = mr.school_id
         WHERE e.report_id = ? 
           AND e.fiscal_year >= ?
-        ORDER BY e.event_date DESC
+        ORDER BY e.event_date ASC
     '''
     
     cursor.execute(query, (report_id, report_id, start_fy))
