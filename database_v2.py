@@ -228,43 +228,54 @@ def get_latest_report_id(conn):
 def get_rapid_growth_schools(db_path=None, target_fy=None):
     """
     売上好調校を取得
-    
+
     前年比で30%以上の売上成長を見せている学校
-    
+
     Args:
         db_path: データベースパス
         target_fy: 対象年度（Noneの場合は現在年度）
-    
+
     Returns:
         list: [{school_id, school_name, attribute, branch, studio, current_sales, prev_sales, growth_rate}, ...]
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
-    
+
     current_fy = target_fy if target_fy else get_current_fiscal_year()
     prev_fy = current_fy - 1
-    
-    report_id = get_latest_report_id(conn)
-    if not report_id:
-        conn.close()
-        return []
 
-    # event_salesから売上を集計
+    # event_dateベースで年度の範囲を計算（4月始まり）
+    current_fy_start = f'{current_fy}-04-01'
+    current_fy_end = f'{current_fy + 1}-04-01'
+    prev_fy_start = f'{prev_fy}-04-01'
+    prev_fy_end = f'{prev_fy + 1}-04-01'
+
+    # event_salesから売上を集計（重複除外 + event_dateベース）
     query = '''
         WITH current_sales AS (
+            -- 重複レコードを除外: event_date + event_name の組み合わせでユニーク化
             SELECT
                 school_id,
-                COALESCE(SUM(sales), 0) as total_sales
-            FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ?
+                COALESCE(SUM(max_sales), 0) as total_sales
+            FROM (
+                SELECT school_id, event_date, event_name, MAX(sales) as max_sales
+                FROM event_sales
+                WHERE event_date >= ? AND event_date < ?
+                GROUP BY school_id, event_date, event_name
+            )
             GROUP BY school_id
         ),
         prev_sales AS (
+            -- 重複レコードを除外: event_date + event_name の組み合わせでユニーク化
             SELECT
                 school_id,
-                COALESCE(SUM(sales), 0) as total_sales
-            FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ?
+                COALESCE(SUM(max_sales), 0) as total_sales
+            FROM (
+                SELECT school_id, event_date, event_name, MAX(sales) as max_sales
+                FROM event_sales
+                WHERE event_date >= ? AND event_date < ?
+                GROUP BY school_id, event_date, event_name
+            )
             GROUP BY school_id
         )
         SELECT
@@ -285,8 +296,8 @@ def get_rapid_growth_schools(db_path=None, target_fy=None):
           AND (COALESCE(curr.total_sales, 0) - prev.total_sales) / prev.total_sales >= 0.3
         ORDER BY growth_rate DESC
     '''
-    
-    cursor.execute(query, (current_fy, report_id, prev_fy, report_id))
+
+    cursor.execute(query, (current_fy_start, current_fy_end, prev_fy_start, prev_fy_end))
     
     results = []
     for row in cursor.fetchall():
@@ -310,50 +321,47 @@ def get_rapid_growth_schools(db_path=None, target_fy=None):
 def get_new_schools(db_path=None, target_fy=None, target_month=None):
     """
     新規開始校を取得（指定年度に売上があり、前年度に売上がない学校）
-    
+
     Args:
         db_path: データベースパス
         target_fy: 対象年度（Noneの場合は現在年度）
         target_month: 対象月（Noneの場合は全月）
-    
+
     Returns:
         list: [{school_id, school_name, attribute, branch, studio, first_event_date, current_sales, prev_sales, growth_rate}, ...]
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
-    
-    current_fy = target_fy if target_fy else get_current_fiscal_year()
-    prev_fy = current_fy - 1
-    
-    report_id = get_latest_report_id(conn)
-    if not report_id:
-        conn.close()
-        return []
 
-    # 月指定がある場合の条件
-    month_condition = "AND month = ?" if target_month else ""
-    
-    # パラメータ構築
-    params = [current_fy, report_id]
-    if target_month:
-        params.append(target_month)
-    # 前年度のパラメータ
-    # params.extend([prev_fy, report_id]) # This line is removed as the logic changes
+    current_fy = target_fy if target_fy else get_current_fiscal_year()
+
+    # event_dateベースで年度の範囲を計算（4月始まり）
+    current_fy_start = f'{current_fy}-04-01'
+    current_fy_end = f'{current_fy + 1}-04-01'
 
     query = f'''
         WITH first_events AS (
+            -- 各学校の初回イベント日を取得（重複除外済み）
             SELECT
                 school_id,
                 MIN(event_date) as first_event_date
-            FROM event_sales
+            FROM (
+                SELECT DISTINCT school_id, event_date, event_name
+                FROM event_sales
+            )
             GROUP BY school_id
         ),
         current_sales AS (
+            -- 重複レコードを除外: event_date + event_name の組み合わせでユニーク化
             SELECT
                 school_id,
-                COALESCE(SUM(sales), 0) as total_sales
-            FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ? {month_condition}
+                COALESCE(SUM(max_sales), 0) as total_sales
+            FROM (
+                SELECT school_id, event_date, event_name, MAX(sales) as max_sales
+                FROM event_sales
+                WHERE event_date >= ? AND event_date < ?
+                GROUP BY school_id, event_date, event_name
+            )
             GROUP BY school_id
         )
         SELECT
@@ -370,21 +378,13 @@ def get_new_schools(db_path=None, target_fy=None, target_month=None):
         FROM first_events fe
         JOIN schools_master s ON s.school_id = fe.school_id
         LEFT JOIN current_sales curr ON curr.school_id = fe.school_id
-        WHERE (
-            -- 初回イベント日が対象年度内（4月1日～翌年3月31日）
-            (strftime('%Y', fe.first_event_date) = CAST(? AS TEXT) AND strftime('%m', fe.first_event_date) >= '04')
-            OR
-            (strftime('%Y', fe.first_event_date) = CAST(? + 1 AS TEXT) AND strftime('%m', fe.first_event_date) <= '03')
-        )
+        WHERE fe.first_event_date >= ? AND fe.first_event_date < ?
         ORDER BY COALESCE(curr.total_sales, 0) DESC
     '''
-    
-    # パラメータ: current_fy, report_id, [target_month], current_fy, current_fy
-    params = [current_fy, report_id]
-    if target_month:
-        params.append(target_month)
-    params.extend([current_fy, current_fy])
-    
+
+    # パラメータ: current_fy_start, current_fy_end (for current_sales), current_fy_start, current_fy_end (for WHERE)
+    params = [current_fy_start, current_fy_end, current_fy_start, current_fy_end]
+
     cursor.execute(query, params)
     
     results = []
@@ -421,63 +421,63 @@ def get_new_schools(db_path=None, target_fy=None, target_month=None):
 def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
     """
     今年度未実施校を取得（前年度売上があり、今年度売上がない学校）
-    
+
     Args:
         db_path: データベースパス
         target_fy: 対象年度（Noneの場合は現在年度）
-        target_month: 対象月（Noneの場合は全月）
-    
+        target_month: 対象月（Noneの場合は全月）- 互換性のために残しているが未使用
+
     Returns:
         list: [{school_id, school_name, attribute, branch, studio, prev_event_count, current_sales, prev_sales, growth_rate}, ...]
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
-    
+
     current_fy = target_fy if target_fy else get_current_fiscal_year()
     prev_fy = current_fy - 1
-    
-    report_id = get_latest_report_id(conn)
-    if not report_id:
-        conn.close()
-        return []
 
-    # 月指定がある場合はフィルタリング条件を追加
-    month_condition = "AND month <= ?" if target_month else ""
-    params = [target_month] if target_month else []
+    # event_dateベースで年度の範囲を計算（4月始まり）
+    current_fy_start = f'{current_fy}-04-01'
+    current_fy_end = f'{current_fy + 1}-04-01'
+    prev_fy_start = f'{prev_fy}-04-01'
+    prev_fy_end = f'{prev_fy + 1}-04-01'
 
     query = f'''
         WITH current_events AS (
+            -- 今年度のユニークイベント数（重複除外）
             SELECT
                 school_id,
                 COUNT(*) as event_count
-            FROM event_sales
-            WHERE report_id = ?
-              AND (
-                (strftime('%Y', event_date) = CAST(? AS TEXT) AND strftime('%m', event_date) >= '04')
-                OR
-                (strftime('%Y', event_date) = CAST(? + 1 AS TEXT) AND strftime('%m', event_date) <= '03')
-              )
+            FROM (
+                SELECT DISTINCT school_id, event_date, event_name
+                FROM event_sales
+                WHERE event_date >= ? AND event_date < ?
+            )
             GROUP BY school_id
         ),
         prev_events AS (
+            -- 前年度のユニークイベント数（重複除外）
             SELECT
                 school_id,
                 COUNT(*) as event_count
-            FROM event_sales
-            WHERE report_id = ?
-              AND (
-                (strftime('%Y', event_date) = CAST(? AS TEXT) AND strftime('%m', event_date) >= '04')
-                OR
-                (strftime('%Y', event_date) = CAST(? + 1 AS TEXT) AND strftime('%m', event_date) <= '03')
-              )
+            FROM (
+                SELECT DISTINCT school_id, event_date, event_name
+                FROM event_sales
+                WHERE event_date >= ? AND event_date < ?
+            )
             GROUP BY school_id
         ),
         prev_sales AS (
+            -- 前年度売上（重複除外）
             SELECT
                 school_id,
-                COALESCE(SUM(sales), 0) as total_sales
-            FROM event_sales
-            WHERE fiscal_year = ? AND report_id = ?
+                COALESCE(SUM(max_sales), 0) as total_sales
+            FROM (
+                SELECT school_id, event_date, event_name, MAX(sales) as max_sales
+                FROM event_sales
+                WHERE event_date >= ? AND event_date < ?
+                GROUP BY school_id, event_date, event_name
+            )
             GROUP BY school_id
         )
         SELECT
@@ -500,16 +500,14 @@ def get_no_events_schools(db_path=None, target_fy=None, target_month=None):
           AND (ce.event_count IS NULL OR ce.event_count = 0)
         ORDER BY COALESCE(prev.total_sales, 0) DESC
     '''
-    
+
     # パラメータ構築
     query_params = [
-        report_id, current_fy, current_fy,     # current_events用
-        report_id, prev_fy, prev_fy,           # prev_events用
-        prev_fy, report_id                     # prev_sales用
+        current_fy_start, current_fy_end,  # current_events用
+        prev_fy_start, prev_fy_end,        # prev_events用
+        prev_fy_start, prev_fy_end         # prev_sales用
     ]
-    if target_month:
-        query_params.append(target_month)
-    
+
     cursor.execute(query, query_params)
     
     results = []
@@ -565,19 +563,29 @@ def get_declining_schools(db_path=None, target_fy=None, member_rate_threshold=0.
 
     query = f'''
         WITH current_sales AS (
+            -- 重複レコードを除外: event_date + event_name の組み合わせでユニーク化
             SELECT
                 school_id,
-                COALESCE(SUM(sales), 0) as total_sales
-            FROM event_sales
-            WHERE event_date >= ? AND event_date < ?
+                COALESCE(SUM(max_sales), 0) as total_sales
+            FROM (
+                SELECT school_id, event_date, event_name, MAX(sales) as max_sales
+                FROM event_sales
+                WHERE event_date >= ? AND event_date < ?
+                GROUP BY school_id, event_date, event_name
+            )
             GROUP BY school_id
         ),
         prev_sales AS (
+            -- 重複レコードを除外: event_date + event_name の組み合わせでユニーク化
             SELECT
                 school_id,
-                COALESCE(SUM(sales), 0) as total_sales
-            FROM event_sales
-            WHERE event_date >= ? AND event_date < ?
+                COALESCE(SUM(max_sales), 0) as total_sales
+            FROM (
+                SELECT school_id, event_date, event_name, MAX(sales) as max_sales
+                FROM event_sales
+                WHERE event_date >= ? AND event_date < ?
+                GROUP BY school_id, event_date, event_name
+            )
             GROUP BY school_id
         ),
         latest_rates AS (

@@ -9,8 +9,16 @@ import pandas as pd
 import numpy as np
 import re
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from database_v2 import get_connection, normalize_manager_name
+
+
+def excel_serial_to_date(serial):
+    """Excelのシリアル値を日付に変換"""
+    if isinstance(serial, (int, float)) and serial > 0:
+        # Excelの日付シリアル値は1900年1月1日が1（ただし1900年のうるう年バグあり）
+        return (datetime(1899, 12, 30) + timedelta(days=serial)).date()
+    return None
 
 
 # 学校名マッピング (報告書Excel → 担当者マスタ)
@@ -639,16 +647,32 @@ def import_event_sales(xlsx, cursor, report_id, sheet_name, fiscal_year, report_
         event_name = str(row[col_mapping.get('event', 3)]).strip() if pd.notna(row[col_mapping.get('event', 3)]) else None
         event_date = row[col_mapping.get('event_date', 4)] if 'event_date' in col_mapping else None
         
-        # イベント日付を文字列に変換し、年度計算用の日付オブジェクトを保持
+        # イベント日付を YYYY-MM-DD 形式の文字列に統一
         event_date_obj = None
+        event_date_str = None
         if pd.notna(event_date):
             if isinstance(event_date, datetime):
+                # datetime型の場合
                 event_date_obj = event_date.date()
-                event_date = event_date_obj
+                event_date_str = event_date_obj.strftime('%Y-%m-%d')
+            elif isinstance(event_date, date):
+                # date型の場合
+                event_date_obj = event_date
+                event_date_str = event_date.strftime('%Y-%m-%d')
+            elif isinstance(event_date, (int, float)) and event_date > 1000:
+                # Excelシリアル値の場合（1000以上で判定）
+                event_date_obj = excel_serial_to_date(event_date)
+                if event_date_obj:
+                    event_date_str = event_date_obj.strftime('%Y-%m-%d')
             else:
-                event_date = str(event_date)
-        else:
-            event_date = None
+                # 文字列の場合（既にYYYY-MM-DD形式と仮定）
+                event_date_str = str(event_date)
+                # 文字列からdateオブジェクトを作成（年度計算用）
+                try:
+                    event_date_obj = datetime.strptime(event_date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    pass
+        event_date = event_date_str
         
         # 学校IDを取得
         school_id = get_school_id_by_name(cursor, school_name)
