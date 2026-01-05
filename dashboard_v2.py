@@ -2595,7 +2595,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             const getHeader = (label, key, align='left') => {{
                 let icon = '';
                 // data-column属性を追加してデバッグしやすくする
-                const style = `padding: 12px; text-align: ${{align}}; cursor: pointer; user-select: none; white-space: nowrap;`;
+                const style = `padding: 12px; text-align: ${{align}}; cursor: pointer; user-select: none; white-space: nowrap; font-size: 13px;`;
                 
                 if (currentSort.column === key) {{
                     icon = currentSort.order === 'asc' ? ' <span style="color:#2563eb">▲</span>' : ' <span style="color:#2563eb">▼</span>';
@@ -2637,34 +2637,34 @@ def generate_dashboard(db_path=None, output_dir=None):
             pageData.forEach((row, idx) => {{
                 const bgColor = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
                 html += `<tr style="background: ${{bgColor}}; border-bottom: 1px solid #e5e7eb;">`;
-                html += `<td style="padding: 12px;">${{row.school_name}}</td>`;
-                html += `<td style="padding: 12px;">${{row.attribute || '-'}}</td>`;
-                html += `<td style="padding: 12px;">${{row.region || '-'}}</td>`;
-                html += `<td style="padding: 12px;">${{row.studio || '-'}}</td>`;
+                html += `<td style="padding: 12px; font-size: 13px;">${{row.school_name}}</td>`;
+                html += `<td style="padding: 12px; font-size: 13px;">${{row.attribute || '-'}}</td>`;
+                html += `<td style="padding: 12px; font-size: 13px;">${{row.region || '-'}}</td>`;
+                html += `<td style="padding: 12px; font-size: 13px;">${{row.studio || '-'}}</td>`;
                 
                 if (alertType === 'new_schools') {{
-                    html += `<td style="padding: 12px;">${{row.first_event_date || '-'}}</td>`;
-                    html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.first_event_date || '-'}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'no_events') {{
-                    html += `<td style="padding: 12px; text-align: right;">${{row.prev_event_count || 0}}件</td>`;
-                    html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.prev_event_count || 0}}件</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'decline') {{
                     // member_rateは既にパーセント形式（63.0 = 63.0%）
                     const rateColor = row.member_rate < 20 ? '#ef4444' : '#f97316';
-                    html += `<td style="padding: 12px; text-align: right; color: ${{rateColor}}; font-weight: bold;">${{row.member_rate.toFixed(1)}}%</td>`;
-                    html += `<td style="padding: 12px; text-align: right; color: #ef4444; font-weight: bold;">${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
-                    html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
-                    html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; color: ${{rateColor}}; font-weight: bold; font-size: 13px;">${{row.member_rate.toFixed(1)}}%</td>`;
+                    html += `<td style="padding: 12px; text-align: right; color: #ef4444; font-weight: bold; font-size: 13px;">${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'event_sales_by_date') {{
-                    html += `<td style="padding: 12px;">${{row.event_name}}</td>`;
-                    html += `<td style="padding: 12px;">${{row.event_date}}</td>`;
-                    html += `<td style="padding: 12px; text-align: right;">${{row.member_rate > 0 ? row.member_rate.toFixed(1) + '%' : '-'}}</td>`;
-                    html += `<td style="padding: 12px; text-align: right;">¥${{row.sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.event_name}}</td>`;
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.event_date}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.member_rate > 0 ? row.member_rate.toFixed(1) + '%' : '-'}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.sales.toLocaleString()}}</td>`;
                 }} else {{
-                    html += `<td style="padding: 12px; text-align: right;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
                     if (alertType !== 'new_schools') {{
-                        html += `<td style="padding: 12px; text-align: right;">¥${{row.prev_sales.toLocaleString()}}</td>`;
-                        html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold;">+${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
+                        html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                        html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold; font-size: 13px;">+${{(row.growth_rate * 100).toFixed(1)}}%</td>`;
                     }}
                 }}
                 html += '</tr>';
@@ -2995,13 +2995,13 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             let html = `
                 \u003cdiv style="margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;"\u003e
-                    \u003cdiv style="font-weight: bold; font-size: 18px; margin-bottom: 6px;"\u003e${{school.school_name}}\u003c/div\u003e
-                    \u003cdiv style="color: #6b7280; font-size: 13px;"\u003e${{school.attribute || '-'}} / ${{school.studio || '-'}}\u003c/div\u003e
+                    \u003cdiv style="font-weight: bold; font-size: 16px; margin-bottom: 6px;"\u003e${{school.school_name}}\u003c/div\u003e
+                    \u003cdiv style="color: #6b7280; font-size: 11px;"\u003e${{school.attribute || '-'}} / ${{school.studio || '-'}}\u003c/div\u003e
                 \u003c/div\u003e
                 \u003cdiv style="display: flex; gap: 20px;"\u003e
                     \u003c!-- 左側: 年度1（青） --\u003e
                     \u003cdiv style="flex: 1;"\u003e
-                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #3b82f6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 16px;"\u003e${{year1}}年度\u003c/div\u003e
+                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #3b82f6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 14px;"\u003e${{year1}}年度\u003c/div\u003e
             `;
             
             // 年度1のイベント
@@ -3012,17 +3012,17 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += `
                     \u003cdiv style="padding: 8px 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
                         \u003cdiv\u003e
-                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 15px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
-                            \u003cdiv style="font-size: 13px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 13px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
+                            \u003cdiv style="font-size: 11px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
                         \u003c/div\u003e
-                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 15px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 13px;"\u003e${{salesFormatted}}\u003c/div\u003e
                     \u003c/div\u003e
                 `;
             }});
             
             // 年度1のフッター
             html += `
-                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 15px;"\u003e
+                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 13px;"\u003e
                             \u003cdiv\u003e計: ${{year1Events.length}}件\u003c/div\u003e
                             \u003cdiv\u003e合計: ${{formatCurrency(year1Total)}}\u003c/div\u003e
                         \u003c/div\u003e
@@ -3030,7 +3030,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                     
                     \u003c!-- 右側: 年度2（紫） --\u003e
                     \u003cdiv style="flex: 1;"\u003e
-                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #8b5cf6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 16px;"\u003e${{year2}}年度\u003c/div\u003e
+                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #8b5cf6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 14px;"\u003e${{year2}}年度\u003c/div\u003e
             `;
             
             // 年度2のイベント
@@ -3041,17 +3041,17 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += `
                     \u003cdiv style="padding: 8px 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
                         \u003cdiv\u003e
-                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 15px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
-                            \u003cdiv style="font-size: 13px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 13px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
+                            \u003cdiv style="font-size: 11px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
                         \u003c/div\u003e
-                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 15px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 13px;"\u003e${{salesFormatted}}\u003c/div\u003e
                     \u003c/div\u003e
                 `;
             }});
             
             // 年度2のフッター
             html += `
-                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 15px;"\u003e
+                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 13px;"\u003e
                             \u003cdiv\u003e計: ${{year2Events.length}}件\u003c/div\u003e
                             \u003cdiv\u003e合計: ${{formatCurrency(year2Total)}}\u003c/div\u003e
                         \u003c/div\u003e
