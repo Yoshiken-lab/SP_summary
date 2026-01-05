@@ -1010,6 +1010,7 @@ def get_improved_member_rate_schools(db_path=None, target_fy=None):
 def get_sales_unit_price_analysis(db_path=None, target_fy=None):
     """
     イベント平均単価（1イベントあたりの売上）が高い学校を取得
+    会員データと属性平均との比較も含む
     
     Args:
         db_path: データベースパス
@@ -1017,7 +1018,8 @@ def get_sales_unit_price_analysis(db_path=None, target_fy=None):
     
     Returns:
         list: [{school_id, school_name, attribute, studio, manager, region, 
-               total_sales, event_count, avg_price}, ...]
+               total_sales, event_count, avg_price, member_count, member_rate,
+               attr_avg_price, price_ratio}, ...]
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
@@ -1029,7 +1031,26 @@ def get_sales_unit_price_analysis(db_path=None, target_fy=None):
         conn.close()
         return []
     
+    # イベントデータと会員データを結合して取得
+    # 会員データは grade='全学年' の最新スナップショットを使用
     query = '''
+        WITH latest_member_counts AS (
+            SELECT 
+                m.school_id,
+                m.member_count,
+                 CASE 
+                    WHEN m.total_students > 0 THEN CAST(m.member_count AS REAL) / m.total_students * 100
+                    ELSE 0 
+                END as member_rate
+            FROM member_rates m
+            JOIN (
+                SELECT school_id, MAX(snapshot_date) as max_snapshot
+                FROM member_rates
+                WHERE grade = '全学年'
+                GROUP BY school_id
+            ) latest ON m.school_id = latest.school_id AND m.snapshot_date = latest.max_snapshot
+            WHERE m.grade = '全学年'
+        )
         SELECT
             s.school_id,
             s.school_name,
@@ -1042,9 +1063,12 @@ def get_sales_unit_price_analysis(db_path=None, target_fy=None):
             CASE 
                 WHEN COUNT(e.id) > 0 THEN CAST(SUM(e.sales) AS REAL) / COUNT(e.id)
                 ELSE 0 
-            END as avg_price
+            END as avg_price,
+            COALESCE(lmc.member_count, 0) as member_count,
+            COALESCE(lmc.member_rate, 0) as member_rate
         FROM schools_master s
         JOIN event_sales e ON s.school_id = e.school_id
+        LEFT JOIN latest_member_counts lmc ON s.school_id = lmc.school_id
         WHERE e.fiscal_year = ? AND e.report_id = ?
         GROUP BY s.school_id, s.school_name, s.attribute, s.studio, s.manager, s.region
         HAVING event_count > 0
@@ -1054,7 +1078,37 @@ def get_sales_unit_price_analysis(db_path=None, target_fy=None):
     cursor.execute(query, (current_fy, report_id))
     
     results = []
-    for row in cursor.fetchall():
+    attr_totals = {}  # 属性ごとの集計用
+    
+    raw_rows = cursor.fetchall()
+    
+    # 1回目ループ: 平均計算のための集計
+    for row in raw_rows:
+        attribute = row[2] or 'その他'
+        sales = row[6]
+        count = row[7]
+        
+        if attribute not in attr_totals:
+            attr_totals[attribute] = {'sales': 0, 'count': 0}
+        
+        attr_totals[attribute]['sales'] += sales
+        attr_totals[attribute]['count'] += count
+
+    # 2回目ループ: データ整形と平均比の計算
+    for row in raw_rows:
+        attribute = row[2] or 'その他'
+        avg_price = row[8]
+        
+        # 属性平均単価の計算
+        attr_avg_price = 0
+        if attribute in attr_totals and attr_totals[attribute]['count'] > 0:
+            attr_avg_price = attr_totals[attribute]['sales'] / attr_totals[attribute]['count']
+            
+        # 平均比の計算
+        price_ratio = 0
+        if attr_avg_price > 0:
+            price_ratio = (avg_price / attr_avg_price) * 100
+            
         results.append({
             'school_id': row[0],
             'school_name': row[1],
@@ -1064,7 +1118,11 @@ def get_sales_unit_price_analysis(db_path=None, target_fy=None):
             'region': row[5] or '',
             'total_sales': row[6],
             'event_count': row[7],
-            'avg_price': row[8]
+            'avg_price': avg_price,
+            'member_count': row[9],
+            'member_rate': row[10],
+            'attr_avg_price': attr_avg_price,
+            'price_ratio': price_ratio
         })
     
     conn.close()

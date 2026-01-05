@@ -2317,23 +2317,29 @@ def generate_dashboard(db_path=None, output_dir=None):
 
         <!-- 会員率改善校タブコンテンツ -->
         <div id="alert-improved" class="alert-content" style="display: none;">
-            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
-                <label style="font-weight: bold; color: #374151;">対象年度:</label>
-                <select id="improvedYearFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white; font-size: 12px;">
-                    <!-- JSで生成 -->
-                </select>
-                <div style="display: flex; align-items: center; gap: 5px; margin-left: 10px;">
-                    <label style="font-weight: bold; color: #374151;">改善ポイント:</label>
-                    <select id="improvedPointFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
-                        <option value="0">0pt以上（全て）</option>
-                        <option value="1">1pt以上</option>
-                        <option value="3">3pt以上</option>
-                        <option value="5">5pt以上</option>
-                        <option value="10">10pt以上</option>
-                        <option value="20">20pt以上</option>
+            <div class="alert-filters" style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap; font-size: 12px;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label style="font-weight: bold; color: #374151;">対象年度:</label>
+                    <select id="improvedYearFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; background: white; font-size: 12px;">
+                        <!-- JSで生成 -->
                     </select>
                 </div>
-                <div style="flex-grow: 1;"></div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label style="font-weight: bold; color: #374151;">属性:</label>
+                    <select id="improvedAttributeFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 12px;">
+                        <option value="">全て</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label style="font-weight: bold; color: #374151;">写真館:</label>
+                    <select id="improvedStudioFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 12px;">
+                        <option value="">全て</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px; flex-grow: 1;">
+                    <label style="font-weight: bold; color: #374151;">学校名:</label>
+                    <input type="text" id="improvedSchoolFilter" oninput="renderAlertTable('improved', 1)" placeholder="学校名で検索" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; width: 100%; max-width: 200px; font-size: 12px;">
+                </div>
                 <button class="csv-download-btn" onclick="downloadAlertCSV('improved')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
             <div id="improved-table-container"></div>
@@ -2342,21 +2348,29 @@ def generate_dashboard(db_path=None, output_dir=None):
 
         <!-- 販売単価分析タブコンテンツ -->
         <div id="alert-unit_price" class="alert-content" style="display: none;">
-            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
-                <label style="font-weight: bold; color: #374151;">対象年度:</label>
-                <select id="unitPriceYearFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white; font-size: 12px;">
-                    <!-- JSで生成 -->
-                </select>
-                <div style="display: flex; align-items: center; gap: 5px; margin-left: 10px;">
-                    <label style="font-weight: bold; color: #374151;">最低イベント回数:</label>
-                    <select id="unitPriceCountFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
-                        <option value="1">1回以上</option>
-                        <option value="3" selected>3回以上</option>
-                        <option value="5">5回以上</option>
-                        <option value="10">10回以上</option>
+            <div class="alert-filters" style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap; font-size: 12px;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label style="font-weight: bold; color: #374151;">対象年度:</label>
+                    <select id="unitPriceYearFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; background: white; font-size: 12px;">
+                        <!-- JSで生成 -->
                     </select>
                 </div>
-                <div style="flex-grow: 1;"></div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label style="font-weight: bold; color: #374151;">属性:</label>
+                    <select id="unitPriceAttributeFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 12px;">
+                        <option value="">全て</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <label style="font-weight: bold; color: #374151;">写真館:</label>
+                    <select id="unitPriceStudioFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 12px;">
+                        <option value="">全て</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px; flex-grow: 1;">
+                    <label style="font-weight: bold; color: #374151;">学校名:</label>
+                    <input type="text" id="unitPriceSchoolFilter" oninput="renderAlertTable('unit_price', 1)" placeholder="学校名で検索" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; width: 100%; max-width: 200px; font-size: 12px;">
+                </div>
                 <button class="csv-download-btn" onclick="downloadAlertCSV('unit_price')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
             <div id="unit_price-table-container"></div>
@@ -2618,24 +2632,36 @@ def generate_dashboard(db_path=None, output_dir=None):
                 }}
                 alertsData['decline'] = data;
             }} else if (alertType === 'improved') {{
-                const yearElement = document.getElementById('improvedYearFilter');
-                const year = yearElement ? yearElement.value : null;
-                const pointThreshold = parseFloat(document.getElementById('improvedPointFilter').value);
+                const year = document.getElementById('improvedYearFilter').value;
+                const attribute = document.getElementById('improvedAttributeFilter').value;
+                const studio = document.getElementById('improvedStudioFilter').value;
+                const schoolName = document.getElementById('improvedSchoolFilter').value.toLowerCase();
                 
                 if (year && improvedAllData[year]) {{
                     data = improvedAllData[year].filter(row => {{
-                        return row.improvement_point >= pointThreshold;
+                        let match = true;
+                        if (attribute && row.attribute !== attribute) match = false;
+                        if (studio && row.studio !== studio) match = false;
+                        if (schoolName && !row.school_name.toLowerCase().includes(schoolName)) match = false;
+                        return match;
                     }});
                 }}
                 alertsData['improved'] = data;
             }} else if (alertType === 'unit_price') {{
-                const yearElement = document.getElementById('unitPriceYearFilter');
-                const year = yearElement ? yearElement.value : null;
-                const minCount = parseInt(document.getElementById('unitPriceCountFilter').value);
+                const year = document.getElementById('unitPriceYearFilter').value;
+                const attribute = document.getElementById('unitPriceAttributeFilter').value;
+                const studio = document.getElementById('unitPriceStudioFilter').value;
+                const schoolName = document.getElementById('unitPriceSchoolFilter').value.toLowerCase();
                 
                 if (year && unitPriceAllData[year]) {{
                     data = unitPriceAllData[year].filter(row => {{
-                        return row.event_count >= minCount;
+                        let match = true;
+                        if (attribute && row.attribute !== attribute) match = false;
+                        if (studio && row.studio !== studio) match = false;
+                        if (schoolName && !row.school_name.toLowerCase().includes(schoolName)) match = false;
+                        // 最低イベント回数は1回以上（内部固定）
+                        if (row.event_count < 1) match = false;
+                        return match;
                     }});
                 }}
                 alertsData['unit_price'] = data;
@@ -2680,11 +2706,11 @@ def generate_dashboard(db_path=None, output_dir=None):
                     // 8カラム: 学校名, 属性, 事業所, 写真館, 会員率, 売上変化率, 今年度売上, 前年度売上
                     return '<colgroup><col style="width: 22%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"></colgroup>';
                 }} else if (alertType === 'improved') {{
-                    // 8カラム: 学校名, 属性, 事業所, 写真館, 今年度会員率, 前年度会員率, 改善pt, 今年度売上
-                    return '<colgroup><col style="width: 22%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"></colgroup>';
+                    // 7カラム: 学校名, 属性, 写真館, 事業所, 今年度会員率, 前年度会員率, 改善幅
+                    return '<colgroup><col style="width: 25%;"><col style="width: 8%;"><col style="width: 15%;"><col style="width: 8%;"><col style="width: 15%;"><col style="width: 15%;"><col style="width: 14%;"></colgroup>';
                 }} else if (alertType === 'unit_price') {{
-                    // 7カラム: 学校名, 属性, 事業所, 写真館, イベント数, 合計売上, 平均単価
-                    return '<colgroup><col style="width: 24%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 14%;"><col style="width: 10%;"><col style="width: 16%;"><col style="width: 18%;"></colgroup>';
+                    // 9カラム: 学校名, 属性, 写真館, 会員率, 売上, 会員数, 単価, 属性平均, 平均比
+                    return '<colgroup><col style="width: 18%;"><col style="width: 8%;"><col style="width: 12%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 8%;"><col style="width: 12%;"><col style="width: 12%;"><col style="width: 12%;"></colgroup>';
                 }} else {{
                     // 7カラム (rapid_growth): 学校名, 属性, 事業所, 写真館, 今年度売上, 前年度売上, 成長率
                     return '<colgroup><col style="width: 24%;"><col style="width: 9%;"><col style="width: 11%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"><col style="width: 14%;"></colgroup>';
@@ -2721,14 +2747,17 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += getHeader('今年度売上', 'current_sales', 'right');
                 html += getHeader('前年度売上', 'prev_sales', 'right');
             }} else if (alertType === 'improved') {{
+                html += getHeader('事業所', 'region');
                 html += getHeader('今年度会員率', 'current_rate', 'right');
                 html += getHeader('前年度会員率', 'prev_rate', 'right');
-                html += getHeader('改善Pt', 'improvement_point', 'right');
-                html += getHeader('今年度売上', 'current_sales', 'right');
+                html += getHeader('改善幅', 'improvement_point', 'right');
             }} else if (alertType === 'unit_price') {{
-                html += getHeader('平均単価', 'avg_price', 'right');
-                html += getHeader('イベント数', 'event_count', 'right');
-                html += getHeader('合計売上', 'total_sales', 'right');
+                html += getHeader('会員率', 'member_rate', 'right');
+                html += getHeader('売上', 'total_sales', 'right');
+                html += getHeader('会員数', 'member_count', 'right');
+                html += getHeader('単価', 'avg_price', 'right');
+                html += getHeader('属性平均', 'attr_avg_price', 'right');
+                html += getHeader('平均比', 'price_ratio', 'right');
             }} else if (alertType === 'event_sales_by_date') {{
                 html += getHeader('イベント名', 'event_name');
                 html += getHeader('開始日', 'event_date');
@@ -2763,14 +2792,18 @@ def generate_dashboard(db_path=None, output_dir=None):
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'improved') {{
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.region || '-'}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold; font-size: 13px;">${{row.current_rate.toFixed(1)}}%</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.prev_rate.toFixed(1)}}%</td>`;
-                    html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold; font-size: 13px;">+${{row.improvement_point.toFixed(1)}}pt</td>`;
-                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold; font-size: 13px;">+${{row.improvement_point.toFixed(1)}}%</td>`;
                 }} else if (alertType === 'unit_price') {{
-                    html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: #2563eb; font-size: 13px;">¥${{Math.round(row.avg_price).toLocaleString()}}</td>`;
-                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.event_count}}回</td>`;
+                    const ratioColor = row.price_ratio >= 100 ? '#16a34a' : '#ef4444';
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.member_rate.toFixed(1)}}%</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.total_sales.toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.member_count}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: #2563eb; font-size: 13px;">¥${{Math.round(row.avg_price).toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{Math.round(row.attr_avg_price).toLocaleString()}}</td>`;
+                    html += `<td style="padding: 12px; text-align: right; font-weight: bold; color: ${{ratioColor}}; font-size: 13px;">${{row.price_ratio.toFixed(1)}}%</td>`;
                 }} else if (alertType === 'event_sales_by_date') {{
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.event_name}}</td>`;
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.event_date}}</td>`;
@@ -2876,28 +2909,37 @@ def generate_dashboard(db_path=None, output_dir=None):
             // CSVヘッダーとデータ生成
             let csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,成長率';
             if (alertType === 'decline') csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,成長率,会員率';
-            if (alertType === 'improved') csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,改善pt,今年度会員率,前年度会員率';
-            if (alertType === 'unit_price') csv = '学校名,属性,写真館,担当者,地区,平均単価,イベント数,合計売上';
+            if (alertType === 'improved') csv = '学校名,属性,写真館,事業所,今年度会員率,前年度会員率,改善幅';
+            if (alertType === 'unit_price') csv = '学校名,属性,写真館,会員率,売上,会員数,単価,属性平均,平均比';
             csv += '\\n';
             
             data.forEach(row => {{
                 csv += `\"${{row.school_name}}\",`;
                 csv += `\"${{row.attribute || ''}}\",`;
                 csv += `\"${{row.studio || ''}}\",`;
-                csv += `\"${{row.manager || ''}}\",`;
-                csv += `\"${{row.region || ''}}\",`;
+                if (alertType !== 'unit_price') {{
+                   if (alertType === 'improved') {{
+                       csv += `\"${{row.region || ''}}\",`;
+                   }} else {{
+                       csv += `\"${{row.manager || ''}}\",`;
+                       csv += `\"${{row.region || ''}}\",`;
+                   }}
+                }}
                 if (alertType === 'unit_price') {{
+                    csv += `${{row.member_rate.toFixed(1)}},`;
+                    csv += `${{row.total_sales}},`;
+                    csv += `${{row.member_count}},`;
                     csv += `${{Math.round(row.avg_price)}},`;
-                    csv += `${{row.event_count}},`;
-                    csv += `${{row.total_sales}}\\n`;
+                    csv += `${{Math.round(row.attr_avg_price)}},`;
+                    csv += `${{row.price_ratio.toFixed(1)}}\\n`;
                 }} else {{
-                    csv += `${{row.current_sales || 0}},`;
-                    csv += `${{row.prev_sales || 0}},`;
                     if (alertType === 'improved') {{
-                        csv += `${{row.improvement_point.toFixed(1)}},`;
                         csv += `${{row.current_rate.toFixed(1)}},`;
-                        csv += `${{row.prev_rate.toFixed(1)}}\\n`;
+                        csv += `${{row.prev_rate.toFixed(1)}},`;
+                        csv += `${{row.improvement_point.toFixed(1)}}\\n`;
                     }} else {{
+                        csv += `${{row.current_sales || 0}},`;
+                        csv += `${{row.prev_sales || 0}},`;
                         csv += `${{(row.growth_rate * 100).toFixed(1)}}%`;
                         if (alertType === 'decline') csv += `,${{row.member_rate.toFixed(1)}}`;
                         csv += '\\n';
@@ -2923,36 +2965,53 @@ def generate_dashboard(db_path=None, output_dir=None):
         function initializeEventSalesFilters() {{
             const yearSelect = document.getElementById('eventSalesYear');
             
-            // 会員率改善校の年度フィルター初期化（JSで動的に行う）
-            const improvedYearSelect = document.getElementById('improvedYearFilter');
-            if (improvedYearSelect) {{
-                improvedYearSelect.innerHTML = '';
-                availableYears.forEach(year => {{
-                    const option = document.createElement('option');
-                    option.value = year;
-                    option.textContent = year + '年度';
-                    improvedYearSelect.appendChild(option);
-                }});
-                // デフォルトは最新年度
-                if (availableYears.length > 0) {{
-                    improvedYearSelect.value = availableYears[0];
-                }}
-            }}
+        // トレンド分析画面のフィルタ初期化
+        function initializeTrendFilters() {{
+             // 属性と写真館のリスト取得
+            const attributes = [...new Set(allSchoolsData.map(s => s.attribute))].filter(a => a).sort();
+            const studios = [...new Set(allSchoolsData.map(s => s.studio))].filter(s => s).sort();
             
-            // 販売単価分析の年度フィルター初期化
-            const unitPriceYearSelect = document.getElementById('unitPriceYearFilter');
-            if (unitPriceYearSelect) {{
-                unitPriceYearSelect.innerHTML = '';
-                availableYears.forEach(year => {{
-                    const option = document.createElement('option');
-                    option.value = year;
-                    option.textContent = year + '年度';
-                    unitPriceYearSelect.appendChild(option);
+            // 共通オプション生成ヘルパー
+            const populate = (id, items) => {{
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerHTML = '\u003coption value=""\u003e全て\u003c/option\u003e';
+                items.forEach(item => {{
+                    const op = document.createElement('option');
+                    op.value = item;
+                    op.textContent = item;
+                    el.appendChild(op);
                 }});
-                if (availableYears.length > 0) {{
-                    unitPriceYearSelect.value = availableYears[0];
-                }}
-            }}
+            }};
+            
+            // 属性・写真館プルダウン更新
+            populate('improvedAttributeFilter', attributes);
+            populate('improvedStudioFilter', studios);
+            populate('unitPriceAttributeFilter', attributes);
+            populate('unitPriceStudioFilter', studios);
+            
+            // 年度プルダウン更新
+            const populateYears = (id) => {{
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerHTML = '';
+                availableYears.forEach(year => {{
+                    const op = document.createElement('option');
+                    op.value = year;
+                    op.textContent = year + '年度';
+                    el.appendChild(op);
+                }});
+                if (availableYears.length > 0) el.value = availableYears[0];
+            }};
+            
+            populateYears('improvedYearFilter');
+            populateYears('unitPriceYearFilter');
+        }}
+
+        // 初期化実行
+        initializeTrendFilters();
+
+        // 販売単価分析の年度フィルター初期化 (削除済み、上記に統合)
             if (!yearSelect) return;
             
             // データからユニークな年を取得
