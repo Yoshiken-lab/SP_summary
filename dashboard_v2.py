@@ -2326,19 +2326,21 @@ def generate_dashboard(db_path=None, output_dir=None):
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <label style="font-weight: bold; color: #374151;">属性:</label>
-                    <select id="improvedAttributeFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 12px;">
+                    <select id="improvedAttributeFilter" onchange="updateImprovedStudioList(); renderAlertTable('improved', 1);" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 12px;">
                         <option value="">全て</option>
                     </select>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <label style="font-weight: bold; color: #374151;">写真館:</label>
-                    <select id="improvedStudioFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 12px;">
+                    <select id="improvedStudioFilter" onchange="updateImprovedSchoolList(); renderAlertTable('improved', 1);" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 12px;">
                         <option value="">全て</option>
                     </select>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px; flex-grow: 1;">
                     <label style="font-weight: bold; color: #374151;">学校名:</label>
-                    <input type="text" id="improvedSchoolFilter" oninput="renderAlertTable('improved', 1)" placeholder="学校名で検索" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; width: 100%; max-width: 200px; font-size: 12px;">
+                    <select id="improvedSchoolFilter" onchange="renderAlertTable('improved', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 12px;">
+                        <option value="">全て</option>
+                    </select>
                 </div>
                 <button class="csv-download-btn" onclick="downloadAlertCSV('improved')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
@@ -2357,19 +2359,21 @@ def generate_dashboard(db_path=None, output_dir=None):
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <label style="font-weight: bold; color: #374151;">属性:</label>
-                    <select id="unitPriceAttributeFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 12px;">
+                    <select id="unitPriceAttributeFilter" onchange="updateUnitPriceStudioList(); renderAlertTable('unit_price', 1);" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 12px;">
                         <option value="">全て</option>
                     </select>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <label style="font-weight: bold; color: #374151;">写真館:</label>
-                    <select id="unitPriceStudioFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 12px;">
+                    <select id="unitPriceStudioFilter" onchange="updateUnitPriceSchoolList(); renderAlertTable('unit_price', 1);" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 12px;">
                         <option value="">全て</option>
                     </select>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px; flex-grow: 1;">
                     <label style="font-weight: bold; color: #374151;">学校名:</label>
-                    <input type="text" id="unitPriceSchoolFilter" oninput="renderAlertTable('unit_price', 1)" placeholder="学校名で検索" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; width: 100%; max-width: 200px; font-size: 12px;">
+                    <select id="unitPriceSchoolFilter" onchange="renderAlertTable('unit_price', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 12px;">
+                        <option value="">全て</option>
+                    </select>
                 </div>
                 <button class="csv-download-btn" onclick="downloadAlertCSV('unit_price')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
@@ -2635,14 +2639,14 @@ def generate_dashboard(db_path=None, output_dir=None):
                 const year = document.getElementById('improvedYearFilter').value;
                 const attribute = document.getElementById('improvedAttributeFilter').value;
                 const studio = document.getElementById('improvedStudioFilter').value;
-                const schoolName = document.getElementById('improvedSchoolFilter').value.toLowerCase();
+                const schoolName = document.getElementById('improvedSchoolFilter').value;
                 
                 if (year && improvedAllData[year]) {{
                     data = improvedAllData[year].filter(row => {{
                         let match = true;
                         if (attribute && row.attribute !== attribute) match = false;
                         if (studio && row.studio !== studio) match = false;
-                        if (schoolName && !row.school_name.toLowerCase().includes(schoolName)) match = false;
+                        if (schoolName && row.school_name !== schoolName) match = false;
                         return match;
                     }});
                 }}
@@ -2651,14 +2655,14 @@ def generate_dashboard(db_path=None, output_dir=None):
                 const year = document.getElementById('unitPriceYearFilter').value;
                 const attribute = document.getElementById('unitPriceAttributeFilter').value;
                 const studio = document.getElementById('unitPriceStudioFilter').value;
-                const schoolName = document.getElementById('unitPriceSchoolFilter').value.toLowerCase();
+                const schoolName = document.getElementById('unitPriceSchoolFilter').value;
                 
                 if (year && unitPriceAllData[year]) {{
                     data = unitPriceAllData[year].filter(row => {{
                         let match = true;
                         if (attribute && row.attribute !== attribute) match = false;
                         if (studio && row.studio !== studio) match = false;
-                        if (schoolName && !row.school_name.toLowerCase().includes(schoolName)) match = false;
+                        if (schoolName && row.school_name !== schoolName) match = false;
                         // 最低イベント回数は1回以上（内部固定）
                         if (row.event_count < 1) match = false;
                         return match;
@@ -2785,16 +2789,24 @@ def generate_dashboard(db_path=None, output_dir=None):
                 const bgColor = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
                 html += `<tr style="background: ${{bgColor}}; border-bottom: 1px solid #e5e7eb;">`;
                 html += `<td style="padding: 12px; font-size: 13px;">${{row.school_name}}</td>`;
-                html += `<td style="padding: 12px; font-size: 13px;">${{row.attribute || '-'}}</td>`;
-                html += `<td style="padding: 12px; font-size: 13px;">${{row.region || '-'}}</td>`;
-                html += `<td style="padding: 12px; font-size: 13px;">${{row.studio || '-'}}</td>`;
+                
+                if (alertType === 'improved' || alertType === 'unit_price') {{
+                    // improved/unit_price: 学校名, 属性, 写真館 (事業所なし)
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.attribute || '-'}}</td>`;
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.studio || '-'}}</td>`;
+                }} else {{
+                    // その他: 学校名, 属性, 事業所, 写真館
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.attribute || '-'}}</td>`;
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.region || '-'}}</td>`;
+                    html += `<td style="padding: 12px; font-size: 13px;">${{row.studio || '-'}}</td>`;
+                }}
                 
                 if (alertType === 'new_schools') {{
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.first_event_date || '-'}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'no_events') {{
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.prev_event_count || 0}}件</td>`;
-                    html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
+                    html += `<td style=" 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'decline') {{
                     // member_rateは既にパーセント形式（63.0 = 63.0%）
                     const rateColor = row.member_rate < 20 ? '#ef4444' : '#f97316';
@@ -2803,11 +2815,13 @@ def generate_dashboard(db_path=None, output_dir=None):
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.current_sales.toLocaleString()}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.prev_sales.toLocaleString()}}</td>`;
                 }} else if (alertType === 'improved') {{
+                    // improved: 事業所, 今年度会員率, 前年度会員率, 改善幅
                     html += `<td style="padding: 12px; font-size: 13px;">${{row.region || '-'}}</td>`;
                     html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold; font-size: 13px;">${{row.current_rate.toFixed(1)}}%</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.prev_rate.toFixed(1)}}%</td>`;
                     html += `<td style="padding: 12px; text-align: right; color: #16a34a; font-weight: bold; font-size: 13px;">+${{row.improvement_point.toFixed(1)}}%</td>`;
                 }} else if (alertType === 'unit_price') {{
+                    // unit_price: 会員率, 売上, 会員数, 単価, 属性平均, 平均比
                     const ratioColor = row.price_ratio >= 100 ? '#16a34a' : '#ef4444';
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">${{row.member_rate.toFixed(1)}}%</td>`;
                     html += `<td style="padding: 12px; text-align: right; font-size: 13px;">¥${{row.total_sales.toLocaleString()}}</td>`;
@@ -3407,6 +3421,175 @@ def generate_dashboard(db_path=None, output_dir=None):
         if (noEventsYearSelect.options.length > 0) {{
             noEventsYearSelect.selectedIndex = 0;
         }}
+        
+        
+        // ==== Trend Analysis Cascading Filters ====
+        // improved 用連動フィルタ
+        function updateImprovedStudioList() {{
+            const attribute = document.getElementById('improvedAttributeFilter').value;
+            const studioSelect = document.getElementById('improvedStudioFilter');
+            const currentValue = studioSelect.value;
+            
+            // 属性で絞り込み
+            let filtered = allSchoolsData;
+            if (attribute) {{
+                filtered = filtered.filter(s => s.attribute === attribute);
+            }}
+            
+            // 写真館リストを更新
+            const studios = [...new Set(filtered.map(s => s.studio).filter(st => st))].sort();
+            studioSelect.innerHTML = '\u003coption value=""\u003e全て\u003c/option\u003e';
+            studios.forEach(studio => {{
+                const option = document.createElement('option');
+                option.value = studio;
+                option.textContent = studio;
+                studioSelect.appendChild(option);
+            }});
+            
+            // 選択状態を維持
+            if (studios.includes(currentValue)) {{
+                studioSelect.value = currentValue;
+            }}
+            
+            // 学校リストも更新
+            updateImprovedSchoolList();
+        }}
+        
+        function updateImprovedSchoolList() {{
+            const attribute = document.getElementById('improvedAttributeFilter').value;
+            const studio = document.getElementById('improvedStudioFilter').value;
+            const schoolSelect = document.getElementById('improvedSchoolFilter');
+            const currentValue = schoolSelect.value;
+            
+            // 属性と写真館で絞り込み
+            let filtered = allSchoolsData;
+            if (attribute) {{
+                filtered = filtered.filter(s => s.attribute === attribute);
+            }}
+            if (studio) {{
+                filtered = filtered.filter(s => s.studio === studio);
+            }}
+            
+            // 学校リストを更新
+            schoolSelect.innerHTML = '\u003coption value=""\u003e全て\u003c/option\u003e';
+            filtered.forEach(school => {{
+                const option = document.createElement('option');
+                option.value = school.school_name;
+                option.textContent = school.school_name;
+                schoolSelect.appendChild(option);
+            }});
+            
+            // 選択状態を維持
+            if (filtered.some(s => s.school_name === currentValue)) {{
+                schoolSelect.value = currentValue;
+            }}
+        }}
+        
+        // unit_price 用連動フィルタ
+        function updateUnitPriceStudioList() {{
+            const attribute = document.getElementById('unitPriceAttributeFilter').value;
+            const studioSelect = document.getElementById('unitPriceStudioFilter');
+            const currentValue = studioSelect.value;
+            
+            let filtered = allSchoolsData;
+            if (attribute) {{
+                filtered = filtered.filter(s => s.attribute === attribute);
+            }}
+            
+            const studios = [...new Set(filtered.map(s => s.studio).filter(st => st))].sort();
+            studioSelect.innerHTML = '\u003coption value=""\u003e全て\u003c/option\u003e';
+            studios.forEach(studio => {{
+                const option = document.createElement('option');
+                option.value = studio;
+                option.textContent = studio;
+                studioSelect.appendChild(option);
+            }});
+            
+            if (studios.includes(currentValue)) {{
+                studioSelect.value = currentValue;
+            }}
+            
+            updateUnitPriceSchoolList();
+        }}
+        
+        function updateUnitPriceSchoolList() {{
+            const attribute = document.getElementById('unitPriceAttributeFilter').value;
+            const studio = document.getElementById('unitPriceStudioFilter').value;
+            const schoolSelect = document.getElementById('unitPriceSchoolFilter');
+            const currentValue = schoolSelect.value;
+            
+            let filtered = allSchoolsData;
+            if (attribute) {{
+                filtered = filtered.filter(s => s.attribute === attribute);
+            }}
+            if (studio) {{
+                filtered = filtered.filter(s => s.studio === studio);
+            }}
+            
+            schoolSelect.innerHTML = '\u003coption value=""\u003e全て\u003c/option\u003e';
+            filtered.forEach(school => {{
+                const option = document.createElement('option');
+                option.value = school.school_name;
+                option.textContent = school.school_name;
+                schoolSelect.appendChild(option);
+            }});
+            
+            if (filtered.some(s => s.school_name === currentValue)) {{
+                schoolSelect.value = currentValue;
+            }}
+        }}
+        
+        // Trend Analysisフィルタを初期化
+        function initializeTrendFilters() {{
+            // 属性リストを取得
+            const attributes = [...new Set(allSchoolsData.map(s => s.attribute).filter(a => a))].sort();
+            
+            // improved用属性プルダウン
+            const improvedAttrSelect = document.getElementById('improvedAttributeFilter');
+            improvedAttrSelect.innerHTML = '\u003coption value=""\u003e全て\u003c/option\u003e';
+            attributes.forEach(attr => {{
+                const option = document.createElement('option');
+                option.value = attr;
+                option.textContent = attr;
+                improvedAttrSelect.appendChild(option);
+            }});
+            
+            // unit_price用属性プルダウン
+            const unitPriceAttrSelect = document.getElementById('unitPriceAttributeFilter');
+            unitPriceAttrSelect.innerHTML = '\u003coption value=""\u003e全て\u003c/option\u003e';
+            attributes.forEach(attr => {{
+                const option = document.createElement('option');
+                option.value = attr;
+                option.textContent = attr;
+                unitPriceAttrSelect.appendChild(option);
+            }});
+            
+            // 写真館と学校リストを初期化
+            updateImprovedStudioList();
+            updateUnitPriceStudioList();
+            
+            // 年度プルダウンを初期化
+            const improvedYearSelect = document.getElementById('improvedYearFilter');
+            Object.keys(improvedAllData).sort((a,b) => b-a).forEach(year => {{
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year + '年度';
+                improvedYearSelect.appendChild(option);
+            }});
+            if (improvedYearSelect.options.length > 0) improvedYearSelect.selectedIndex = 0;
+            
+            const unitPriceYearSelect = document.getElementById('unitPriceYearFilter');
+            Object.keys(unitPriceAllData).sort((a,b) => b-a).forEach(year => {{
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year + '年度';
+                unitPriceYearSelect.appendChild(option);
+            }});
+            if (unitPriceYearSelect.options.length > 0) unitPriceYearSelect.selectedIndex = 0;
+        }}
+        
+        // Trend Analysisフィルタを初期化
+        initializeTrendFilters();
         
         renderAlertTable('rapid_growth', 1);
     </script>
