@@ -274,23 +274,67 @@ class SalesAggregator:
 
     def _check_school_master(self) -> None:
         """
-        売上データの学校がマスタに存在するかチェック
+        売上データの学校がマスタに存在するかチェック（DB版）
+
+        schools_masterテーブルを参照して学校名の存在をチェックする。
+        これにより、Excelマスタとの表記揺れによる誤判定を防ぐ。
 
         Raises:
             SchoolMasterMismatchError: マスタに存在しない学校がある場合
         """
-        sales_schools = set(self.sales_df["学校名"].unique())
-        master_schools = set(self.master_df["学校名"].unique())
-
-        unmatched = sales_schools - master_schools
-        self.result.unmatched_schools = list(unmatched)
-
-        if unmatched:
-            logger.warning(f"マスタにない学校: {len(unmatched)}件")
-            for school in unmatched:
-                logger.warning(f"  - {school}")
-            # マスタ不一致エラーをスロー（担当者別以降の集計を中断）
-            raise SchoolMasterMismatchError(list(unmatched))
+        try:
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+            from database_v2 import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # DBから全学校名を取得（基本学校名とフル学校名の両方）
+            cursor.execute('SELECT DISTINCT school_name FROM schools_master')
+            db_schools = {row[0].strip() for row in cursor.fetchall()}
+            
+            cursor.execute('SELECT DISTINCT base_school_name FROM schools_master WHERE base_school_name IS NOT NULL')
+            db_base_schools = {row[0].strip() for row in cursor.fetchall()}
+            
+            conn.close()
+            
+            # 全学校名を統合
+            master_schools = db_schools | db_base_schools
+            
+            # 売上データの学校名（strip済み）
+            sales_schools = {str(name).strip() for name in self.sales_df["学校名"].unique()}
+            
+            # 不一致をチェック
+            unmatched = sales_schools - master_schools
+            self.result.unmatched_schools = list(unmatched)
+            
+            if unmatched:
+                logger.warning(f"マスタにない学校: {len(unmatched)}件")
+                for school in unmatched:
+                    logger.warning(f"  - {school}")
+                # マスタ不一致エラーをスロー（担当者別以降の集計を中断）
+                raise SchoolMasterMismatchError(list(unmatched))
+                
+        except SchoolMasterMismatchError:
+            # 想定通りのエラーは再スロー
+            raise
+        except Exception as e:
+            logger.error(f"学校マスタチェックエラー: {e}")
+            # フォールバック: Excelマスタと比較
+            logger.warning("DBチェック失敗、Excelマスタとの比較にフォールバックします")
+            sales_schools = set(self.sales_df["学校名"].unique())
+            master_schools = set(self.master_df["学校名"].unique())
+            
+            unmatched = sales_schools - master_schools
+            self.result.unmatched_schools = list(unmatched)
+            
+            if unmatched:
+                logger.warning(f"マスタにない学校: {len(unmatched)}件")
+                for school in unmatched:
+                    logger.warning(f"  - {school}")
+                raise SchoolMasterMismatchError(list(unmatched))
 
     def _aggregate_total_sales(self) -> None:
         """全体売上を集計"""

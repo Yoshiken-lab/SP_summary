@@ -701,7 +701,7 @@ def create_app(config=None):
 
     @app.route('/api/publish/import', methods=['POST'])
     def publish_import():
-        """実績反映(DBインポート)実行"""
+        """実績反映(DBインポート)実行 - Ver2版"""
         try:
             data = request.get_json()
             session_id = data.get('session_id')
@@ -715,11 +715,12 @@ def create_app(config=None):
             session = app.session_data[session_id]
             files = session['files']
 
-            # 統計情報を格納
+            # 統計情報を格納（Ver2のstats形式に対応）
             total_stats = {
-                'school_sales_count': 0,
-                'monthly_summary_count': 0,
-                'event_sales_count': 0
+                'school_monthly_sales': 0,
+                'monthly_totals': 0,
+                'event_sales': 0,
+                'member_rates': 0
             }
             
             # 各ファイルをインポート
@@ -730,19 +731,24 @@ def create_app(config=None):
                 for file_info in files:
                     filepath = Path(file_info['path'])
                     if filepath.exists():
-                        # 既存のimporterを使用
-                        from importer import import_excel_with_stats
-                        result = import_excel_with_stats(str(filepath))
+                        # Ver2のimporterを使用
+                        from importer_v2 import import_excel_v2
+                        result = import_excel_v2(str(filepath))
                         
                         if result and result.get('success'):
                             imported_count += 1
                             report_ids.append(result['report_id'])
                             
-                            # 統計情報を集計
+                            # 統計情報を集計（Ver2のstats形式）
                             stats = result.get('stats', {})
-                            total_stats['school_sales_count'] += stats.get('school_sales', 0)
-                            total_stats['monthly_summary_count'] += stats.get('monthly_summary', 0)
-                            total_stats['event_sales_count'] += stats.get('event_sales', 0)
+                            for key in total_stats:
+                                if key in stats:
+                                    # statsの値が直接整数の場合と辞書の場合の両方に対応
+                                    value = stats[key]
+                                    if isinstance(value, dict):
+                                        total_stats[key] += value.get('count', 0)
+                                    else:
+                                        total_stats[key] += value
                             
                             logger.info(f"インポート完了: {file_info['filename']}")
                         else:
@@ -752,8 +758,13 @@ def create_app(config=None):
                             
                             # これまでインポートしたデータを削除
                             if report_ids:
-                                from importer import rollback_reports
-                                rollback_reports(report_ids)
+                                from database_v2 import get_connection
+                                conn = get_connection()
+                                cursor = conn.cursor()
+                                for report_id in report_ids:
+                                    cursor.execute('DELETE FROM reports WHERE id = ?', (report_id,))
+                                conn.commit()
+                                conn.close()
                                 logger.info(f"ロールバック完了: {len(report_ids)}件削除")
                             
                             return jsonify({
@@ -765,8 +776,13 @@ def create_app(config=None):
                 # 例外発生時もロールバック
                 logger.error(f"インポート中の例外: {e}")
                 if report_ids:
-                    from importer import rollback_reports
-                    rollback_reports(report_ids)
+                    from database_v2 import get_connection
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    for report_id in report_ids:
+                        cursor.execute('DELETE FROM reports WHERE id = ?', (report_id,))
+                    conn.commit()
+                    conn.close()
                     logger.info(f"ロールバック完了: {len(report_ids)}件削除")
                 raise
 
