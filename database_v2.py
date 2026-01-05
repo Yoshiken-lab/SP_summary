@@ -1132,6 +1132,92 @@ def get_sales_unit_price_analysis(db_path=None, target_fy=None):
     return results
 
 
+def get_studio_decline_analysis(db_path=None, target_fy=None):
+    """
+    写真館別の売上低下分析
+    
+    Returns:
+        list: 写真館ごとの売上情報
+            - studio: 写真館名
+            - region: 事業所
+            - current_sales: 今年度売上
+            - prev_sales: 前年度売上
+            - school_count: 担当校数
+            - change_rate: 変化率 (今年度/前年度 - 1)
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    # 最新のreport_idを取得
+    report_id = get_latest_report_id(conn)
+    if not report_id:
+        conn.close()
+        return []
+    
+    # 年度指定がない場合は最新年度
+    if target_fy is None:
+        cursor.execute('SELECT MAX(fiscal_year) FROM event_sales WHERE report_id = ?', (report_id,))
+        result = cursor.fetchone()
+        target_fy = result[0] if result and result[0] else datetime.now().year
+    
+    prev_fy = target_fy - 1
+    
+    # 今年度の写真館別集計
+    query = '''
+        WITH current_year AS (
+            SELECT 
+                s.studio,
+                s.region,
+                COUNT(DISTINCT s.school_id) as school_count,
+                COALESCE(SUM(e.sales), 0) as current_sales
+            FROM schools_master s
+            LEFT JOIN event_sales e ON s.school_id = e.school_id 
+                AND e.fiscal_year = ? AND e.report_id = ?
+            WHERE s.studio IS NOT NULL AND s.studio != ''
+            GROUP BY s.studio, s.region
+        ),
+        prev_year AS (
+            SELECT 
+                s.studio,
+                COALESCE(SUM(e.sales), 0) as prev_sales
+            FROM schools_master s
+            LEFT JOIN event_sales e ON s.school_id = e.school_id 
+                AND e.fiscal_year = ? AND e.report_id = ?
+            WHERE s.studio IS NOT NULL AND s.studio != ''
+            GROUP BY s.studio
+        )
+        SELECT 
+            c.studio,
+            c.region,
+            c.current_sales,
+            COALESCE(p.prev_sales, 0) as prev_sales,
+            c.school_count,
+            CASE 
+                WHEN p.prev_sales > 0 THEN ((c.current_sales - p.prev_sales) * 1.0 / p.prev_sales)
+                ELSE 0
+            END as change_rate
+        FROM current_year c
+        LEFT JOIN prev_year p ON c.studio = p.studio
+        ORDER BY change_rate ASC
+    '''
+    
+    cursor.execute(query, (target_fy, report_id, prev_fy, report_id))
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'studio': row[0] or '',
+            'region': row[1] or '',
+            'current_sales': row[2] or 0,
+            'prev_sales': row[3] or 0,
+            'school_count': row[4] or 0,
+            'change_rate': row[5] or 0
+        })
+    
+    conn.close()
+    return results
+
+
 
 if __name__ == '__main__':
     # テスト実行: データベース初期化

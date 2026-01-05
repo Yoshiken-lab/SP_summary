@@ -12,7 +12,7 @@ from pathlib import Path
 from database_v2 import (
     get_connection, get_rapid_growth_schools, get_new_schools, get_no_events_schools, get_declining_schools,
     get_events_for_date_filter, get_all_schools, get_improved_member_rate_schools, get_yearly_event_comparison,
-    get_sales_unit_price_analysis
+    get_sales_unit_price_analysis, get_studio_decline_analysis
 )    
 
 
@@ -721,6 +721,14 @@ def generate_dashboard(db_path=None, output_dir=None):
     all_schools_json = json.dumps(all_schools_data, ensure_ascii=False)
     improved_all_json = json.dumps(improved_all, ensure_ascii=False)
     unit_price_all_json = json.dumps(unit_price_all, ensure_ascii=False)
+    
+    # 写真館別売上低下データの取得（全年度）
+    print("   写真館別低下データを取得中...")
+    studio_decline_all = {}
+    for y in available_years:
+        studio_data = get_studio_decline_analysis(db_path, target_fy=y)
+        studio_decline_all[y] = studio_data
+    studio_decline_all_json = json.dumps(studio_decline_all, ensure_ascii=False)
 
     # HTMLファイル名
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -2185,8 +2193,9 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div class="alert-category" style="flex: 1; padding: 20px; background: #fff7ed; border-radius: 8px; border: 2px solid #fed7aa;">
                 <div class="alert-category-title" style="font-weight: bold; color: #9a3412; margin-bottom: 15px; font-size: 16px;">⚠️ 要注意・改善</div>
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="showAlert('no_events')" id="tab-no_events" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">今年度未実施校</button>
+                    <button onclick="showAlert('no_events')" id="tab-no_events" class=" alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">今年度未実施校</button>
                     <button onclick="showAlert('decline')" id="tab-decline" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">会員率・売上低下</button>
+                    <button onclick="showAlert('studio_decline')" id="tab-studio_decline" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">写真館別低下</button>
                 </div>
             </div>
             <!-- トレンド分析カテゴリ -->
@@ -2381,6 +2390,20 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div id="unit_price-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
         </div>
 
+        <!-- 写真館別低下タブコンテンツ -->
+        <div id="alert-studio_decline" class="alert-content" style="display: none;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
+                <label style="font-weight: bold; color: #374151;">対象年度:</label>
+                <select id="studioDeclineYearFilter" onchange="renderAlertTable('studio_decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white; font-size: 12px;">
+                    <!-- JSで生成 -->
+                </select>
+                <div style="flex-grow: 1;"></div>
+                <button class="csv-download-btn" onclick="downloadAlertCSV('studio_decline')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
+            </div>
+            <div id="studio_decline-table-container"></div>
+            <div id="studio_decline-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
+        </div>
+
         <!-- イベント開始日別売上タブコンテンツ -->
         <div id="alert-event_sales_by_date" class="alert-content" style="display: none;">
             <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
@@ -2476,6 +2499,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         const eventSalesDataFull = {json.dumps(event_sales_by_date_data, ensure_ascii=False)};
         const allSchoolsData = {all_schools_json};
         const availableYears = {json.dumps(available_years, ensure_ascii=False)};
+        const studioDeclineAllData = {studio_decline_all_json};
 
         const alertsData = {{
             'rapid_growth': rapidGrowthData,
@@ -2484,7 +2508,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             'decline': declineBaseData,
             'improved': [],
             'unit_price': [],
-            'event_sales_by_date': []
+            'event_sales_by_date': [],
+            'studio_decline': []
         }};
         
         
