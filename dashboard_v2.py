@@ -2157,8 +2157,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div class="alert-category" style="flex: 1; padding: 20px; background: #f0fdf4; border-radius: 8px; border: 2px solid #86efac;">
                 <div class="alert-category-title" style="font-weight: bold; color: #166534; margin-bottom: 15px; font-size: 16px;">📊 売上・実績</div>
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="showAlert('rapid_growth')" id="tab-rapid_growth" class="alert-tab active" style="padding: 8px 16px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">売上好調校</button>
-                    <button onclick="showAlert('new_schools')" id="tab-new_schools" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">新規開始校</button>
+                    <button onclick="showAlert('rapid_growth')" id="tab-rapid_growth" class="alert-tab active" style="padding: 10px 18px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">売上好調校</button>
+                    <button onclick="showAlert('new_schools')" id="tab-new_schools" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">新規開始校</button>
                 </div>
             </div>
             
@@ -2166,8 +2166,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div class="alert-category" style="flex: 1; padding: 20px; background: #fff7ed; border-radius: 8px; border: 2px solid #fed7aa;">
                 <div class="alert-category-title" style="font-weight: bold; color: #9a3412; margin-bottom: 15px; font-size: 16px;">⚠️ 要注意・改善</div>
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="showAlert('no_events')" id="tab-no_events" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">今年度未実施校</button>
-                    <button onclick="showAlert('decline')" id="tab-decline" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">会員率・売上低下</button>
+                    <button onclick="showAlert('no_events')" id="tab-no_events" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">今年度未実施校</button>
+                    <button onclick="showAlert('decline')" id="tab-decline" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">会員率・売上低下</button>
                 </div>
             </div>
             <!-- トレンド分析カテゴリ -->
@@ -2175,7 +2175,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <div class="alert-category-title" style="font-weight: bold; color: #1e40af; margin-bottom: 15px; font-size: 16px;">📈 トレンド分析</div>
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <!-- 今後追加 -->
-                    <span style="font-size: 12px; color: #6b7280;">(準備中)</span>
+                    <span style="font-size: 14px; color: #6b7280;">(準備中)</span>
                 </div>
             </div>
 
@@ -2183,8 +2183,8 @@ def generate_dashboard(db_path=None, output_dir=None):
             <div class="alert-category" style="flex: 1; padding: 20px; background: #fdf4ff; border-radius: 8px; border: 2px solid #f0abfc;">
                 <div class="alert-category-title" style="font-weight: bold; color: #86198f; margin-bottom: 15px; font-size: 16px;">📅 イベント関連</div>
                 <div class="alert-tabs" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="showAlert('yearly_comparison')" id="tab-yearly_comparison" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">年度別イベント比較</button>
-                    <button onclick="showAlert('event_sales_by_date')" id="tab-event_sales_by_date" class="alert-tab" style="padding: 8px 16px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">イベント開始日別売上</button>
+                    <button onclick="showAlert('yearly_comparison')" id="tab-yearly_comparison" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">年度別イベント比較</button>
+                    <button onclick="showAlert('event_sales_by_date')" id="tab-event_sales_by_date" class="alert-tab" style="padding: 10px 18px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">イベント開始日別売上</button>
                 </div>
             </div>
         </div>
@@ -2192,7 +2192,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         <!-- 売上好調校タブコンテンツ -->
         <div id="alert-rapid_growth" class="alert-content active" style="display: block;">
             <div class="alert-header" style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                <button class="csv-download-btn" onclick="downloadAlertCSV('rapid_growth')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+                <button class="csv-download-btn" onclick="downloadAlertCSV('rapid_growth')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
             <div id="rapid_growth-table-container"></div>
             <div id="rapid_growth-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
@@ -2200,13 +2200,13 @@ def generate_dashboard(db_path=None, output_dir=None):
 
         <!-- 新規開始校タブコンテンツ -->
         <div id="alert-new_schools" class="alert-content" style="display: none;">
-            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
                 <label style="font-weight: bold; color: #374151;">対象年度:</label>
-                <select id="newSchoolsYearFilter" onchange="renderAlertTable('new_schools', 1)" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white;">
+                <select id="newSchoolsYearFilter" onchange="renderAlertTable('new_schools', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white; font-size: 12px;">
                     <!-- JSで生成 -->
                 </select>
                 <label style="font-weight: bold; color: #374151; margin-left: 10px;">開始月:</label>
-                <select id="newSchoolsMonthFilter" onchange="renderAlertTable('new_schools', 1)" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; background: white;">
+                <select id="newSchoolsMonthFilter" onchange="renderAlertTable('new_schools', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; background: white; font-size: 12px;">
                     <option value="">全ての月</option>
                     <option value="01">1月</option>
                     <option value="02">2月</option>
@@ -2222,7 +2222,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                     <option value="12">12月</option>
                 </select>
                 <div style="flex-grow: 1;"></div>
-                <button class="csv-download-btn" onclick="downloadAlertCSV('new_schools')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+                <button class="csv-download-btn" onclick="downloadAlertCSV('new_schools')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
             <div id="new_schools-table-container"></div>
             <div id="new_schools-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
@@ -2230,14 +2230,14 @@ def generate_dashboard(db_path=None, output_dir=None):
 
         <!-- 今年度未実施校タブコンテンツ -->
         <div id="alert-no_events" class="alert-content" style="display: none;">
-            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
                 <label style="font-weight: bold; color: #374151;">対象年度:</label>
-                <select id="noEventsYearFilter" onchange="renderAlertTable('no_events', 1)" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white;">
+                <select id="noEventsYearFilter" onchange="renderAlertTable('no_events', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 120px; background: white; font-size: 12px;">
                     <!-- JSで生成 -->
                 </select>
             </div>
             <div class="alert-header" style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                <button class="csv-download-btn" onclick="downloadAlertCSV('no_events')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+                <button class="csv-download-btn" onclick="downloadAlertCSV('no_events')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
             <div id="no_events-table-container"></div>
             <div id="no_events-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
@@ -2245,10 +2245,10 @@ def generate_dashboard(db_path=None, output_dir=None):
 
         <!-- 会員率・売上低下タブコンテンツ -->
         <div id="alert-decline" class="alert-content" style="display: none;">
-            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap; font-size: 12px;">
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <label style="font-weight: bold; color: #374151;">会員率:</label>
-                    <select id="declineMemberRateFilter" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
+                    <select id="declineMemberRateFilter" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
                         <option value="110">指定なし</option>
                         <option value="50">50%未満</option>
                         <option value="40">40%未満</option>
@@ -2259,7 +2259,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <label style="font-weight: bold; color: #374151;">売上減少率:</label>
-                    <select id="declineSalesMin" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
+                    <select id="declineSalesMin" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
                         <option value="0">0%</option>
                         <option value="10" selected>10%</option>
                         <option value="20">20%</option>
@@ -2273,7 +2273,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                         <option value="100">100%</option>
                     </select>
                     <span>～</span>
-                    <select id="declineSalesMax" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
+                    <select id="declineSalesMax" onchange="renderAlertTable('decline', 1)" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
                         <option value="200"> - </option>
                         <option value="10">10%</option>
                         <option value="20">20%</option>
@@ -2290,7 +2290,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                 </div>
             </div>
             <div class="alert-header" style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                <button class="csv-download-btn" onclick="downloadAlertCSV('decline')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+                <button class="csv-download-btn" onclick="downloadAlertCSV('decline')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
             <div id="decline-table-container"></div>
             <div id="decline-pagination" class="pagination" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;"></div>
@@ -2298,13 +2298,13 @@ def generate_dashboard(db_path=None, output_dir=None):
 
         <!-- イベント開始日別売上タブコンテンツ -->
         <div id="alert-event_sales_by_date" class="alert-content" style="display: none;">
-            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+            <div class="alert-filters" style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px;">
                 <div style="font-weight: bold; color: #374151;">年:</div>
-                <select id="eventSalesYear" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px;">
+                <select id="eventSalesYear" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 12px;">
                     <option value="">年</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">月:</div>
-                <select id="eventSalesMonth" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 80px;">
+                <select id="eventSalesMonth" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 80px; font-size: 12px;">
                     <option value="">月</option>
                     <option value="01">1月</option>
                     <option value="02">2月</option>
@@ -2320,13 +2320,13 @@ def generate_dashboard(db_path=None, output_dir=None):
                     <option value="12">12月</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">日:</div>
-                <select id="eventSalesDay" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 80px;">
+                <select id="eventSalesDay" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 80px; font-size: 12px;">
                     <option value="">日</option>
                 </select>
                 <div style="color: #374151;">に公開したイベントを</div>
-                <button onclick="filterEventSalesByDate()" style="padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer;">表示する</button>
+                <button onclick="filterEventSalesByDate()" style="padding: 6px 14px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">表示する</button>
                 <div style="flex-grow: 1;"></div>
-                <button class="csv-download-btn" onclick="downloadAlertCSV('event_sales_by_date')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+                <button class="csv-download-btn" onclick="downloadAlertCSV('event_sales_by_date')" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
             <div id="event_sales_by_date-table-container">
                 <div style="text-align: center; color: #6b7280; padding: 40px;">年を選択して「表示する」をクリックしてください</div>
@@ -2336,21 +2336,21 @@ def generate_dashboard(db_path=None, output_dir=None):
         
         <!-- 年度別イベント比較タブコンテンツ -->
         <div id="alert-yearly_comparison" class="alert-content" style="display: none;">
-            <div class="alert-filters" style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap; font-size: 13px;">
+            <div class="alert-filters" style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb; flex-wrap: wrap; font-size: 12px;">
                 <div style="font-weight: bold; color: #374151;">属性:</div>
-                <select id="yearlyComparisonAttribute" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 13px;">
+                <select id="yearlyComparisonAttribute" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 100px; font-size: 12px;">
                     <option value="">全て</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">写真館:</div>
-                <select id="yearlyComparisonStudio" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 13px;">
+                <select id="yearlyComparisonStudio" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 130px; font-size: 12px;">
                     <option value="">全て</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">学校:</div>
-                <select id="yearlyComparisonSchool" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 220px; font-size: 13px;">
+                <select id="yearlyComparisonSchool" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 220px; font-size: 12px;">
                     <option value="">-- 学校を選択 --</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">で 月:</div>
-                <select id="yearlyComparisonMonth" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 70px; font-size: 13px;">
+                <select id="yearlyComparisonMonth" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 70px; font-size: 12px;">
                     <option value="">全て</option>
                     <option value="01">1月</option>
                     <option value="02">2月</option>
@@ -2366,15 +2366,15 @@ def generate_dashboard(db_path=None, output_dir=None):
                     <option value="12">12月</option>
                 </select>
                 <div style="font-weight: bold; color: #374151;">に</div>
-                <select id="yearlyComparisonYear1" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 90px; font-size: 13px;">
+                <select id="yearlyComparisonYear1" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 90px; font-size: 12px;">
                 </select>
                 <div style="font-weight: bold; color: #374151;">と</div>
-                <select id="yearlyComparisonYear2" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 90px; font-size: 13px;">
+                <select id="yearlyComparisonYear2" style="padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 90px; font-size: 12px;">
                 </select>
                 <div style="color: #374151;">で公開したイベントを</div>
-                <button onclick="compareYearlyEvents()" style="padding: 6px 14px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">比較する</button>
+                <button onclick="compareYearlyEvents()" style="padding: 6px 14px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">比較する</button>
                 <div style="flex-grow: 1;"></div>
-                <button class="csv-download-btn" onclick="downloadYearlyComparisonCSV()" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">📥 CSV出力</button>
+                <button class="csv-download-btn" onclick="downloadYearlyComparisonCSV()" style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📥 CSV出力</button>
             </div>
             <div id="yearly_comparison-table-container">
                 <div style="text-align: center; color: #6b7280; padding: 40px;">学校を選択して「比較する」をクリックしてください</div>
@@ -2995,13 +2995,13 @@ def generate_dashboard(db_path=None, output_dir=None):
             
             let html = `
                 \u003cdiv style="margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;"\u003e
-                    \u003cdiv style="font-weight: bold; font-size: 16px; margin-bottom: 6px;"\u003e${{school.school_name}}\u003c/div\u003e
-                    \u003cdiv style="color: #6b7280; font-size: 11px;"\u003e${{school.attribute || '-'}} / ${{school.studio || '-'}}\u003c/div\u003e
+                    \u003cdiv style="font-weight: bold; font-size: 18px; margin-bottom: 6px;"\u003e${{school.school_name}}\u003c/div\u003e
+                    \u003cdiv style="color: #6b7280; font-size: 13px;"\u003e${{school.attribute || '-'}} / ${{school.studio || '-'}}\u003c/div\u003e
                 \u003c/div\u003e
                 \u003cdiv style="display: flex; gap: 20px;"\u003e
                     \u003c!-- 左側: 年度1（青） --\u003e
                     \u003cdiv style="flex: 1;"\u003e
-                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #3b82f6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 14px;"\u003e${{year1}}年度\u003c/div\u003e
+                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #3b82f6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 16px;"\u003e${{year1}}年度\u003c/div\u003e
             `;
             
             // 年度1のイベント
@@ -3012,17 +3012,17 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += `
                     \u003cdiv style="padding: 8px 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
                         \u003cdiv\u003e
-                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 13px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
-                            \u003cdiv style="font-size: 11px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 15px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
+                            \u003cdiv style="font-size: 13px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
                         \u003c/div\u003e
-                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 13px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 15px;"\u003e${{salesFormatted}}\u003c/div\u003e
                     \u003c/div\u003e
                 `;
             }});
             
             // 年度1のフッター
             html += `
-                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 13px;"\u003e
+                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 15px;"\u003e
                             \u003cdiv\u003e計: ${{year1Events.length}}件\u003c/div\u003e
                             \u003cdiv\u003e合計: ${{formatCurrency(year1Total)}}\u003c/div\u003e
                         \u003c/div\u003e
@@ -3030,7 +3030,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                     
                     \u003c!-- 右側: 年度2（紫） --\u003e
                     \u003cdiv style="flex: 1;"\u003e
-                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #8b5cf6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 14px;"\u003e${{year2}}年度\u003c/div\u003e
+                        \u003cdiv style="padding: 8px 0; border-bottom: 3px solid #8b5cf6; margin-bottom: 12px; font-weight: 600; color: #1f2937; font-size: 16px;"\u003e${{year2}}年度\u003c/div\u003e
             `;
             
             // 年度2のイベント
@@ -3041,17 +3041,17 @@ def generate_dashboard(db_path=None, output_dir=None):
                 html += `
                     \u003cdiv style="padding: 8px 10px; background: ${{bgColor}}; border: 1px solid #e5e7eb; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;"\u003e
                         \u003cdiv\u003e
-                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 13px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
-                            \u003cdiv style="font-size: 11px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
+                            \u003cdiv style="font-weight: 500; margin-bottom: 4px; font-size: 15px;"\u003e${{e.event_name || '-'}}\u003c/div\u003e
+                            \u003cdiv style="font-size: 13px; color: #6b7280;"\u003e(${{publishDate}}公開)\u003c/div\u003e
                         \u003c/div\u003e
-                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 13px;"\u003e${{salesFormatted}}\u003c/div\u003e
+                        \u003cdiv style="color: #059669; font-weight: 600; font-size: 15px;"\u003e${{salesFormatted}}\u003c/div\u003e
                     \u003c/div\u003e
                 `;
             }});
             
             // 年度2のフッター
             html += `
-                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 13px;"\u003e
+                        \u003cdiv style="padding: 12px 10px; margin-top: 10px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; font-weight: 600; color: #1f2937; font-size: 15px;"\u003e
                             \u003cdiv\u003e計: ${{year2Events.length}}件\u003c/div\u003e
                             \u003cdiv\u003e合計: ${{formatCurrency(year2Total)}}\u003c/div\u003e
                         \u003c/div\u003e
