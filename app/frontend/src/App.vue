@@ -10,6 +10,7 @@
 <script>
 import TheSidebar from './components/layout/TheSidebar.vue'
 import './assets/theme.css'
+import './assets/element-dark.css'
 
 export default {
   name: 'App',
