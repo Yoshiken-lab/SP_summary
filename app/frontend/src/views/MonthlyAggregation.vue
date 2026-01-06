@@ -1,101 +1,156 @@
 <template>
-  <div class="page-container">
-    <el-card shadow="never">
-      <template #header>
-        <div class="card-header">
-          <h1>月次集計</h1>
-          <p>CSVデータから売上を集計し、Excel報告書を作成します</p>
-        </div>
-      </template>
+  <div class="page-container monthly-aggregation">
+    <div class="page-header">
+      <h1>月次集計</h1>
+      <p>CSVデータから売上を集計し、Excel報告書を作成します</p>
+    </div>
 
-      <el-steps :active="activeStep" finish-status="success" align-center style="margin-bottom: 30px">
-        <el-step title="ファイル選択" />
-        <el-step title="期間選択" />
-        <el-step title="集計実行" />
-      </el-steps>
+    <el-row :gutter="24" class="main-content-grid">
+      <!-- Left Column: File Uploads -->
+      <el-col :span="14">
+        <el-card class="upload-card" shadow="never">
+          <template #header>
+            <div class="card-title">
+              <span class="step-badge">STEP 1</span>
+              <span>ファイル選択</span>
+            </div>
+          </template>
 
-      <el-row :gutter="20">
-        <!-- Left Column: File Uploads -->
-        <el-col :span="12">
-          <el-form label-position="top" class="form-container">
-            <el-form-item label="1. 売上データ (CSV)">
-               <el-upload
-                ref="uploadSalesRef"
-                action="#"
-                :limit="1"
-                :auto-upload="false"
-                :on-change="handleSalesChange"
-                :on-remove="handleSalesRemove"
-                :on-exceed="handleExceed"
-              >
-                <el-button type="primary"><el-icon><Upload /></el-icon> ファイルを選択</el-button>
-              </el-upload>
-            </el-form-item>
-            <el-form-item label="2. 会員データ (CSV)">
-              <el-upload
-                ref="uploadAccountsRef"
-                action="#"
-                :limit="1"
-                :auto-upload="false"
-                :on-change="handleAccountsChange"
-                :on-remove="handleAccountsRemove"
-                :on-exceed="handleExceed"
-              >
-                <el-button type="primary"><el-icon><Upload /></el-icon> ファイルを選択</el-button>
-              </el-upload>
-            </el-form-item>
-            <el-form-item label="3. 担当者マスタ (XLSX)">
-              <el-upload
-                ref="uploadMasterRef"
-                action="#"
-                :limit="1"
-                :auto-upload="false"
-                :on-change="handleMasterChange"
-                :on-remove="handleMasterRemove"
-                :on-exceed="handleExceed"
-              >
-                <el-button type="primary"><el-icon><Upload /></el-icon> ファイルを選択</el-button>
-              </el-upload>
-            </el-form-item>
-          </el-form>
-        </el-col>
+          <!-- Sales CSV -->
+          <div class="upload-section">
+            <div class="upload-label">
+              <span class="icon">📊</span>
+              <span>売上データ (CSV)</span>
+              <span v-if="salesFile" class="file-status success">✓</span>
+            </div>
+            <el-upload
+              ref="uploadSalesRef"
+              drag
+              action="#"
+              :limit="1"
+              :auto-upload="false"
+              :on-change="handleSalesChange"
+              :on-remove="handleSalesRemove"
+              :on-exceed="handleExceed"
+              :show-file-list="false"
+              class="drag-upload"
+            >
+              <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+              <div class="el-upload__text">
+                <span v-if="!salesFile">ファイルをドラッグ&ドロップ</span>
+                <span v-else class="file-name">{{ salesFile.name }}</span>
+              </div>
+            </el-upload>
+          </div>
 
-        <!-- Right Column: Options & Action -->
-        <el-col :span="12">
-          <div class="options-action-panel">
+          <!-- Accounts CSV -->
+          <div class="upload-section">
+            <div class="upload-label">
+              <span class="icon">👥</span>
+              <span>会員データ (CSV)</span>
+              <span v-if="accountsFile" class="file-status success">✓</span>
+            </div>
+            <el-upload
+              ref="uploadAccountsRef"
+              drag
+              action="#"
+              :limit="1"
+              :auto-upload="false"
+              :on-change="handleAccountsChange"
+              :on-remove="handleAccountsRemove"
+              :on-exceed="handleExceed"
+              :show-file-list="false"
+              class="drag-upload"
+            >
+              <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+              <div class="el-upload__text">
+                <span v-if="!accountsFile">ファイルをドラッグ&ドロップ</span>
+                <span v-else class="file-name">{{ accountsFile.name }}</span>
+              </div>
+            </el-upload>
+          </div>
+
+          <!-- Master XLSX -->
+          <div class="upload-section">
+            <div class="upload-label">
+              <span class="icon">📋</span>
+              <span>担当者マスタ (XLSX)</span>
+              <span v-if="masterFile" class="file-status success">✓</span>
+            </div>
+            <el-upload
+              ref="uploadMasterRef"
+              drag
+              action="#"
+              :limit="1"
+              :auto-upload="false"
+              :on-change="handleMasterChange"
+              :on-remove="handleMasterRemove"
+              :on-exceed="handleExceed"
+              :show-file-list="false"
+              class="drag-upload"
+            >
+              <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+              <div class="el-upload__text">
+                <span v-if="!masterFile">ファイルをドラッグ&ドロップ</span>
+                <span v-else class="file-name">{{ masterFile.name }}</span>
+              </div>
+            </el-upload>
+          </div>
+        </el-card>
+      </el-col>
+
+      <!-- Right Column: Period Selection & Execution -->
+      <el-col :span="10">
+        <div class="right-column">
+          <!-- Period Selection Card -->
+          <el-card class="period-card" shadow="never">
+            <template #header>
+              <div class="card-title">
+                <span class="step-badge">STEP 2</span>
+                <span>対象期間</span>
+              </div>
+            </template>
             <el-form label-position="top">
-              <el-form-item label="4. 対象期間の選択">
-                <el-col :span="11">
-                  <el-select v-model="options.fiscalYear" placeholder="年度">
-                    <el-option v-for="year in fiscalYears" :key="year" :label="`${year}年度`" :value="year" />
-                  </el-select>
-                </el-col>
-                <el-col class="text-center" :span="2">-</el-col>
-                <el-col :span="11">
-                  <el-select v-model="options.month" placeholder="月">
-                    <el-option v-for="month in 12" :key="month" :label="`${month}月`" :value="month" />
-                  </el-select>
-                </el-col>
+              <el-form-item label="年度">
+                <el-select v-model="options.fiscalYear" placeholder="年度を選択" style="width: 100%">
+                  <el-option v-for="year in fiscalYears" :key="year" :label="`${year}年度`" :value="year" />
+                </el-select>
               </el-form-item>
-              <el-form-item>
-                 <div class="action-box">
-                    <el-button
-                      type="primary"
-                      size="large"
-                      @click="startAggregation"
-                      :disabled="!canStart"
-                      :loading="isLoading"
-                    >
-                      <el-icon><Promotion /></el-icon>
-                      <span>集計を実行</span>
-                    </el-button>
-                 </div>
+              <el-form-item label="月">
+                <el-select v-model="options.month" placeholder="月を選択" style="width: 100%">
+                  <el-option v-for="month in 12" :key="month" :label="`${month}月`" :value="month" />
+                </el-select>
               </el-form-item>
             </el-form>
-          </div>
-        </el-col>
-      </el-row>
-    </el-card>
+            <el-button
+              type="primary"
+              size="large"
+              @click="startAggregation"
+              :disabled="!canStart"
+              :loading="isLoading"
+              class="execute-btn"
+            >
+              <el-icon><Histogram /></el-icon>
+              <span>集計を実行</span>
+            </el-button>
+          </el-card>
+
+          <!-- Log Display -->
+          <el-card v-if="logs.length > 0" class="log-card" shadow="never">
+            <template #header>
+              <div class="card-title">
+                <span>ログ</span>
+              </div>
+            </template>
+            <div class="log-area">
+              <div v-for="(log, index) in logs" :key="index" class="log-entry" :class="log.type">
+                {{ log.message }}
+              </div>
+            </div>
+          </el-card>
+        </div>
+      </el-col>
+    </el-row>
 
     <!-- 処理中ダイアログ -->
     <el-dialog v-model="monthlyModalVisible" title="月次集計" :close-on-click-modal="false" :show-close="!isLoading">
@@ -145,7 +200,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { ElNotification, ElLoading } from 'element-plus';
-import { Upload, Promotion, Check, Close, Loading } from '@element-plus/icons-vue';
+import { UploadFilled, Histogram, Check, Close, Loading } from '@element-plus/icons-vue';
 
 // --- State ---
 const activeStep = ref(0);
@@ -178,6 +233,10 @@ const fiscalYears = computed(() => {
   const currentYear = new Date().getFullYear();
   return Array.from({ length: 6 }, (_, i) => currentYear - 4 + i);
 });
+
+const salesFile = computed(() => files.value.sales);
+const accountsFile = computed(() => files.value.accounts);
+const masterFile = computed(() => files.value.master);
 
 const canStart = computed(() => {
   return !!(files.value.sales && files.value.accounts && files.value.master && !isLoading.value);
@@ -336,76 +395,270 @@ const closeMasterMismatchError = () => {
 
 </script>
 
+
 <style scoped>
-.page-container {
-  padding: 20px;
+/* Page Layout */
+.monthly-aggregation {
+  padding: 0;
 }
-.card-header h1 {
-  margin: 0;
+
+.page-header {
+  padding: var(--space-xl);
+  padding-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.page-header h1 {
   font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-sm) 0;
 }
-.card-header p {
-  margin: 5px 0 0 0;
-  color: var(--el-text-color-secondary);
+
+.page-header p {
+  color: var(--text-secondary);
+  margin: 0;
   font-size: 0.9rem;
 }
-.el-form-item {
-    margin-bottom: 25px;
+
+/* Main Content Grid */
+.main-content-grid {
+  padding: var(--space-xl);
 }
-.options-action-panel {
-  padding: 20px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px;
-  height: 100%;
+
+/* Card Styles */
+.upload-card,
+.period-card,
+.log-card {
+  height: auto;
 }
-.action-box {
-    text-align: center;
-    margin-top: 2rem;
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
-.el-select {
+
+.step-badge {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Upload Sections */
+.upload-section {
+  margin-bottom: var(--space-lg);
+}
+
+.upload-section:last-child {
+  margin-bottom: 0;
+}
+
+.upload-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.upload-label .icon {
+  font-size: 1.2rem;
+}
+
+.file-status {
+  margin-left: auto;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.file-status.success {
+  color: var(--accent-green);
+}
+
+/* Drag & Drop Upload */
+.drag-upload {
   width: 100%;
 }
-.text-center {
-  text-align: center;
-  line-height: 32px;
+
+.drag-upload :deep(.el-upload-dragger) {
+  width: 100%;
+  height: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  transition: all var(--transition-fast);
 }
-.dialog-content {
-  padding: 10px;
+
+.drag-upload :deep(.el-upload-dragger:hover) {
+  border-color: var(--accent-blue);
+  background: rgba(88, 166, 255, 0.05);
 }
+
+.drag-upload :deep(.el-icon--upload) {
+  font-size: 2rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.drag-upload :deep(.el-upload__text) {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.file-name {
+  color: var(--accent-blue) !important;
+  font-weight: 500;
+}
+
+/* Right Column */
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  height: 100%;
+}
+
+/* Period Card */
+.period-card {
+  flex-shrink: 0;
+}
+
+.period-card :deep(.el-form-item) {
+  margin-bottom: var(--space-md);
+}
+
+.period-card :deep(.el-form-item:last-child) {
+  margin-bottom: 0;
+}
+
+.period-card :deep(.el-form-item__label) {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: var(--space-sm);
+}
+
+/* Execute Button */
+.execute-btn {
+  width: 100%;
+  margin-top: var(--space-md);
+  background: var(--gradient-purple) !important;
+  border: none !important;
+  font-weight: 600;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.execute-btn:hover {
+  filter: brightness(1.1);
+}
+
+.execute-btn:disabled {
+  background: var(--bg-input) !important;
+  color: var(--text-tertiary) !important;
+  filter: none;
+}
+
+/* Log Card */
+.log-card {
+  flex: 1;
+  min-height: 200px;
+}
+
+.log-area {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.log-entry {
+  margin-bottom: var(--space-xs);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.log-entry:last-child {
+  margin-bottom: 0;
+}
+
+.log-entry.info {
+  color: var(--text-primary);
+}
+
+.log-entry.success {
+  color: var(--accent-green);
+}
+
+.log-entry.error {
+  color: var(--accent-red);
+}
+
+.log-entry.warning {
+  color: var(--accent-orange);
+}
+
+/* Dialog Styles */
 .dialog-title {
   text-align: center;
   font-size: 1.2rem;
-  margin-bottom: 1.5rem;
-  color: var(--el-text-color-primary);
+  margin-bottom: var(--space-lg);
+  color: var(--text-primary);
 }
+
 .modal-logs {
-  margin-top: 1.5rem;
-  padding: 10px;
-  background-color: #f9fafb;
-  border-radius: 4px;
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   max-height: 150px;
   overflow-y: auto;
   font-size: 0.9rem;
 }
+
 .modal-log-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 5px;
-  color: var(--el-text-color-regular);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+  color: var(--text-secondary);
 }
+
 .modal-school-list {
-  margin-top: 1rem;
+  margin-top: var(--space-md);
   max-height: 200px;
   overflow-y: auto;
-  background-color: #fef0f0;
-  padding: 8px;
-  border-radius: 4px;
+  background-color: rgba(218, 54, 51, 0.1);
+  border: 1px solid var(--accent-red);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
 }
+
 .modal-school-item {
-  color: var(--el-text-color-primary);
+  color: var(--text-primary);
+  padding: var(--space-xs) 0;
 }
+
 :deep(.el-result__subtitle) {
-  color: var(--el-text-color-regular);
+  color: var(--text-secondary);
 }
 </style>
