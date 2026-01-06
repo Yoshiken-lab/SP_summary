@@ -1123,6 +1123,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         const schoolsList = {json.dumps(schools_list, ensure_ascii=False)};
         const improvedAllData = {improved_all_json};
         const unitPriceAllData = {unit_price_all_json};
+        const studioDeclineAllData = {studio_decline_all_json};
         
         let monthlyChart, branchChart, schoolChart, branchMonthlyChart, managerChart, eventChart, memberChart;
         let currentMonthlySalesYear = {default_year};
@@ -2629,7 +2630,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         const eventSalesDataFull = {json.dumps(event_sales_by_date_data, ensure_ascii=False)};
         const allSchoolsData = {all_schools_json};
         const availableYears = {json.dumps(available_years, ensure_ascii=False)};
-        const studioDeclineAllData = {studio_decline_all_json};
+
 
         const alertsData = {{
             'rapid_growth': rapidGrowthData,
