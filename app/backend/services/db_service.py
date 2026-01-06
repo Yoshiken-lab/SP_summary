@@ -103,7 +103,7 @@ class DatabaseService:
             # 既存のmain.pyのpublish機能を使用
             from main import publish_dashboard
 
-            publish_dashboard()
+            publish_dashboard(publish_path)
             logger.info(f"ダッシュボード公開完了: {publish_path}")
             return True
 

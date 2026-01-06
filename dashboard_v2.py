@@ -1399,41 +1399,6 @@ def generate_dashboard(db_path=None, output_dir=None):
             }});
         }}
         
-        function switchYear() {{
-            const year = parseInt(document.getElementById('yearSelect').value);
-            const data = allYearsData[year];
-            
-            // サマリーカード更新
-            document.getElementById('reportDate').textContent = `レポート日: ${{data.stats.report_date}}`;
-            document.getElementById('salesCardTitle').textContent = `${{year}}年度 累計売上`;
-            document.getElementById('salesCardValue').textContent = `¥${{data.stats.current_total.toLocaleString()}}`;
-            document.getElementById('salesCardSub').textContent = `前年同期 ¥${{data.stats.prev_total.toLocaleString()}}`;
-            
-            const yoyRate = data.stats.yoy_rate * 100;
-            document.getElementById('yoyCardValue').textContent = `${{yoyRate.toFixed(1)}}%`;
-            document.getElementById('yoyCardValue').className = yoyRate >= 100 ? 'card-value success' : yoyRate >= 80 ? 'card-value warning' : 'card-value danger';
-            document.getElementById('yoyCardSub').textContent = yoyRate >= 100 ? '成長' : '減少';
-            
-            const budgetRate = data.stats.avg_budget_rate * 100;
-            document.getElementById('budgetCardValue').textContent = `${{budgetRate.toFixed(1)}}%`;
-            document.getElementById('budgetCardValue').className = budgetRate >= 100 ? 'card-value success' : budgetRate >= 80 ? 'card-value warning' : 'card-value danger';
-            
-            document.getElementById('countCardValue').textContent = `${{data.stats.school_count}}/${{data.stats.event_count}}`;
-            
-            // グラフ更新
-            updateMonthlyChart(data.monthly);
-            // updateBranchChart(data.branch); // 削除
-            
-            // 現在の詳細タブに応じて更新
-            if (currentDetailTab === 'school') {{
-                updateSchoolChart(data.top_schools);
-            }} else if (currentDetailTab === 'event') {{
-                updateEventChart(data.top_events);
-            }} else if (currentDetailTab === 'member') {{
-                updateMemberChart(data.member_rates);
-            }}
-        }}
-        
         function updateMonthlyChart(monthlyData) {{
             const labels = monthlyData.map(d => `${{d.month}}月`);
             const salesData = monthlyData.map(d => d.sales);
@@ -2293,7 +2258,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         }}
         
         // 初期表示
-        const initialYear = parseInt(document.getElementById('yearSelect').value);
+        const initialYear = parseInt(document.getElementById('monthlySalesYearSelect').value);
         const initialData = allYearsData[initialYear];
         updateMonthlyChart(initialData.monthly);
         

@@ -34,7 +34,7 @@ from dashboard import generate_html_dashboard
 from member_rate_page import generate_member_rate_page
 
 # ファイルサーバーの公開先パス
-PUBLISH_PATH = Path(r"\\192.168.11.51\事業所間受け渡し\VPN(事業所別フォルダ)\dashboard")
+PUBLISH_PATH = Path(__file__).parent / 'app' / 'public_dashboards'
 PUBLISH_FILENAME = "dashboard.html"
 
 
@@ -51,18 +51,21 @@ def show_help():
     print("  sync-master <マスタファイル>            - 学校マスタ同期")
 
 
-def publish_dashboard():
+def publish_dashboard(output_dir=None):
     """ダッシュボード生成＆ファイルサーバーに公開"""
     print("ダッシュボードを生成中...")
     local_path = generate_html_dashboard()
     print(f"  ローカル: {local_path}")
 
-    # ファイルサーバーにコピー
-    if not PUBLISH_PATH.exists():
-        PUBLISH_PATH.mkdir(parents=True, exist_ok=True)
-        print(f"  フォルダを作成しました: {PUBLISH_PATH}")
+    # 公開先ディレクトリ
+    target_dir = output_dir if output_dir else PUBLISH_PATH
 
-    dest_path = PUBLISH_PATH / PUBLISH_FILENAME
+    # ファイルサーバーにコピー
+    if not target_dir.exists():
+        target_dir.mkdir(parents=True, exist_ok=True)
+        print(f"  フォルダを作成しました: {target_dir}")
+
+    dest_path = target_dir / PUBLISH_FILENAME
     shutil.copy2(local_path, dest_path)
     print(f"  公開先: {dest_path}")
     print(f"\n公開完了！")
