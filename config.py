@@ -22,7 +22,7 @@ class Config:
 
     # ダッシュボード公開先（ローカルサーバー公開用）
     PUBLISH_PATH = APP_DIR / 'public_dashboards'
-    PUBLISH_FILENAME = 'dashboard.html'
+    PUBLISH_FILENAME = 'index.html'
 
     # GitHub Pages公開設定
     GITHUB_PAGES_REPO_PATH = BASE_DIR / 'sp-dashboard'  # sp-dashboardフォルダのパス

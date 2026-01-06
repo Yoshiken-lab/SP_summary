@@ -35,7 +35,7 @@ from member_rate_page import generate_member_rate_page
 
 # ファイルサーバーの公開先パス
 PUBLISH_PATH = Path(__file__).parent / 'app' / 'public_dashboards'
-PUBLISH_FILENAME = "dashboard.html"
+PUBLISH_FILENAME = "index.html"
 
 
 def show_help():
