@@ -1,37 +1,40 @@
 <template>
-  <div v-loading="isLoading" element-loading-text="処理を実行しています..." class="page-container">
-    <el-header class="page-header">
-      <h1 class="page-title">データ確認</h1>
-      <p class="page-description">データベースに保存されている各種集計データを確認・検索します。</p>
-    </el-header>
+  <div v-loading="isLoading" element-loading-text="処理を実行しています..." class="page-container data-viewer">
+    <div class="page-header">
+      <h1>データベース確認</h1>
+      <p>データベースに保存されている各種集計データを確認・検索します</p>
+    </div>
 
-    <el-alert v-if="error" :title="error" type="error" show-icon @close="error = null" />
+    <div class="main-content-wrapper">
+      <el-alert v-if="error" :title="error" type="error" show-icon @close="error = null" style="margin-bottom: 20px;" />
 
-    <el-card class="box-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span><el-icon><DataAnalysis /></el-icon> 1. 確認するデータを選択</span>
-        </div>
-      </template>
-      <el-radio-group v-model="selectedTable" size="large" @change="onTableChange">
-        <el-radio-button
-          v-for="table in dataTables"
-          :key="table.id"
-          :label="table.id"
-          :value="table.id"
-        >
-          {{ table.name }}
-        </el-radio-button>
-      </el-radio-group>
-      <p class="table-description">{{ selectedTableDescription }}</p>
-    </el-card>
+      <el-card class="box-card" shadow="never">
+        <template #header>
+          <div class="card-header">
+            <span class="step-badge">STEP 1</span>
+            <span>確認するデータを選択</span>
+          </div>
+        </template>
+        <el-radio-group v-model="selectedTable" size="large" @change="onTableChange">
+          <el-radio-button
+            v-for="table in dataTables"
+            :key="table.id"
+            :label="table.id"
+            :value="table.id"
+          >
+            {{ table.name }}
+          </el-radio-button>
+        </el-radio-group>
+        <p class="table-description">{{ selectedTableDescription }}</p>
+      </el-card>
 
-    <el-card class="box-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span><el-icon><Filter /></el-icon> 2. 検索条件</span>
-        </div>
-      </template>
+      <el-card class="box-card" shadow="never">
+        <template #header>
+          <div class="card-header">
+            <span class="step-badge">STEP 2</span>
+            <span>検索条件</span>
+          </div>
+        </template>
       <el-form :model="filters" label-position="top">
         <el-row :gutter="20">
           <el-col :span="6">
@@ -80,13 +83,14 @@
       </div>
     </el-card>
 
-    <el-card v-if="searchResult" class="box-card" shadow="never">
-       <template #header>
-        <div class="card-header">
-          <span><el-icon><Document /></el-icon> 3. 検索結果</span>
-           <span class="result-count">（{{ searchResult.total_count }}件）</span>
-        </div>
-      </template>
+      <el-card v-if="searchResult" class="box-card" shadow="never">
+         <template #header>
+          <div class="card-header">
+            <span class="step-badge">STEP 3</span>
+            <span>検索結果</span>
+             <span class="result-count">（{{ searchResult.total_count }}件）</span>
+          </div>
+        </template>
 
       <div v-if="searchResult.data.length === 0" class="no-data">
         <el-empty description="該当するデータがありません" />
@@ -123,7 +127,8 @@
         </el-button>
         <span class="export-hint">現在の検索条件で全件をCSV出力します</span>
       </div>
-    </el-card>
+      </el-card>
+    </div>
   </div>
 </template>
 
@@ -300,65 +305,141 @@ onMounted(fetchFilterOptions);
 </script>
 
 <style scoped>
-.page-container {
-  padding: 20px;
+/* Page Layout */
+.data-viewer {
+  padding: 0;
 }
+
 .page-header {
-  margin-bottom: 20px;
+  padding: var(--space-lg) var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-color);
 }
-.page-title {
-  font-size: 24px;
+
+.page-header h1 {
+  font-size: 1.5rem;
   font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-sm) 0;
 }
-.page-description {
-  font-size: 14px;
-  color: #606266;
+
+.page-header p {
+  color: var(--text-secondary);
+  margin: 0;
+  font-size: 0.9rem;
 }
+
+/* Main Content Wrapper */
+.main-content-wrapper {
+  padding: var(--space-lg) var(--space-md);
+}
+
+/* Card Styles */
 .box-card {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg);
 }
+
 .card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: var(--space-md);
   font-weight: 600;
+  color: var(--text-primary);
+  font-size: 1rem;
 }
-.card-header .el-icon {
-  margin-right: 8px;
-  vertical-align: middle;
+
+.step-badge {
+  background: rgba(88, 166, 255, 0.1);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  color: var(--accent-blue);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
+
 .table-description {
-  margin-top: 15px;
-  font-size: 14px;
-  color: #909399;
+  margin-top: var(--space-md);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
+
+/* Form Actions */
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
 }
+
+/* Result Count */
 .result-count {
-  font-size: 14px;
+  font-size: 0.85rem;
   font-weight: normal;
-  color: #909399;
-  margin-left: 10px;
+  color: var(--text-tertiary);
+  margin-left: auto;
 }
+
+/* Pagination */
 .pagination-container {
-  margin-top: 20px;
+  margin-top: var(--space-lg);
   display: flex;
   justify-content: center;
 }
+
+/* Export Section */
 .export-section {
-  margin-top: 20px;
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border-color);
   text-align: right;
 }
+
 .export-hint {
-  font-size: 13px;
-  color: #909399;
-  margin-left: 10px;
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  margin-left: var(--space-sm);
 }
+
+/* No Data */
 .no-data {
   text-align: center;
-  padding: 40px 0;
+  padding: var(--space-xl) 0;
+}
+
+/* Radio Button Group - Dark Theme */
+:deep(.el-radio-button) {
+  outline: 1px solid var(--border-color) !important;
+  border: none !important;
+}
+
+:deep(.el-radio-button__inner) {
+  background-color: var(--bg-input) !important;
+  border: none !important;
+  outline: none !important;
+  color: var(--text-primary) !important;
+}
+
+:deep(.el-radio-button__inner:hover) {
+  background-color: rgba(88, 166, 255, 0.1) !important;
+  color: var(--accent-blue) !important;
+}
+
+:deep(.el-radio-button.is-active .el-radio-button__inner) {
+  background-color: var(--accent-blue) !important;
+  color: white !important;
+}
+
+:deep(.el-radio-button:first-child) {
+  border-top-left-radius: var(--radius-md) !important;
+  border-bottom-left-radius: var(--radius-md) !important;
+}
+
+:deep(.el-radio-button:last-child) {
+  border-top-right-radius: var(--radius-md) !important;
+  border-bottom-right-radius: var(--radius-md) !important;
 }
 </style>

@@ -339,7 +339,7 @@ const closeCumulativeModal = () => {
 
 /* Main Content Grid */
 .main-content-grid {
-  padding: var(--space-xl);
+  padding: var(--space-lg) var(--space-md);
 }
 
 /* Card Styles */
@@ -477,6 +477,12 @@ const closeCumulativeModal = () => {
   font-size: 1.2rem;
   margin-bottom: var(--space-lg);
   color: var(--text-primary);
+}
+
+.page-header {
+  padding: var(--space-lg) var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-logs {

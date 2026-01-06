@@ -403,8 +403,8 @@ const closeMasterMismatchError = () => {
 }
 
 .page-header {
-  padding: var(--space-xl);
-  padding-bottom: var(--space-lg);
+  padding: var(--space-lg) var(--space-md);
+  padding-bottom: var(--space-md);
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -423,7 +423,7 @@ const closeMasterMismatchError = () => {
 
 /* Main Content Grid */
 .main-content-grid {
-  padding: var(--space-xl);
+  padding: var(--space-lg) var(--space-md);
 }
 
 /* Card Styles */
