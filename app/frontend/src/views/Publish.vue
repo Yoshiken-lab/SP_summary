@@ -1,6 +1,11 @@
 <template>
-  <div class="page-container">
-    <el-row :gutter="20">
+  <div class="page-container publish-page">
+    <div class="page-header">
+      <h1>実績反映</h1>
+      <p>報告書をアップ ロードしてデータベースへ反映し、ダッシュボードを公開します</p>
+    </div>
+
+    <el-row :gutter="24" class="main-content-grid">
       <!-- Left Column: Main Actions -->
       <el-col :span="16">
         <!-- Step 1: Data Upload -->
@@ -461,43 +466,118 @@ onMounted(async () => {
 });
 </script>
 
+
 <style scoped>
-.page-container {
-  padding: 20px;
+/* Page Layout */
+.publish-page {
+  padding: 0;
 }
+
+.page-header {
+  padding: var(--space-xl);
+  padding-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.page-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-sm) 0;
+}
+
+.page-header p {
+  color: var(--text-secondary);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Main Content Grid */
+.main-content-grid {
+  padding: var(--space-xl);
+}
+
+/* Card Styles */
 .box-card {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg);
 }
+
 .card-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 1rem;
 }
-.card-header span {
-  font-size: 1.2rem;
-  font-weight: bold;
-}
+
 .step-label {
-    font-size: 1.1rem;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
+  background: rgba(88, 166, 255, 0.1);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  color: var(--accent-blue);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
-.upload-area {
-  width: 100%;
+
+/* Upload Styles */
+:deep(.el-upload-dragger) {
+  padding: var(--space-xl) !important;
+  border: 2px dashed rgba(75, 85, 99, 0.5) !important;
+  background: var(--bg-input) !important;
 }
+
+:deep(.el-upload-dragger:hover) {
+  border-color: var(--accent-blue) !important;
+  background: rgba(88, 166, 255, 0.05) !important;
+}
+
+:deep(.el-icon--upload) {
+  font-size: 2rem;
+  color: var(--text-primary) !important;
+}
+
+:deep(.el-upload__text) {
+  color: var(--text-primary) !important;
+}
+
+/* Tab Descriptions */
 .tab-description {
+  color: var(--text-secondary);
   font-size: 0.9rem;
-  color: var(--el-text-color-secondary);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-md);
+  line-height: 1.6;
 }
+
+/* Action Buttons */
 .action-buttons {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    margin-top: 1rem;
+  display: flex;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+  flex-wrap: wrap;
 }
-.publish-url-box {
-    margin-top: 1.5rem;
+
+.action-buttons .el-button {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* Status Styles */
+.status-info {
+  padding: var(--space-md);
+  background: rgba(88, 166, 255, 0.05);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-md);
+}
+
+.status-info p {
+  margin: var(--space-xs) 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
 }
 </style>
+```

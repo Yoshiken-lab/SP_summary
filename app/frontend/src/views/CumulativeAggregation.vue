@@ -1,110 +1,106 @@
 <template>
-  <div class="page-container">
-    <el-card shadow="never">
-      <template #header>
-        <div class="card-header">
-          <h1>累積集計</h1>
-          <p>複数の月次集計ファイルを元に、年度の累積報告書を作成します</p>
-        </div>
-      </template>
+  <div class="page-container cumulative-aggregation">
+    <div class="page-header">
+      <h1>累積集計</h1>
+      <p>複数の月次集計ファイルを元に、年度の累積報告書を作成します</p>
+    </div>
 
-      <el-row :gutter="20">
-        <el-col :span="14">
-          <el-form label-position="top">
-            <el-form-item>
-              <template #label>
-                <span class="step-label">1</span> 月次集計ファイルを追加
-              </template>
-              <el-upload
-                drag
-                multiple
-                action="#"
-                :auto-upload="false"
-                :on-change="handleFilesChange"
-                :show-file-list="false"
-                class="upload-area"
-              >
-                <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-                <div class="el-upload__text">
-                  ここにファイルをドラッグ＆ドロップ
-                  <br>または<em>クリックしてアップロード</em>
-                </div>
-              </el-upload>
-            </el-form-item>
+    <el-row :gutter="24" class="main-content-grid">
+      <el-col :span="14">
+        <el-card class="upload-card" shadow="never">
+          <template #header>
+            <div class="card-title">
+              <span class="step-badge">STEP 1</span>
+              <span>月次集計ファイルの追加</span>
+            </div>
+          </template>
 
-            <el-form-item v-if="cumulativeInputFiles.length > 0">
-               <template #label>
-                <span class="step-label">2</span> 追加されたファイルを確認
-              </template>
-              <el-table :data="cumulativeInputFiles" style="width: 100%">
-                <el-table-column prop="file.name" label="ファイル名" />
-                <el-table-column label="対象年月" width="220">
-                  <template #default="scope">
-                    <el-date-picker
-                      v-model="scope.row.period"
-                      type="month"
-                      placeholder="年月を選択"
-                      format="YYYY年M月"
-                      value-format="YYYY-M"
-                    />
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" width="80" align="center">
-                   <template #default="scope">
-                    <el-button type="danger" :icon="Delete" circle @click="removeInputFile(scope.$index)" />
-                  </template>
-                </el-table-column>
-              </el-table>
-              <div v-if="calculatedFiscalYear" class="fiscal-year-info">
-                対象年度: <strong>{{ calculatedFiscalYear }}年度</strong>
-                （出力ファイル: SP_年度累計_{{ calculatedFiscalYear }}.xlsx）
-              </div>
-            </el-form-item>
-          </el-form>
-        </el-col>
+          <el-upload
+            drag
+            multiple
+            action="#"
+            :auto-upload="false"
+            :on-change="handleFilesChange"
+            :show-file-list="false"
+            class="drag-upload"
+          >
+            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <div class="el-upload__text">
+              <span>ファイルをドラッグ&ドロップ（複数可）</span>
+            </div>
+          </el-upload>
 
-        <el-col :span="10">
-           <div class="options-action-panel">
-            <el-form label-position="top">
-              <el-form-item>
-                 <template #label>
-                  <span class="step-label">3</span> 既存の累積ファイル (オプション)
+          <div v-if="cumulativeInputFiles.length > 0" class="file-list-section">
+            <div class="section-header">
+              <span class="step-badge">STEP 2</span>
+              <span>追加されたファイル ({{ cumulativeInputFiles.length }}件)</span>
+            </div>
+            <el-table :data="cumulativeInputFiles" style="width: 100%">
+              <el-table-column prop="file.name" label="ファイル名" />
+              <el-table-column label="対象年月" width="220">
+                <template #default="scope">
+                  <el-date-picker
+                    v-model="scope.row.period"
+                    type="month"
+                    placeholder="年月を選択"
+                    format="YYYY年M月"
+                    value-format="YYYY-M"
+                  />
                 </template>
-                <el-upload
-                  ref="uploadExistingRef"
-                  action="#"
-                  :limit="1"
-                  :auto-upload="false"
-                  :on-change="handleExistingFileChange"
-                  :on-remove="handleExistingFileRemove"
-                >
-                  <el-button><el-icon><FolderOpened /></el-icon> ファイルを選択</el-button>
-                   <template #tip>
-                    <div class="el-upload__tip">
-                      既存のファイルに追記・上書きする場合に選択
-                    </div>
-                  </template>
-                </el-upload>
-              </el-form-item>
-               <el-form-item>
-                  <div class="action-box">
-                    <el-button
-                      type="primary"
-                      size="large"
-                      @click="startCumulativeAggregation"
-                      :disabled="!canStartCumulative"
-                      :loading="isLoading"
-                    >
-                      <el-icon><Histogram /></el-icon>
-                      <span>累積集計を実行 ({{ cumulativeInputFiles.length }}件)</span>
-                    </el-button>
-                  </div>
-               </el-form-item>
-            </el-form>
-           </div>
-        </el-col>
-      </el-row>
-    </el-card>
+              </el-table-column>
+              <el-table-column label="操作" width="80" align="center">
+                <template #default="scope">
+                  <el-button type="danger" :icon="Delete" circle @click="removeInputFile(scope.$index)" />
+                </template>
+              </el-table-column>
+            </el-table>
+            <div v-if="calculatedFiscalYear" class="fiscal-year-info">
+              対象年度: <strong>{{ calculatedFiscalYear }}年度</strong>
+              （出力ファイル: SP_年度累計_{{ calculatedFiscalYear }}.xlsx）
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="10">
+        <div class="right-column">
+          <el-card class="option-card" shadow="never">
+            <template #header>
+              <div class="card-title">
+                <span class="step-badge">STEP 3</span>
+                <span>既存ファイル（オプション）</span>
+              </div>
+            </template>
+            <el-upload
+              ref="uploadExistingRef"
+              action="#"
+              :limit="1"
+              :auto-upload="false"
+              :on-change="handleExistingFileChange"
+              :on-remove="handleExistingFileRemove"
+            >
+              <el-button><el-icon><FolderOpened /></el-icon> ファイルを選択</el-button>
+              <template #tip>
+                <div class="el-upload__tip">
+                  既存のファイルに追記・上書きする場合に選択
+                </div>
+              </template>
+            </el-upload>
+            <el-button
+              type="primary"
+              size="large"
+              @click="startCumulativeAggregation"
+              :disabled="!canStartCumulative"
+              :loading="isLoading"
+              class="execute-btn"
+            >
+              <el-icon><Histogram /></el-icon>
+              <span>累積集計を実行 ({{ cumulativeInputFiles.length }}件)</span>
+            </el-button>
+          </el-card>
+        </div>
+      </el-col>
+    </el-row>
 
      <!-- 処理中ダイアログ -->
     <el-dialog v-model="cumulativeModalVisible" title="累積集計" :close-on-click-modal="false" :show-close="!isLoading">
@@ -330,68 +326,185 @@ const closeCumulativeModal = () => {
     align-items: center;
 }
 .step-label::before {
-    content: '';
-    display: inline-block;
-    width: 8px;
-    height: 1.2rem;
-    background-color: var(--el-color-primary);
-    margin-right: 8px;
-    border-radius: 3px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-sm) 0;
 }
-.options-action-panel, .action-box {
+
+.page-header p {
+  color: var(--text-secondary);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Main Content Grid */
+.main-content-grid {
+  padding: var(--space-xl);
+}
+
+/* Card Styles */
+.upload-card,
+.option-card {
+  height: auto;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.step-badge {
+  background: rgba(88, 166, 255, 0.1);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  color: var(--accent-blue);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* Drag & Drop Upload */
+.drag-upload {
+  width: 100%;
+}
+
+.drag-upload :deep(.el-upload-dragger) {
+  width: 100%;
+  height: 100px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  height: 100%;
+  justify-content: center;
+  border: 2px dashed rgba(75, 85, 99, 0.5) !important;
+  border-radius: var(--radius-md);
+  background: var(--bg-input) !important;
+  transition: all var(--transition-fast);
 }
-.options-action-panel {
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px;
-  padding: 20px;
+
+.drag-upload :deep(.el-upload-dragger:hover) {
+  border-color: var(--accent-blue) !important;
+  background: rgba(88, 166, 255, 0.05) !important;
 }
-.el-upload__tip {
-    margin-top: 5px;
-    font-size: 0.8rem;
+
+.drag-upload :deep(.el-icon--upload) {
+  font-size: 2rem;
+  color: var(--text-primary) !important;
+  margin-bottom: var(--space-sm);
 }
+
+.drag-upload :deep(.el-upload__text) {
+  color: var(--text-primary) !important;
+  font-size: 0.85rem;
+}
+
+/* File List Section */
+.file-list-section {
+  margin-top: var(--space-xl);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Fiscal Year Info */
 .fiscal-year-info {
-  margin-top: 1rem;
-  background-color: #ecf5ff;
-  border: 1px solid #d9ecff;
-  color: #409eff;
-  padding: 0.75rem;
-  border-radius: 4px;
+  margin-top: var(--space-md);
+  background-color: rgba(88, 166, 255, 0.1);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  color: var(--accent-blue);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
 }
-.dialog-content, .result-info {
-  padding: 10px;
+
+.fiscal-year-info strong {
+  color: var(--text-primary);
+  font-weight: 700;
 }
+
+/* Right Column */
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Option Card */
+.option-card {
+  flex-shrink: 0;
+}
+
+.option-card :deep(.el-upload__tip) {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-top: var(--space-sm);
+}
+
+/* Execute Button */
+.execute-btn {
+  width: 100%;
+  margin-top: var(--space-lg);
+  background: var(--gradient-purple) !important;
+  border: none !important;
+  font-weight: 600;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.execute-btn:hover {
+  filter: brightness(1.1);
+}
+
+.execute-btn:disabled {
+  background: var(--bg-input) !important;
+  color: var(--text-tertiary) !important;
+  filter: none;
+}
+
+/* Dialog Styles */
 .dialog-title {
   text-align: center;
   font-size: 1.2rem;
-  margin-bottom: 1.5rem;
-  color: var(--el-text-color-primary);
+  margin-bottom: var(--space-lg);
+  color: var(--text-primary);
 }
+
 .modal-logs {
-  margin-top: 1.5rem;
-  padding: 10px;
-  background-color: #f9fafb;
-  border-radius: 4px;
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   max-height: 150px;
   overflow-y: auto;
   font-size: 0.9rem;
 }
+
 .modal-log-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 5px;
-  color: var(--el-text-color-regular);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+  color: var(--text-secondary);
 }
+
 .result-info p {
-    margin: 5px 0;
-    color: var(--el-text-color-regular);
+  margin: var(--space-xs) 0;
+  color: var(--text-secondary);
 }
+
 :deep(.el-result__subtitle) {
-  color: var(--el-text-color-regular);
+  color: var(--text-secondary);
 }
 </style>
+```
