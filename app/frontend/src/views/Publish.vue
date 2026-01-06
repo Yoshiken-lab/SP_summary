@@ -579,5 +579,49 @@ onMounted(async () => {
   color: var(--text-secondary);
   font-size: 0.85rem;
 }
+
+/* Descriptions Component - Dashboard Status */
+:deep(.el-descriptions) {
+  margin-top: 0;
+}
+
+:deep(.el-descriptions.is-bordered) {
+  border: 1px solid var(--border-color) !important;
+}
+
+:deep(.el-descriptions__body) {
+  background-color: transparent !important;
+}
+
+:deep(.el-descriptions__table) {
+  background-color: transparent !important;
+  border-collapse: collapse !important;
+}
+
+:deep(.el-descriptions-item__cell) {
+  border: 1px solid var(--border-color) !important;
+  background-color: var(--bg-card) !important;
+}
+
+:deep(.el-descriptions__label.el-descriptions__cell.is-bordered-label) {
+  color: var(--text-secondary) !important;
+  font-weight: 600 !important;
+  background-color: var(--bg-input) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+:deep(.el-descriptions__content.el-descriptions__cell.is-bordered-content) {
+  color: var(--text-primary) !important;
+  background-color: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+/* Force all table cells (TD) to use dark borders */
+:deep(.el-descriptions__table td) {
+  border: 1px solid var(--border-color) !important;
+}
+
+:deep(.el-descriptions__table th) {
+  border: 1px solid var(--border-color) !important;
+}
 </style>
-```
