@@ -20,8 +20,8 @@ class Config:
     OUTPUT_DIR = Path.home() / 'Downloads'
     UPLOAD_DIR = APP_DIR / 'uploads'
 
-    # ダッシュボード公開先（社内サーバー）
-    PUBLISH_PATH = Path(r'\\192.168.11.51\事業所間受け渡し\VPN(事業所別フォルダ)\dashboard')
+    # ダッシュボード公開先（ローカルサーバー公開用）
+    PUBLISH_PATH = APP_DIR / 'public_dashboards'
     PUBLISH_FILENAME = 'dashboard.html'
 
     # GitHub Pages公開設定
