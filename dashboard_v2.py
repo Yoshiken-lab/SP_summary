@@ -740,7 +740,7 @@ def generate_dashboard(db_path=None, output_dir=None):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>スクールフォト売上分析ダッシュボード V2</title>
+    <title>スクールフォト売上分析ダッシュボード</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -943,15 +943,10 @@ def generate_dashboard(db_path=None, output_dir=None):
     <div class="container">
         <div class="header">
             <div>
-                <h1>📊 スクールフォト売上分析ダッシュボード V2</h1>
+                <h1>📊 スクールフォト売上分析ダッシュボード</h1>
                 <p class="date" id="reportDate">レポート日: {stats['report_date']}</p>
             </div>
-            <div style="text-align: right;">
-                <div style="font-size: 12px; color: #666;">年度選択</div>
-                <select id="yearSelect" onchange="switchYear()" style="min-width: 150px; margin-top: 8px;">
-                    {chr(10).join([f'<option value="{y}" {"selected" if y == default_year else ""}>{y}年度</option>' for y in available_years])}
-                </select>
-            </div>
+
         </div>
         
         <div class="summary-cards">
@@ -970,11 +965,7 @@ def generate_dashboard(db_path=None, output_dir=None):
                 <div class="card-value {'success' if stats['avg_budget_rate'] >= 1 else 'warning' if stats['avg_budget_rate'] >= 0.8 else 'danger'}" id="budgetCardValue">{stats['avg_budget_rate']*100:.1f}%</div>
                 <div class="card-sub">目標: 100%</div>
             </div>
-            <div class="card">
-                <div class="card-title">学校/イベント数</div>
-                <div class="card-value" id="countCardValue">{stats['school_count']}/{stats['event_count']}</div>
-                <div class="card-sub">蓄積データ</div>
-            </div>
+
         </div>
         
         <!-- 月別売上推移セクション -->
@@ -1202,10 +1193,24 @@ def generate_dashboard(db_path=None, output_dir=None):
             if (currentTab === 'monthly') {{
                 updateMonthlyChart(yearData.monthly);
             }} else if (currentTab === 'branch') {{
+                // 現在選択されている事業所を保存
+                const currentBranch = document.getElementById('branchFilter').value;
                 updateBranchMonthlySelectors(yearData.branch_monthly);
+                // 選択が存在すれば復元
+                const branchFilter = document.getElementById('branchFilter');
+                if (currentBranch && branchFilter.querySelector(`option[value="${{currentBranch}}"]`)) {{
+                    branchFilter.value = currentBranch;
+                }}
                 renderBranchMonthlyChart();
             }} else if (currentTab === 'manager') {{
+                // 現在選択されている担当者を保存
+                const currentManager = document.getElementById('managerFilter').value;
                 updateManagerSelectors(yearData.manager_monthly);
+                // 選択が存在すれば復元
+                const managerFilter = document.getElementById('managerFilter');
+                if (currentManager && managerFilter.querySelector(`option[value="${{currentManager}}"]`)) {{
+                    managerFilter.value = currentManager;
+                }}
                 renderManagerChart();
             }}
         }}
