@@ -853,13 +853,28 @@ def create_app(config=None):
     def preview_dashboard():
         """ダッシュボードプレビュー"""
         try:
-            # 最新のダッシュボードファイルを検索
-            dashboard_dir = APP_DIR.parent
-            dashboard_files = list(dashboard_dir.glob('dashboard_*.html'))
+            # 複数のディレクトリから最新のダッシュボードファイルを検索
+            search_dirs = [
+                APP_DIR.parent,  # プロジェクトルート
+                APP_DIR          # app/ ディレクトリ
+            ]
+            
+            logger.info(f"検索ディレクトリ: {[str(d) for d in search_dirs]}")
+            
+            all_dashboard_files = []
+            for dashboard_dir in search_dirs:
+                found_files = list(dashboard_dir.glob('dashboard_*.html'))
+                logger.info(f"{dashboard_dir} で見つかったファイル: {[f.name for f in found_files]}")
+                all_dashboard_files.extend(found_files)
 
-            if dashboard_files:
+            if all_dashboard_files:
                 # 最新のファイルを取得（更新日時順）
-                latest_dashboard = max(dashboard_files, key=lambda p: p.stat().st_mtime)
+                # デバッグ情報をログ出力
+                for f in all_dashboard_files:
+                    logger.info(f"  {f.name}: {f.stat().st_mtime}")
+                    
+                latest_dashboard = max(all_dashboard_files, key=lambda p: p.stat().st_mtime)
+                logger.info(f"選択されたファイル: {latest_dashboard}")
                 return send_file(str(latest_dashboard), mimetype='text/html')
             else:
                 return jsonify({
