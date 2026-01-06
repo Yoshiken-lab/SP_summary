@@ -443,14 +443,14 @@ const closeMasterMismatchError = () => {
 }
 
 .step-badge {
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
+  background: rgba(88, 166, 255, 0.1);
+  border: 1px solid rgba(88, 166, 255, 0.3);
   padding: 2px 10px;
   border-radius: var(--radius-sm);
   font-size: 0.7rem;
-  color: var(--text-secondary);
+  color: var(--accent-blue);
   font-family: var(--font-mono);
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.5px;
 }
 
@@ -468,8 +468,8 @@ const closeMasterMismatchError = () => {
   align-items: center;
   gap: var(--space-sm);
   margin-bottom: var(--space-sm);
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: 0.95rem;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -499,25 +499,25 @@ const closeMasterMismatchError = () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 2px dashed var(--border-color);
+  border: 2px dashed rgba(75, 85, 99, 0.5) !important;
   border-radius: var(--radius-md);
-  background: var(--bg-input);
+  background: var(--bg-input) !important;
   transition: all var(--transition-fast);
 }
 
 .drag-upload :deep(.el-upload-dragger:hover) {
-  border-color: var(--accent-blue);
-  background: rgba(88, 166, 255, 0.05);
+  border-color: var(--accent-blue) !important;
+  background: rgba(88, 166, 255, 0.05) !important;
 }
 
 .drag-upload :deep(.el-icon--upload) {
   font-size: 2rem;
-  color: var(--text-secondary);
+  color: var(--text-primary) !important;
   margin-bottom: var(--space-sm);
 }
 
 .drag-upload :deep(.el-upload__text) {
-  color: var(--text-secondary);
+  color: var(--text-primary) !important;
   font-size: 0.85rem;
 }
 
@@ -548,8 +548,9 @@ const closeMasterMismatchError = () => {
 }
 
 .period-card :deep(.el-form-item__label) {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
   margin-bottom: var(--space-sm);
 }
 

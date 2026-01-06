@@ -68,7 +68,7 @@ export default {
 .brand {
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #f8fafc;
   margin-bottom: 2.5rem;
   display: flex;
   align-items: center;
@@ -91,7 +91,7 @@ export default {
 
 .brand-sub {
   font-weight: 400;
-  opacity: 0.5;
+  opacity: 0.7;
 }
 
 /* Navigation Menu */
