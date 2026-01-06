@@ -314,15 +314,22 @@ const executePublish = async () => {
 
     // 統計情報を含む通知
     const stats = importData.stats || {};
-    const message = `実績の反映とダッシュボードの生成が完了しました。\n\n` +
-      `・学校別売上データ: ${stats.school_sales_count || 0}件\n` +
-      `・月別サマリーデータ: ${stats.monthly_summary_count || 0}件\n` +
-      `・イベント別売上データ: ${stats.event_sales_count || 0}件`;
+    const formatNumber = (num) => (num || 0).toLocaleString('ja-JP');
+    const message = `
+      <div style="line-height: 1.8;">
+        <p style="margin-bottom: 16px;">実績の反映とダッシュボードの生成が完了しました。</p>
+        <div style="padding-left: 8px;">
+          • 学校別売上データ: <strong>${formatNumber(stats.school_sales_count)}</strong>件<br>
+          • 月別サマリーデータ: <strong>${formatNumber(stats.monthly_summary_count)}</strong>件<br>
+          • イベント別売上データ: <strong>${formatNumber(stats.event_sales_count)}</strong>件
+        </div>
+      </div>
+    `;
     
     ElMessageBox.alert(message, '実績反映完了', {
       confirmButtonText: 'OK',
       type: 'success',
-      dangerouslyUseHTMLString: false
+      dangerouslyUseHTMLString: true
     });
     
     publishFiles.value = [];
