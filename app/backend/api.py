@@ -789,7 +789,12 @@ def create_app(config=None):
             return jsonify({
                 'status': 'success',
                 'fileCount': imported_count,
-                'stats': total_stats
+                'stats': {
+                    'school_sales_count': total_stats.get('school_monthly_sales', 0),
+                    'monthly_summary_count': total_stats.get('monthly_totals', 0),
+                    'event_sales_count': total_stats.get('event_sales', 0),
+                    'member_rates_count': total_stats.get('member_rates', 0)
+                }
             })
 
         except Exception as e:
