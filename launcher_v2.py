@@ -13,7 +13,7 @@ import subprocess
 import threading
 import json
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox, scrolledtext, filedialog
 from pathlib import Path
 from datetime import datetime
 import ctypes
@@ -634,7 +634,7 @@ class MainApp:
         self.pages['server'] = ServerControlPage(self.content_area, self.server_manager)
         self.pages['monthly'] = MonthlyAggregationPage(self.content_area)
         self.pages['cumulative'] = CumulativeAggregationPage(self.content_area)
-        self.pages['results'] = PlaceholderPage(self.content_area, "実績反映", "確定した売上データをシステムのマスタに反映させます")
+        self.pages['results'] = PerformanceReflectionPage(self.content_area)
         self.pages['database'] = PlaceholderPage(self.content_area, "データベース確認", "登録されているテーブルやレコードを直接確認します")
 
     def show_page(self, page_key):
@@ -1570,6 +1570,272 @@ class CumulativeAggregationPage(tk.Frame):
             self._update_file_list()
 
 
+
+
+
+class PerformanceReflectionPage(tk.Frame):
+    """実績反映ページ"""
+    def __init__(self, parent):
+        super().__init__(parent, bg=COLORS['bg_main'])
+        
+        # 状態管理
+        self.uploaded_files = [] # リスト: {'path': Path, 'name': str, 'size': str}
+        self.is_processing = False
+        
+        # UI構築
+        self._create_header()
+        self._create_main_layout()
+
+    def _create_header(self):
+        """ヘッダー作成"""
+        header = tk.Frame(self, bg=COLORS['bg_main'])
+        header.pack(fill=tk.X, padx=30, pady=(30, 20))
+        
+        tk.Label(
+            header, text="実績反映", font=('Meiryo', 18, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_main']
+        ).pack(anchor='w')
+        
+        tk.Label(
+            header, text="売上報告書（Excel）を取り込み、データベースとダッシュボードを更新します。",
+            font=('Meiryo', 10), fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+        ).pack(anchor='w', pady=(5, 0))
+
+    def _create_main_layout(self):
+        """メインレイアウト作成"""
+        # コンテンツ全体をスクロール可能にするためのCanvas
+        canvas = tk.Canvas(self, bg=COLORS['bg_main'], highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=COLORS['bg_main'])
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        # キャンバス幅調整
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas.find_withtag("all")[0], width=event.width)
+        
+        canvas.bind("<Configure>", on_canvas_configure)
+        
+        # マウスホイールスクロール（全体）
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        
+        # キャンバスにマウスがある時だけスクロール有効化
+        canvas.bind('<Enter>', lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        canvas.bind('<Leave>', lambda e: canvas.unbind_all("<MouseWheel>"))
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(30, 0))
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # コンテンツ配置
+        self._create_step1(scrollable_frame)
+        self._create_step2(scrollable_frame)
+        
+        self.scrollable_frame = scrollable_frame
+        self.canvas = canvas
+
+    def _create_step1(self, parent):
+        """STEP 1: ファイル選択"""
+        step_frame = tk.Frame(parent, bg=COLORS['bg_main'])
+        step_frame.pack(fill=tk.X, pady=(0, 25))
+        
+        tk.Label(
+            step_frame, text="STEP 1", font=('Meiryo', 11, 'bold'),
+            fg=COLORS['accent'], bg=COLORS['bg_main']
+        ).pack(anchor='w')
+        
+        tk.Label(
+            step_frame, text="売上報告書ファイルを選択", font=('Meiryo', 12, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_main']
+        ).pack(anchor='w', pady=(0, 10))
+        
+        # ドロップゾーン
+        self.drop_zone = tk.Frame(
+            step_frame, bg=COLORS['bg_card'],
+            highlightbackground=COLORS['border'], highlightthickness=1
+        )
+        self.drop_zone.pack(fill=tk.X, ipady=30)
+        
+        # ホバーエフェクト
+        def on_enter(e):
+            self.drop_zone.config(highlightbackground=COLORS['accent'])
+        def on_leave(e):
+            self.drop_zone.config(highlightbackground=COLORS['border'])
+        self.drop_zone.bind('<Enter>', on_enter)
+        self.drop_zone.bind('<Leave>', on_leave)
+        
+        # DnD設定
+        try:
+            self.drop_zone.drop_target_register(DND_FILES)
+            self.drop_zone.dnd_bind('<<Drop>>', self._on_drop)
+        except Exception:
+            pass # DnD非対応環境
+            
+        content_frame = tk.Frame(self.drop_zone, bg=COLORS['bg_card'])
+        content_frame.pack(expand=True)
+        
+        # アイコン（絵文字）
+        tk.Label(
+            content_frame, text="📁", font=('Meiryo', 24),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        ).pack(pady=(0, 10))
+        
+        tk.Label(
+            content_frame, text="ここにExcelファイルをドラッグ＆ドロップ",
+            font=('Meiryo', 12), fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        ).pack(pady=(0, 10))
+        
+        tk.Label(
+            content_frame, text="または",
+            font=('Meiryo', 10), fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        ).pack(pady=(0, 10))
+        
+        ModernButton(
+            content_frame, text="ファイルを選択",
+            command=self._select_files, width=20
+        ).pack()
+        
+        # ファイルリスト表示エリア
+        self.file_list_frame = tk.Frame(step_frame, bg=COLORS['bg_main'])
+        self.file_list_frame.pack(fill=tk.X, pady=(15, 0))
+
+    def _create_step2(self, parent):
+        """STEP 2: 実行コントロール"""
+        step_frame = tk.Frame(parent, bg=COLORS['bg_main'])
+        step_frame.pack(fill=tk.X, pady=(0, 40))
+        
+        tk.Label(
+            step_frame, text="STEP 2", font=('Meiryo', 11, 'bold'),
+            fg=COLORS['accent'], bg=COLORS['bg_main']
+        ).pack(anchor='w')
+        
+        tk.Label(
+            step_frame, text="実績反映を実行", font=('Meiryo', 12, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_main']
+        ).pack(anchor='w', pady=(0, 10))
+        
+        self.execute_btn_frame = tk.Frame(step_frame, bg=COLORS['bg_main'])
+        self.execute_btn_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        self.execute_btn = ModernButton(
+            self.execute_btn_frame, 
+            text="実績反映を実行", 
+            command=self._confirm_execution,
+            width=25,
+            height=45,
+            state='disabled'
+        )
+        self.execute_btn.pack(anchor='w')
+
+    def _on_drop(self, event):
+        """ファイルドロップ時の処理"""
+        files = self.tk.splitlist(event.data)
+        self._add_files(files)
+
+    def _select_files(self):
+        """ファイル選択ダイアログ"""
+        files = filedialog.askopenfilenames(
+            filetypes=[("Excel files", "*.xlsx *.xls")]
+        )
+        if files:
+            self._add_files(files)
+
+    def _add_files(self, files):
+        """ファイルをリストに追加"""
+        for f in files:
+            path = Path(f)
+            if path.suffix.lower() not in ['.xlsx', '.xls']:
+                continue
+            
+            # 重複チェック（リスト内）
+            if any(fl['path'] == path for fl in self.uploaded_files):
+                continue
+            
+            size_mb = path.stat().st_size / (1024 * 1024)
+            self.uploaded_files.append({
+                'path': path,
+                'name': path.name,
+                'size': f"{size_mb:.1f} MB"
+            })
+        
+        self._update_file_list()
+
+    def _update_file_list(self):
+        """ファイルリスト表示更新"""
+        # 既存の内容をクリア
+        for widget in self.file_list_frame.winfo_children():
+            widget.destroy()
+            
+        if not self.uploaded_files:
+            self._check_can_execute()
+            return
+
+        # ヘッダー (修正: bg_sidebarを使用)
+        header = tk.Frame(self.file_list_frame, bg=COLORS['bg_sidebar'], height=35)
+        header.pack(fill=tk.X, pady=(0, 2))
+        header.pack_propagate(False) # 高さ固定
+        
+        tk.Label(
+            header, text="ファイル名", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_sidebar']
+        ).pack(side=tk.LEFT, padx=10)
+        
+        tk.Label(
+            header, text="操作", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_sidebar']
+        ).pack(side=tk.RIGHT, padx=10)
+
+        # ファイル一覧
+        for i, file_info in enumerate(self.uploaded_files):
+            row = tk.Frame(self.file_list_frame, bg=COLORS['bg_card'], padx=10, pady=8)
+            row.pack(fill=tk.X, pady=2)
+            
+            # Label
+            tk.Label(
+                row, text=file_info['name'], font=('Meiryo', 9),
+                fg=COLORS['text_primary'], bg=COLORS['bg_card']
+            ).pack(side=tk.LEFT)
+            
+            # Delete Button
+            ModernButton(
+                row, text="削除", 
+                command=lambda idx=i: self._remove_file(idx),
+                width=60, bg_color=COLORS['danger'], hover_color=COLORS['danger_hover']
+            ).pack(side=tk.RIGHT)
+
+        self._check_can_execute()
+
+    def _remove_file(self, index):
+        """ファイルをリストから削除"""
+        if 0 <= index < len(self.uploaded_files):
+            self.uploaded_files.pop(index)
+            self._update_file_list()
+
+    def _check_can_execute(self):
+        """実行可能かチェック"""
+        if self.uploaded_files:
+            self.execute_btn.set_state('normal')
+        else:
+            self.execute_btn.set_state('disabled')
+
+    def _confirm_execution(self):
+        """実行確認"""
+        if not self.uploaded_files:
+            return
+            
+        # 仮実装：確認ダイアログ
+        response = messagebox.askyesno(
+            "実行確認",
+            f"{len(self.uploaded_files)}個のファイルを反映しますか？\\n\\n※この処理は取り消せません。"
+        )
+        if response:
+            messagebox.showinfo("処理開始", "機能を実装中です...")
 
 
 class MonthlyAggregationPage(tk.Frame):
