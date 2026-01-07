@@ -573,13 +573,13 @@ class MonthlyAggregationPage(tk.Frame):
         self._create_file_select_row(files_container, "担当者マスタ (XLSX)", "📋", "master", "*.xlsx")
 
     def _create_file_select_row(self, parent, label_text, icon, file_key, file_filter):
-        """ファイル選択行を作成"""
+        """ファイル選択行を作成（ドロップゾーンスタイル）"""
         row_frame = tk.Frame(parent, bg=COLORS['bg_card'])
-        row_frame.pack(fill=tk.X, pady=(0, 15))
+        row_frame.pack(fill=tk.X, pady=(0, 20))
         
         # ラベル + アイコン
         label_frame = tk.Frame(row_frame, bg=COLORS['bg_card'])
-        label_frame.pack(fill=tk.X, pady=(0, 8))
+        label_frame.pack(fill=tk.X, pady=(0, 10))
         
         tk.Label(
             label_frame, text=icon, font=('Segoe UI', 14),
@@ -596,33 +596,61 @@ class MonthlyAggregationPage(tk.Frame):
             label_frame, text="✓", font=('Segoe UI', 12, 'bold'),
             fg=COLORS['success'], bg=COLORS['bg_card']
         )
-        # 初期状態では非表示
         
-        # ファイル選択ボックス
-        input_frame = tk.Frame(row_frame, bg=COLORS['bg_main'], padx=1, pady=1)
-        input_frame.pack(fill=tk.X)
+        # ドロップゾーン（破線ボーダー + クラウドアイコン）
+        drop_zone = tk.Frame(row_frame, bg=COLORS['bg_main'], highlightthickness=2, 
+                             highlightbackground=COLORS['border'], highlightcolor=COLORS['border'])
+        drop_zone.pack(fill=tk.X, ipady=30)
         
-        inner_frame = tk.Frame(input_frame, bg=COLORS['bg_main'])
-        inner_frame.pack(fill=tk.X, padx=2, pady=2)
+        # 内部コンテンツフレーム（クリック可能にするため）
+        content_frame = tk.Frame(drop_zone, bg=COLORS['bg_main'], cursor='hand2')
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        # ファイル名表示
-        file_var = tk.StringVar(value="ファイルを選択してください")
-        file_entry = tk.Entry(
-            inner_frame, textvariable=file_var, state='readonly',
+        # クラウドアイコン
+        cloud_label = tk.Label(
+            content_frame, text="☁", font=('Segoe UI', 32),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+        )
+        cloud_label.pack(pady=(0, 5))
+        
+        # プレースホルダーテキスト / ファイル名
+        file_name_label = tk.Label(
+            content_frame, text="ファイルをドラッグ&ドロップ",
             font=('Segoe UI', 9), fg=COLORS['text_secondary'],
-            bg=COLORS['bg_main'], relief='flat', bd=0
+            bg=COLORS['bg_main']
         )
-        file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10, pady=8)
+        file_name_label.pack()
         
-        # 選択ボタン
-        select_btn = ModernButton(
-            inner_frame, text="参照", btn_type='primary',
-            command=lambda: self._select_file(file_key, file_var, check_label, file_filter)
-        )
-        select_btn.pack(side=tk.RIGHT, padx=10)
+        # クリックイベントをバインド（ドロップゾーン全体をクリック可能に）
+        def on_click(event=None):
+            self._select_file(file_key, file_name_label, cloud_label, check_label, file_filter)
+        
+        drop_zone.bind('<Button-1>', on_click)
+        content_frame.bind('<Button-1>', on_click)
+        cloud_label.bind('<Button-1>', on_click)
+        file_name_label.bind('<Button-1>', on_click)
+        
+        # ホバーエフェクト
+        def on_enter(event):
+            drop_zone.config(highlightbackground=COLORS['accent'], highlightcolor=COLORS['accent'])
+            content_frame.config(bg='#2a3142')
+            cloud_label.config(bg='#2a3142', fg=COLORS['accent'])
+            file_name_label.config(bg='#2a3142')
+        
+        def on_leave(event):
+            drop_zone.config(highlightbackground=COLORS['border'], highlightcolor=COLORS['border'])
+            content_frame.config(bg=COLORS['bg_main'])
+            cloud_label.config(bg=COLORS['bg_main'], fg=COLORS['text_secondary'])
+            file_name_label.config(bg=COLORS['bg_main'])
+        
+        drop_zone.bind('<Enter>', on_enter)
+        drop_zone.bind('<Leave>', on_leave)
+        content_frame.bind('<Enter>', on_enter)
+        content_frame.bind('<Leave>', on_leave)
         
         # 参照を保存
-        setattr(self, f'{file_key}_var', file_var)
+        setattr(self, f'{file_key}_name_label', file_name_label)
+        setattr(self, f'{file_key}_cloud_label', cloud_label)
         setattr(self, f'{file_key}_check', check_label)
 
     def _create_period_section(self, parent):
@@ -693,7 +721,7 @@ class MonthlyAggregationPage(tk.Frame):
         )
         self.execute_btn.pack(fill=tk.X, pady=(10, 0))
 
-    def _select_file(self, file_key, file_var, check_label, file_filter):
+    def _select_file(self, file_key, file_name_label, cloud_label, check_label, file_filter):
         """ファイル選択ダイアログ"""
         from tkinter import filedialog
         
@@ -710,7 +738,11 @@ class MonthlyAggregationPage(tk.Frame):
         
         if filename:
             self.files[file_key] = filename
-            file_var.set(Path(filename).name)
+            # ファイル名のみ表示
+            file_name_label.config(text=Path(filename).name, fg=COLORS['accent'])
+            # クラウドアイコンを小さく、色を変更
+            cloud_label.config(text="📄", font=('Segoe UI', 24))
+            # チェックマーク表示
             check_label.pack(side=tk.RIGHT)
             self._check_can_execute()
 
