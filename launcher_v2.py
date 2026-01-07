@@ -111,6 +111,89 @@ class ModernButton(tk.Button):
                 self['cursor'] = 'hand2'
         super().configure(cnf)
 
+class ModernDropdown(tk.Frame):
+    """モダンなドロップダウンウィジェット"""
+    def __init__(self, master, values, default_value="", **kwargs):
+        super().__init__(master, bg=COLORS['bg_main'], **kwargs)
+        
+        self.values = values
+        self.current_value = tk.StringVar(value=default_value)
+        
+        # ドロップダウンボタン
+        self.button = tk.Button(
+            self, textvariable=self.current_value,
+            font=('Segoe UI', 10), fg=COLORS['text_primary'],
+            bg=COLORS['bg_main'], relief='flat', bd=0,
+            anchor='w', padx=10, cursor='hand2',
+            command=self._toggle_menu
+        )
+        self.button.pack(fill=tk.BOTH, expand=True, ipady=8)
+        
+        # ドロップダウンアイコン
+        arrow_label = tk.Label(
+            self.button, text="▼", font=('Segoe UI', 8),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+        )
+        arrow_label.place(relx=1.0, rely=0.5, anchor='e', x=-10)
+        
+        self.menu = None
+        self.menu_visible = False
+    
+    def _toggle_menu(self):
+        if self.menu_visible:
+            self._hide_menu()
+        else:
+            self._show_menu()
+    
+    def _show_menu(self):
+        # メニューを作成
+        self.menu = tk.Toplevel(self)
+        self.menu.wm_overrideredirect(True)
+        self.menu.config(bg=COLORS['bg_card'])
+        
+        # 位置を計算
+        x = self.winfo_rootx()
+        y = self.winfo_rooty() + self.winfo_height()
+        self.menu.geometry(f"{self.winfo_width()}x+{x}+{y}")
+        
+        # 選択肢を追加
+        for value in self.values:
+            item = tk.Button(
+                self.menu, text=value, font=('Segoe UI', 10),
+                fg=COLORS['text_primary'], bg=COLORS['bg_card'],
+                relief='flat', bd=0, anchor='w', padx=10,
+                cursor='hand2',
+                command=lambda v=value: self._select(v)
+            )
+            item.pack(fill=tk.X, ipady=5)
+            
+            # ホバーエフェクト
+            def on_enter(e, btn=item):
+                btn.config(bg=COLORS['sidebar_active'])
+            def on_leave(e, btn=item):
+                btn.config(bg=COLORS['bg_card'])
+            
+            item.bind('<Enter>', on_enter)
+            item.bind('<Leave>', on_leave)
+        
+        self.menu_visible = True
+        self.menu.bind('<FocusOut>', lambda e: self._hide_menu())
+        self.menu.focus_set()
+    
+    def _hide_menu(self):
+        if self.menu:
+            self.menu.destroy()
+            self.menu = None
+        self.menu_visible = False
+    
+    def _select(self, value):
+        self.current_value.set(value)
+        self._hide_menu()
+    
+    def get(self):
+        return self.current_value.get()
+
+
 class SidebarButton(tk.Button):
     """サイドバー用ナビゲーションボタン"""
     def __init__(self, master, text, icon, command, is_active=False):
@@ -609,6 +692,13 @@ class MonthlyAggregationPage(tk.Frame):
             fg=COLORS['success'], bg=COLORS['bg_card']
         )
         
+        # 削除ボタン（ファイル選択後に表示）
+        remove_btn = tk.Label(
+            label_frame, text="×", font=('Segoe UI', 16, 'bold'),
+            fg=COLORS['danger'], bg=COLORS['bg_card'], cursor='hand2'
+        )
+        remove_btn.bind('<Button-1>', lambda e: self._remove_file(file_key, file_name_label, cloud_label, check_label, remove_btn))
+        
         # ドロップゾーン（破線ボーダー + クラウドアイコン）
         drop_zone = tk.Frame(row_frame, bg=COLORS['bg_main'], highlightthickness=2, 
                              highlightbackground=COLORS['border'], highlightcolor=COLORS['border'])
@@ -679,7 +769,8 @@ class MonthlyAggregationPage(tk.Frame):
                     self.files[file_key] = dropped_file
                     file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'])
                     cloud_label.config(text="📄", font=('Segoe UI', 24))
-                    check_label.pack(side=tk.RIGHT)
+                    check_label.pack(side=tk.RIGHT, padx=(5, 0))
+                    remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
                     self._check_can_execute()
             
             # ドロップターゲットとして登録
@@ -692,6 +783,7 @@ class MonthlyAggregationPage(tk.Frame):
         setattr(self, f'{file_key}_name_label', file_name_label)
         setattr(self, f'{file_key}_cloud_label', cloud_label)
         setattr(self, f'{file_key}_check', check_label)
+        setattr(self, f'{file_key}_remove_btn', remove_btn)
 
     def _create_period_section(self, parent):
         """期間選択セクション作成"""
@@ -729,12 +821,10 @@ class MonthlyAggregationPage(tk.Frame):
         fiscal_year = current_year if current_month >= 4 else current_year - 1
         years = [str(y) + "年度" for y in range(fiscal_year - 4, fiscal_year + 2)]
         
-        self.year_var = tk.StringVar(value=str(fiscal_year) + "年度")
-        year_combo = ttk.Combobox(
-            year_frame, textvariable=self.year_var, values=years,
-            state='readonly', font=('Segoe UI', 10)
-        )
-        year_combo.pack(fill=tk.X)
+        # カスタムドロップダウン（年度）
+        year_dropdown = ModernDropdown(year_frame, years, str(fiscal_year) + "年度")
+        year_dropdown.pack(fill=tk.X)
+        self.year_dropdown = year_dropdown
         
         # 月選択
         month_frame = tk.Frame(card, bg=COLORS['bg_card'])
@@ -745,13 +835,11 @@ class MonthlyAggregationPage(tk.Frame):
             fg=COLORS['text_secondary'], bg=COLORS['bg_card']
         ).pack(anchor='w', pady=(0, 5))
         
+        # カスタムドロップダウン（月）
         months = [str(m) + "月" for m in range(1, 13)]
-        self.month_var = tk.StringVar(value=str(current_month) + "月")
-        month_combo = ttk.Combobox(
-            month_frame, textvariable=self.month_var, values=months,
-            state='readonly', font=('Segoe UI', 10)
-        )
-        month_combo.pack(fill=tk.X)
+        month_dropdown = ModernDropdown(month_frame, months, str(current_month) + "月")
+        month_dropdown.pack(fill=tk.X)
+        self.month_dropdown = month_dropdown
         
         # 実行ボタン
         self.execute_btn = ModernButton(
@@ -782,9 +870,21 @@ class MonthlyAggregationPage(tk.Frame):
             file_name_label.config(text=Path(filename).name, fg=COLORS['accent'])
             # クラウドアイコンを小さく、色を変更
             cloud_label.config(text="📄", font=('Segoe UI', 24))
-            # チェックマーク表示
-            check_label.pack(side=tk.RIGHT)
+            # チェックマークと削除ボタン表示
+            check_label.pack(side=tk.RIGHT, padx=(5, 0))
+            remove_btn = getattr(self, f'{file_key}_remove_btn')
+            remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
             self._check_can_execute()
+    
+    def _remove_file(self, file_key, file_name_label, cloud_label, check_label, remove_btn):
+        """選択したファイルを削除"""
+        self.files[file_key] = None
+        # UI を初期状態に戻す
+        file_name_label.config(text="ファイルをドラッグ&ドロップ", fg=COLORS['text_secondary'])
+        cloud_label.config(text="☁", font=('Segoe UI', 32))
+        check_label.pack_forget()
+        remove_btn.pack_forget()
+        self._check_can_execute()
 
     def _check_can_execute(self):
         """実行ボタンの活性化チェック"""
