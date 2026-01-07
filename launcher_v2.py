@@ -120,11 +120,11 @@ class ModernButton(tk.Button):
         if 'btn_type' in cnf:
             btn_type = cnf.pop('btn_type')
             if btn_type == 'danger':
-                self.default_bg = COLORS['error']
-                self.hover_bg = COLORS['error_hover']
+                self.default_bg = COLORS['danger']
+                self.hover_bg = COLORS['danger_hover']
             elif btn_type == 'secondary':
-                self.default_bg = COLORS['secondary']
-                self.hover_bg = COLORS['secondary_hover']
+                self.default_bg = COLORS.get('secondary', '#6B7280') # Fallback if undefined
+                self.hover_bg = COLORS.get('secondary_hover', '#4B5563')
             else:
                 self.default_bg = COLORS['accent']
                 self.hover_bg = COLORS['accent_hover']
@@ -137,9 +137,9 @@ class ModernButton(tk.Button):
         # Update appearance based on state
         current_state = cnf.get('state', self['state'])
         if current_state == 'disabled':
-            super().configure(bg='#6B7280', cursor='arrow')
+            super().configure(bg='#4B5563', fg='#000000', cursor='arrow')
         else:
-            super().configure(bg=self.default_bg, cursor='hand2')
+            super().configure(bg=self.default_bg, fg='white', cursor='hand2')
     
     # configはconfigureのエイリアス
     config = configure
@@ -829,10 +829,8 @@ class ServerControlPage(tk.Frame):
         cards_frame.grid_columnconfigure(0, weight=1)
         cards_frame.grid_columnconfigure(1, weight=1)
 
-        # APIカード
-        self._create_card(cards_frame, 0, "管理APIサーバー", "🛠", True)
         # Dashboardカード
-        self._create_card(cards_frame, 1, "公開ダッシュボード", "🌐", False)
+        self._create_card(cards_frame, 0, "公開ダッシュボード", "🌐", False)
 
         # ログエリア
         log_frame = tk.Frame(container, bg=COLORS['bg_main'])
@@ -2211,7 +2209,7 @@ class MonthlyAggregationPage(tk.Frame):
             command=self._execute_aggregation,
             state='disabled'
         )
-        self.execute_btn.pack(fill=tk.X, ipady=12)
+        # self.execute_btn.pack(fill=tk.X, ipady=12)
 
     def _create_file_upload_section(self, parent):
         """ファイルアップロードセクション作成（横3つ並び）"""
@@ -2505,8 +2503,10 @@ class MonthlyAggregationPage(tk.Frame):
         """実行ボタンの活性化チェック"""
         if all(self.files.values()) and not self.is_processing:
             self.execute_btn.config(state='normal')
+            self.execute_btn.pack(fill=tk.X, ipady=12)
         else:
             self.execute_btn.config(state='disabled')
+            self.execute_btn.pack_forget()
 
     def _execute_aggregation(self):
         """集計実行"""
