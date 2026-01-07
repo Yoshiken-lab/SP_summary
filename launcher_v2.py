@@ -1008,9 +1008,10 @@ class CumulativeAggregationPage(tk.Frame):
         select_existing_btn = ModernButton(
             btn_frame, text="📂 ファイルを選択", btn_type='secondary',
             command=self._select_existing_file,
-            font=('Meiryo', 10)
+            font=('Meiryo', 10),
+            width=25  # 固定幅に変更
         )
-        select_existing_btn.pack(fill=tk.X, ipady=8)
+        select_existing_btn.pack(side=tk.LEFT)
         
         # 選択されたファイル表示
         self.existing_file_label = tk.Label(
@@ -1025,9 +1026,10 @@ class CumulativeAggregationPage(tk.Frame):
             self.control_section_frame, text="累積集計を実行", btn_type='primary',
             font=('Meiryo', 12),
             command=self._execute_cumulative,
-            state='disabled'
+            state='disabled',
+            width=30  # 固定幅に変更
         )
-        self.execute_btn.pack(fill=tk.X, ipady=12)
+        self.execute_btn.pack(anchor='w')
     
     def _select_existing_file(self):
         """既存ファイル選択ダイアログ"""
