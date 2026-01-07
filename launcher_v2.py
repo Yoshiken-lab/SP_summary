@@ -17,6 +17,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from pathlib import Path
 from datetime import datetime
 import ctypes
+import requests
 
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
@@ -980,8 +981,174 @@ class MonthlyAggregationPage(tk.Frame):
 
     def _execute_aggregation(self):
         """集計実行"""
-        # TODO: 次のステップで実装
-        messagebox.showinfo("開発中", "集計機能は次のステップで実装します")
+        if not all(self.files.values()) or self.is_processing:
+            return
+        
+        # 処理中フラグ
+        self.is_processing = True
+        self.execute_btn.config(state='disabled')
+        
+        # スレッドで実行（UIをブロックしないため）
+        thread = threading.Thread(target=self._run_aggregation_process)
+        thread.daemon = True
+        thread.start()
+    
+    def _run_aggregation_process(self):
+        """集計処理の実行（別スレッド）"""
+        try:
+            # STEP 1: ファイルアップロード
+            session_id = self._upload_files()
+            if not session_id:
+                return
+            
+            # STEP 2: 集計実行
+            result = self._run_aggregation(session_id)
+            if result:
+                # 成功時は結果ダイアログを表示
+                self.after(0, lambda: self._show_result_dialog(result.get('total_sales', 0)))
+        
+        except Exception as e:
+            # エラーダイアログを表示
+            error_msg = str(e)
+            self.after(0, lambda: self._show_error_dialog(error_msg))
+        
+        finally:
+            # 処理完了フラグ
+            self.is_processing = False
+            self.after(0, lambda: self.execute_btn.config(state='normal' if all(self.files.values()) else 'disabled'))
+    
+    def _upload_files(self):
+        """ファイルアップロード処理"""
+        try:
+            # APIエンドポイント（ローカル）
+            url = 'http://localhost:8080/api/upload'
+            
+            # ファイルを開く
+            files_data = {
+                'sales_file': open(self.files['sales'], 'rb'),
+                'accounts_file': open(self.files['accounts'], 'rb'),
+                'master_file': open(self.files['master'], 'rb')
+            }
+            
+            # POSTリクエスト送信
+            response = requests.post(url, files=files_data, timeout=30)
+            
+            # ファイルを閉じる
+            for f in files_data.values():
+                f.close()
+            
+            # レスポンス確認
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    return data.get('session_id')
+                else:
+                    raise Exception(data.get('message', 'アップロードに失敗しました'))
+            else:
+                raise Exception(f'サーバーエラー: {response.status_code}')
+        
+        except requests.exceptions.ConnectionError:
+            self.after(0, lambda: self._show_error_dialog('APIサーバーに接続できません。\nサーバーが起動しているか確認してください。'))
+            return None
+        except Exception as e:
+            error_msg = f'ファイルアップロード中にエラーが発生しました:\n{str(e)}'
+            self.after(0, lambda: self._show_error_dialog(error_msg))
+            return None
+    
+    def _run_aggregation(self, session_id):
+        """集計実行処理"""
+        try:
+            # APIエンドポイント
+            url = 'http://localhost:8080/api/aggregate'
+            
+            # 年度・月を抽出（"2025年度" → 2025, "1月" → 1）
+            year_str = self.year_var.get()
+            month_str = self.month_var.get()
+            
+            fiscal_year = int(year_str.replace('年度', ''))
+            month = int(month_str.replace('月', ''))
+            
+            # POSTリクエスト送信
+            payload = {
+                'session_id': session_id,
+                'fiscal_year': fiscal_year,
+                'month': month
+            }
+            
+            response = requests.post(url, json=payload, timeout=60)
+            
+            # レスポンス確認
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    return data.get('summary', {})
+                elif data.get('error_type') == 'master_mismatch':
+                    # マスタ不一致エラー
+                    schools = data.get('unmatched_schools', [])
+                    self.after(0, lambda: self._show_master_mismatch_dialog(schools))
+                    return None
+                else:
+                    raise Exception(data.get('message', '集計に失敗しました'))
+            else:
+                raise Exception(f'サーバーエラー: {response.status_code}')
+        
+        except Exception as e:
+            error_msg = f'集計処理中にエラーが発生しました:\n{str(e)}'
+            self.after(0, lambda: self._show_error_dialog(error_msg))
+            return None
+    
+    def _show_result_dialog(self, total_sales):
+        """集計完了ダイアログを表示"""
+        # 総売上をフォーマット
+        sales_str = f'¥{int(total_sales):,}'
+        
+        result = messagebox.showinfo(
+            '月次集計完了',
+            f'集計が完了しました！\n\n総売上: {sales_str}',
+            parent=self
+        )
+        
+        # ダイアログを閉じたらフォームをリセット
+        if result:
+            self._reset_form()
+    
+    def _show_master_mismatch_dialog(self, schools):
+        """マスタ不一致エラーダイアログを表示"""
+        schools_list = '\n'.join([f'  • {school}' for school in schools])
+        
+        messagebox.showerror(
+            '担当者マスタ不一致',
+            f'以下の学校が担当者マスタ（XLSX）に登録されていません。\n'
+            f'マスタを更新してから、再度集計を実行してください。\n\n'
+            f'{schools_list}',
+            parent=self
+        )
+        
+        # エラー後はフォームをリセット
+        self._reset_form()
+    
+    def _show_error_dialog(self, message):
+        """エラーダイアログを表示"""
+        messagebox.showerror('エラー', message, parent=self)
+    
+    def _reset_form(self):
+        """フォームをリセット"""
+        # ファイル選択をクリア
+        for file_key in ['sales', 'accounts', 'master']:
+            if self.files[file_key]:
+                self.files[file_key] = None
+                
+                # UIをリセット
+                name_label = getattr(self, f'{file_key}_name_label')
+                cloud_label = getattr(self, f'{file_key}_cloud_label')
+                remove_btn = getattr(self, f'{file_key}_remove_btn')
+                
+                name_label.config(text="ドラッグ&ドロップ", fg=COLORS['text_secondary'], font=('Segoe UI', 12))
+                cloud_label.config(text="☁", font=('Segoe UI', 28))
+                remove_btn.pack_forget()
+        
+        # ボタンを無効化
+        self.execute_btn.config(state='disabled')
 
 
 def main():
