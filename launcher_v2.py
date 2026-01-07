@@ -1384,9 +1384,9 @@ class CumulativeAggregationPage(tk.Frame):
         
         # 右側のカラムから順に配置 (pack side=RIGHT) - Frameで幅固定
         
-        # 操作カラム（80px固定）
-        action_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=80)
-        action_col.pack(side=tk.RIGHT, padx=(5, 0))
+        # 操作カラム（80px固定）スクロールバー分の余白(20px)を確保
+        action_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=80, height=30)
+        action_col.pack(side=tk.RIGHT, padx=(5, 20))
         action_col.pack_propagate(False)
         
         tk.Label(
@@ -1395,7 +1395,7 @@ class CumulativeAggregationPage(tk.Frame):
         ).pack(expand=True, fill=tk.BOTH)
         
         # 対象月カラム（100px固定）
-        month_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=100)
+        month_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=100, height=30)
         month_col.pack(side=tk.RIGHT, padx=(5, 5))
         month_col.pack_propagate(False)
         
@@ -1405,7 +1405,7 @@ class CumulativeAggregationPage(tk.Frame):
         ).pack(expand=True, fill=tk.BOTH)
         
         # 対象年カラム（120px固定）
-        year_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=120)
+        year_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=120, height=30)
         year_col.pack(side=tk.RIGHT, padx=(10, 5))
         year_col.pack_propagate(False)
         
