@@ -278,6 +278,10 @@ class ModernDialog(tk.Toplevel):
         self.attributes('-alpha', 0.0)
         self._fade_in()
         
+        # 最前面へ
+        self.lift()
+        self.focus_force()
+        
     def _center_window(self, parent):
         self.update_idletasks()
         width = self.winfo_width()
@@ -1338,8 +1342,13 @@ class MonthlyAggregationPage(tk.Frame):
             fg=COLORS['text_secondary'], bg=COLORS['bg_card'], justify='center'
         ).pack()
         
+        
         self.progress_window.transient(self)
         self.progress_window.grab_set()
+        
+        # 最前面へ
+        self.progress_window.lift()
+        self.progress_window.focus_force()
     
     def _hide_progress_modal(self):
         """集計中モーダルを閉じる"""
