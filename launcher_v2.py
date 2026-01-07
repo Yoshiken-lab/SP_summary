@@ -945,9 +945,8 @@ class CumulativeAggregationPage(tk.Frame):
             arrowcolor=COLORS['text_secondary'],
             relief='flat')
             
-        # Canvasとスクロールバーを作成
+        # Canvasを作成（スクロールバーなし）
         canvas = tk.Canvas(container, bg=COLORS['bg_main'], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview, style="Dark.Vertical.TScrollbar")
         
         # スクロール可能なフレーム
         self.content_area = tk.Frame(canvas, bg=COLORS['bg_main'])
@@ -963,10 +962,8 @@ class CumulativeAggregationPage(tk.Frame):
         
         canvas_window = canvas.create_window((0, 0), window=self.content_area, anchor="nw")
         canvas.bind('<Configure>', on_canvas_configure)
-        canvas.configure(yscrollcommand=scrollbar.set)
         
         canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
         
         # マウスホイールでスクロール（ページ固有のイベント）
         self.canvas = canvas
@@ -1384,9 +1381,9 @@ class CumulativeAggregationPage(tk.Frame):
         
         # 右側のカラムから順に配置 (pack side=RIGHT) - Frameで幅固定
         
-        # 操作カラム（80px固定）スクロールバー分の余白(20px)を確保
+        # 操作カラム（80px固定）スクロールバー削除に伴い余白調整
         action_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=80, height=30)
-        action_col.pack(side=tk.RIGHT, padx=(5, 20))
+        action_col.pack(side=tk.RIGHT, padx=(5, 0)) # 右余白を0に戻す
         action_col.pack_propagate(False)
         
         tk.Label(
@@ -1425,19 +1422,21 @@ class CumulativeAggregationPage(tk.Frame):
         list_container.pack(fill=tk.BOTH, expand=True)
         
         canvas = tk.Canvas(list_container, bg=COLORS['bg_card'], highlightthickness=0, height=200)
-        scrollbar = ttk.Scrollbar(list_container, orient="vertical", command=canvas.yview, style="Dark.Vertical.TScrollbar")
         scrollable_frame = tk.Frame(canvas, bg=COLORS['bg_card'])
         
+        # Canvasのサイズ変更時に内部フレームの幅を更新して同期させる
+        def on_list_canvas_configure(event):
+            canvas.itemconfig(list_window, width=event.width)
+            
         scrollable_frame.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
         
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        list_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.bind('<Configure>', on_list_canvas_configure)
         
         canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
         
         # 各ファイル行を作成
         for i, file_info in enumerate(self.cumulative_files):
