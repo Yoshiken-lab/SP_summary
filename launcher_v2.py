@@ -287,14 +287,14 @@ class ModernDialog(tk.Toplevel):
         width = self.winfo_width()
         height = self.winfo_height()
         
-        # 最小サイズ保証
-        width = max(width, 400)
-        height = max(height, 200)
+        # 固定サイズ（幅500px）
+        target_width = 500
+        target_height = max(height, 220)
         
-        x = parent.winfo_rootx() + (parent.winfo_width() // 2) - (width // 2)
-        y = parent.winfo_rooty() + (parent.winfo_height() // 2) - (height // 2)
+        x = parent.winfo_rootx() + (parent.winfo_width() // 2) - (target_width // 2)
+        y = parent.winfo_rooty() + (parent.winfo_height() // 2) - (target_height // 2)
         
-        self.geometry(f"{width}x{height}+{x}+{y}")
+        self.geometry(f"{target_width}x{target_height}+{x}+{y}")
 
     def _fade_in(self):
         """フェードインアニメーション"""
@@ -373,7 +373,7 @@ class ModernDialog(tk.Toplevel):
         tk.Label(
             msg_frame, text=message, font=('Segoe UI', 11),
             fg=COLORS['text_primary'], bg=COLORS['bg_card'],
-            justify='left', wraplength=300
+            justify='left', wraplength=380
         ).pack(anchor='w', pady=(5, 0))
         
         if detail:
@@ -389,7 +389,7 @@ class ModernDialog(tk.Toplevel):
             detail_label = tk.Label(
                 detail_frame, text=detail, font=('Consolas', 9) if is_path else ('Segoe UI', 9),
                 fg=fg_color, bg=detail_bg,
-                justify='left', wraplength=280, cursor=cursor
+                justify='left', wraplength=360, cursor=cursor
             )
             detail_label.pack(anchor='w')
             
@@ -1304,7 +1304,7 @@ class MonthlyAggregationPage(tk.Frame):
         """集計中モーダルを表示（カスタムデザイン）"""
         self.progress_window = tk.Toplevel(self)
         self.progress_window.title("月次集計")
-        self.progress_window.geometry("400x200")
+        self.progress_window.geometry("550x250")
         self.progress_window.overrideredirect(True)
         self.progress_window.config(bg=COLORS['bg_card'])
         self.progress_window.attributes('-topmost', True)
@@ -1318,8 +1318,8 @@ class MonthlyAggregationPage(tk.Frame):
         
         # 中央に配置
         self.progress_window.update_idletasks()
-        x = (self.progress_window.winfo_screenwidth() // 2) - 200
-        y = (self.progress_window.winfo_screenheight() // 2) - 100
+        x = (self.progress_window.winfo_screenwidth() // 2) - 275
+        y = (self.progress_window.winfo_screenheight() // 2) - 125
         self.progress_window.geometry(f"+{x}+{y}")
         
         # コンテンツ
@@ -1339,7 +1339,8 @@ class MonthlyAggregationPage(tk.Frame):
         
         tk.Label(
             frame, text="この処理には時間がかかる場合があります\nしばらくお待ちください", font=('Segoe UI', 10),
-            fg=COLORS['text_secondary'], bg=COLORS['bg_card'], justify='center'
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card'], justify='center',
+            wraplength=480
         ).pack()
         
         
