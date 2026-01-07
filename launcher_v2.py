@@ -17,6 +17,7 @@ from tkinter import ttk, messagebox, scrolledtext, filedialog
 from pathlib import Path
 from datetime import datetime
 import ctypes
+import shutil
 from importer_v2 import import_excel_v2
 from dashboard_v2 import generate_dashboard
 
@@ -1878,7 +1879,19 @@ class PerformanceReflectionPage(tk.Frame):
             # ダッシュボード更新
             if success_count > 0:
                 self._update_progress("ダッシュボードを更新中...")
-                generate_dashboard()
+                
+                # 公開用ディレクトリに出力
+                public_dir = APP_DIR / 'public_dashboards'
+                public_dir.mkdir(exist_ok=True, parents=True) # ディレクトリがない場合は作成
+                
+                # 生成実行
+                output_path = generate_dashboard(output_dir=public_dir)
+                
+                # index.htmlとしてコピー（アクセスしやすくするため）
+                try:
+                    shutil.copy(output_path, public_dir / 'index.html')
+                except Exception as e:
+                    print(f"index.html creation failed: {e}")
                 
             # 完了処理
             self.after(0, lambda: self._handle_completion(success_count, total_files, error_details))
