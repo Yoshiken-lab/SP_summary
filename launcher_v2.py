@@ -1645,52 +1645,44 @@ class PerformanceReflectionPage(tk.Frame):
         ).pack(anchor='w', pady=(5, 0))
 
     def _create_main_layout(self):
-        """メインレイアウト作成 (左右2カラム 4:6)"""
-        # メインコンテナ (スクロールなし)
-        # グリッドレイアウトを使用して比率制御
+        """メインレイアウト作成 (左右2カラム 5:5)"""
+        # メインコンテナ
         main_container = tk.Frame(self, bg=COLORS['bg_main'])
         main_container.pack(fill=tk.BOTH, expand=True, padx=30, pady=20)
         
-        # グリッド設定 (4:6)
-        main_container.grid_columnconfigure(0, weight=4)
-        main_container.grid_columnconfigure(1, weight=6)
+        # グリッド設定 (5:5) - 左側のコンテンツが増えるため少し広げる
+        main_container.grid_columnconfigure(0, weight=1)
+        main_container.grid_columnconfigure(1, weight=1)
         main_container.grid_rowconfigure(0, weight=1)
         
-        # 左カラム (40%)
+        # 左カラム
         left_col = tk.Frame(main_container, bg=COLORS['bg_main'])
         left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 20))
         
-        # 右カラム (60%)
+        # 右カラム
         right_col = tk.Frame(main_container, bg=COLORS['bg_main'])
         right_col.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
         
         # コンテンツ配置
-        self._create_file_selection_area(left_col)
+        self._create_left_panel(left_col)
         self._create_right_panel(right_col)
 
-    def _create_file_selection_area(self, parent):
-        """STEP 1: ファイル選択 (左カラム)"""
-        # 親フレームのサイズに合わせて広げる
-        step_frame = tk.Frame(parent, bg=COLORS['bg_main'])
-        step_frame.pack(fill=tk.X, expand=False, anchor='n')
-        
+    def _create_left_panel(self, parent):
+        """左パネル (ファイル選択 + 実行)"""
+        # タイトル: 売上報告書ファイルを取り込む
         tk.Label(
-            step_frame, text="STEP 1", font=('Meiryo', 11, 'bold'),
-            fg=COLORS['accent'], bg=COLORS['bg_main']
-        ).pack(anchor='w')
-        
-        tk.Label(
-            step_frame, text="売上報告書ファイルを取り込む", font=('Meiryo', 12, 'bold'),
+            parent, text="売上報告書ファイルを取り込む", font=('Meiryo', 12, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_main']
         ).pack(anchor='w', pady=(0, 10))
         
         # ドロップゾーン
         self.drop_zone = tk.Frame(
-            step_frame, bg=COLORS['bg_card'],
+            parent, bg=COLORS['bg_card'],
             highlightbackground=COLORS['border'], highlightthickness=1
         )
         self.drop_zone.pack(fill=tk.X, expand=False, ipady=20)
         
+        # ... (DnD setup omitted as it's handled by update) ...
         # ホバーエフェクト
         def on_enter(e):
             self.drop_zone.config(highlightbackground=COLORS['accent'])
@@ -1726,36 +1718,26 @@ class PerformanceReflectionPage(tk.Frame):
         ).pack()
         
         # ファイルリスト表示エリア
-        self.file_list_frame = tk.Frame(step_frame, bg=COLORS['bg_main'])
-        self.file_list_frame.pack(fill=tk.X, pady=(15, 0))
+        self.file_list_frame = tk.Frame(parent, bg=COLORS['bg_main'])
+        self.file_list_frame.pack(fill=tk.X, pady=(15, 20)) # 下に余白追加
+
+        # 実績反映を実行ボタン (左カラム最下部配置)
+        self._create_execution_panel(parent)
 
     def _create_right_panel(self, parent):
-        """右カラム (コントロール & ステータス)"""
-        # STEP 2: 実行コントロール
-        self._create_execution_panel(parent)
-        
-        # スペーサー
-        tk.Frame(parent, bg=COLORS['bg_main'], height=30).pack()
-        
+        """右パネル (ステータス)"""
         # 公開ステータスパネル
         self._create_status_panel(parent)
         
     def _create_execution_panel(self, parent):
-        """STEP 2: 実行ボタン"""
-        step_frame = tk.Frame(parent, bg=COLORS['bg_main'])
-        step_frame.pack(fill=tk.X)
-        
+        """実行ボタン配置"""
+        # タイトル: 実績反映を実行
         tk.Label(
-            step_frame, text="STEP 2", font=('Meiryo', 11, 'bold'),
-            fg=COLORS['accent'], bg=COLORS['bg_main']
-        ).pack(anchor='w')
-        
-        tk.Label(
-            step_frame, text="実績反映を実行", font=('Meiryo', 12, 'bold'),
+            parent, text="実績反映を実行", font=('Meiryo', 12, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_main']
         ).pack(anchor='w', pady=(0, 10))
         
-        self.execute_btn_frame = tk.Frame(step_frame, bg=COLORS['bg_main'])
+        self.execute_btn_frame = tk.Frame(parent, bg=COLORS['bg_main'])
         self.execute_btn_frame.pack(fill=tk.X, pady=(5, 0))
         
         self.execute_btn = ModernButton(
@@ -1797,6 +1779,13 @@ class PerformanceReflectionPage(tk.Frame):
         )
         self.status_text.pack(side=tk.LEFT)
         
+        # 最終更新日時
+        self.last_updated_label = tk.Label(
+            status_row, text="最終更新: --", font=('Meiryo', 9),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        )
+        self.last_updated_label.pack(side=tk.RIGHT)
+
         # URL表示部
         self.url_frame = tk.Frame(self.status_card, bg=COLORS['bg_main'], padx=10, pady=8)
         self.url_frame.pack(fill=tk.X, pady=(0, 15))
@@ -1836,6 +1825,20 @@ class PerformanceReflectionPage(tk.Frame):
             ip = self.server_manager.get_local_ip()
             url = f"http://{ip}:{port}"
             
+            # 最終更新日時の取得
+            last_updated = "未作成"
+            try:
+                index_path = self.server_manager.dashboard_dir / "index.html"
+                if index_path.exists():
+                    mtime = index_path.stat().st_mtime
+                    from datetime import datetime
+                    dt = datetime.fromtimestamp(mtime)
+                    last_updated = f"最終作成: {dt.strftime('%Y/%m/%d %H:%M')}"
+            except Exception:
+                pass
+            
+            self.last_updated_label.config(text=last_updated)
+
             if is_running:
                 self.status_indicator.config(fg='#10b981') # Green
                 self.status_text.config(text="公開中", fg='#10b981')
