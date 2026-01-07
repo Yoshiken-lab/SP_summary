@@ -682,13 +682,13 @@ class MonthlyAggregationPage(tk.Frame):
         header_frame.pack(fill=tk.X, pady=(0, 20))
         
         step_badge = tk.Label(
-            header_frame, text="STEP 1", font=('Consolas', 8, 'bold'),
+            header_frame, text="STEP 1", font=('Consolas', 9, 'bold'),
             fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
         )
         step_badge.pack(side=tk.LEFT, padx=(0, 10))
         
         tk.Label(
-            header_frame, text="ファイル選択", font=('Segoe UI', 11, 'bold'),
+            header_frame, text="ファイル選択", font=('Segoe UI', 12, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
@@ -726,13 +726,13 @@ class MonthlyAggregationPage(tk.Frame):
         ).pack(side=tk.LEFT, padx=(0, 5))
         
         tk.Label(
-            label_frame, text=label_text, font=('Segoe UI', 9, 'bold'),
+            label_frame, text=label_text, font=('Segoe UI', 10, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
         # 削除ボタン（ファイル選択後に表示）
         remove_btn = tk.Label(
-            label_frame, text="削除", font=('Segoe UI', 8, 'bold'),
+            label_frame, text="削除", font=('Segoe UI', 9),
             fg='white', bg='#991B1B', cursor='hand2', padx=6, pady=2
         )
         remove_btn.bind('<Button-1>', lambda e: self._remove_file(file_key, file_name_label, cloud_label, remove_btn))
@@ -756,7 +756,7 @@ class MonthlyAggregationPage(tk.Frame):
         # プレースホルダーテキスト / ファイル名
         file_name_label = tk.Label(
             content_frame, text="ドラッグ&ドロップ",
-            font=('Segoe UI', 8), fg=COLORS['text_secondary'],
+            font=('Segoe UI', 16), fg=COLORS['text_secondary'],
             bg=COLORS['bg_main'], wraplength=150
         )
         file_name_label.pack()
@@ -805,7 +805,7 @@ class MonthlyAggregationPage(tk.Frame):
                     
                     # ファイルを設定
                     self.files[file_key] = dropped_file
-                    file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'])
+                    file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'], font=('Segoe UI', 16))
                     cloud_label.config(text="📄", font=('Segoe UI', 20))
                     remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
                     self._check_can_execute()
@@ -832,13 +832,13 @@ class MonthlyAggregationPage(tk.Frame):
         header_frame.pack(fill=tk.X, pady=(0, 20))
         
         step_badge = tk.Label(
-            header_frame, text="STEP 2", font=('Consolas', 8, 'bold'),
+            header_frame, text="STEP 2", font=('Consolas', 9, 'bold'),
             fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
         )
         step_badge.pack(side=tk.LEFT, padx=(0, 10))
         
         tk.Label(
-            header_frame, text="対象期間", font=('Segoe UI', 11, 'bold'),
+            header_frame, text="対象期間", font=('Segoe UI', 12, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
@@ -896,7 +896,7 @@ class MonthlyAggregationPage(tk.Frame):
         if filename:
             self.files[file_key] = filename
             # ファイル名のみ表示
-            file_name_label.config(text=Path(filename).name, fg=COLORS['accent'])
+            file_name_label.config(text=Path(filename).name, fg=COLORS['accent'], font=('Segoe UI', 16))
             # クラウドアイコンを小さく、色を変更
             cloud_label.config(text="📄", font=('Segoe UI', 20))
             # 削除ボタン表示
