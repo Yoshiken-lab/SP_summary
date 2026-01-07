@@ -18,6 +18,13 @@ from pathlib import Path
 from datetime import datetime
 import ctypes
 
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    TKDND_AVAILABLE = True
+except ImportError:
+    TKDND_AVAILABLE = False
+    TkinterDnD = None
+
 # パス設定
 BASE_DIR = Path(__file__).parent
 APP_DIR = BASE_DIR / 'app'
@@ -154,7 +161,12 @@ class SidebarButton(tk.Button):
 
 class MainApp:
     def __init__(self):
-        self.root = tk.Tk()
+        # tkinterdnd2が利用可能ならDnD対応版を使用
+        if TKDND_AVAILABLE:
+            self.root = TkinterDnD.Tk()
+        else:
+            self.root = tk.Tk()
+        
         self.root.title('SP ADMIN PRO - スクールフォト売上管理')
         self.root.geometry('1000x700')
         self.root.configure(bg=COLORS['bg_main'])
@@ -647,6 +659,34 @@ class MonthlyAggregationPage(tk.Frame):
         drop_zone.bind('<Leave>', on_leave)
         content_frame.bind('<Enter>', on_enter)
         content_frame.bind('<Leave>', on_leave)
+        
+        # ドラッグ&ドロップの登録（tkinterdnd2が利用可能な場合）
+        if TKDND_AVAILABLE:
+            def on_drop(event):
+                # ドロップされたファイルパスを取得
+                files = self.winfo_toplevel().tk.splitlist(event.data)
+                if files:
+                    dropped_file = files[0]  # 最初のファイルのみ使用
+                    # ファイル形式チェック
+                    if file_filter == "*.csv" and not dropped_file.lower().endswith('.csv'):
+                        messagebox.showerror("エラー", "CSVファイルを選択してください")
+                        return
+                    elif file_filter == "*.xlsx" and not dropped_file.lower().endswith('.xlsx'):
+                        messagebox.showerror("エラー", "Excelファイル(.xlsx)を選択してください")
+                        return
+                    
+                    # ファイルを設定
+                    self.files[file_key] = dropped_file
+                    file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'])
+                    cloud_label.config(text="📄", font=('Segoe UI', 24))
+                    check_label.pack(side=tk.RIGHT)
+                    self._check_can_execute()
+            
+            # ドロップターゲットとして登録
+            drop_zone.drop_target_register(DND_FILES)
+            drop_zone.dnd_bind('<<Drop>>', on_drop)
+            content_frame.drop_target_register(DND_FILES)
+            content_frame.dnd_bind('<<Drop>>', on_drop)
         
         # 参照を保存
         setattr(self, f'{file_key}_name_label', file_name_label)
