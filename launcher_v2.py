@@ -965,12 +965,12 @@ class CumulativeAggregationPage(tk.Frame):
         
         canvas.pack(side="left", fill="both", expand=True)
         
-        # マウスホイールでスクロール（ページ固有のイベント）
+        # マウスホイールイベントはファイルリストなどの個別要素に任せるため、全体スクロールは無効化
         self.canvas = canvas
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        self.bind('<Enter>', lambda e: canvas.bind_all("<MouseWheel>", on_mousewheel))
-        self.bind('<Leave>', lambda e: canvas.unbind_all("<MouseWheel>"))
+        # def on_mousewheel(event):
+        #     canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        # self.bind('<Enter>', lambda e: canvas.bind_all("<MouseWheel>", on_mousewheel))
+        # self.bind('<Leave>', lambda e: canvas.unbind_all("<MouseWheel>"))
         
         # STEP 1: ファイル追加
         self._create_file_drop_section()
@@ -1437,6 +1437,14 @@ class CumulativeAggregationPage(tk.Frame):
         canvas.bind('<Configure>', on_list_canvas_configure)
         
         canvas.pack(side="left", fill="both", expand=True)
+        
+        # ファイルリストのマウスホイールスクロール
+        def on_list_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            
+        # Canvas上にマウスがある時だけスクロール有効化
+        canvas.bind('<Enter>', lambda e: canvas.bind_all("<MouseWheel>", on_list_mousewheel))
+        canvas.bind('<Leave>', lambda e: canvas.unbind_all("<MouseWheel>"))
         
         # 各ファイル行を作成
         for i, file_info in enumerate(self.cumulative_files):
