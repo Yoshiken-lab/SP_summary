@@ -154,14 +154,27 @@ class ModernDropdown(tk.Frame):
         # 位置を計算
         x = self.winfo_rootx()
         y = self.winfo_rooty() + self.winfo_height()
-        # メニューの高さを計算（各アイテムx30px程度）
-        menu_height = min(len(self.values) * 30, 300)
+        # メニューの高さを計算（各アイテムx30px程度、最大300px）
+        menu_height = min(len(self.values) * 35, 300)
         self.menu.geometry(f"{self.winfo_width()}x{menu_height}+{x}+{y}")
+        
+        # スクロール可能なキャンバス
+        canvas = tk.Canvas(self.menu, bg=COLORS['bg_card'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.menu, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=COLORS['bg_card'])
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
         
         # 選択肢を追加
         for value in self.values:
             item = tk.Button(
-                self.menu, text=value, font=('Segoe UI', 10),
+                scrollable_frame, text=value, font=('Segoe UI', 10),
                 fg=COLORS['text_primary'], bg=COLORS['bg_card'],
                 relief='flat', bd=0, anchor='w', padx=10,
                 cursor='hand2',
@@ -177,6 +190,11 @@ class ModernDropdown(tk.Frame):
             
             item.bind('<Enter>', on_enter)
             item.bind('<Leave>', on_leave)
+        
+        # キャンバスとスクロールバーを配置
+        canvas.pack(side="left", fill="both", expand=True)
+        if len(self.values) * 35 > 300:  # スクロールが必要な場合のみ表示
+            scrollbar.pack(side="right", fill="y")
         
         self.menu_visible = True
         self.menu.bind('<FocusOut>', lambda e: self._hide_menu())
@@ -627,27 +645,41 @@ class MonthlyAggregationPage(tk.Frame):
         ).pack(anchor='w', pady=(5, 0))
 
     def _create_main_layout(self):
-        """メインレイアウト作成"""
-        container = tk.Frame(self, bg=COLORS['bg_main'])
-        container.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
+        """メインレイアウト作成（縦並び）"""
+        # スクロール可能なコンテナ
+        main_container = tk.Frame(self, bg=COLORS['bg_main'])
+        main_container.pack(fill=tk.BOTH, expand=True)
         
-        # 左右2カラムレイアウト
-        # 左側: ファイル選択（60%）
-        left_frame = tk.Frame(container, bg=COLORS['bg_main'])
-        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 15))
+        # コンテンツエリア（上部）
+        content_area = tk.Frame(main_container, bg=COLORS['bg_main'])
+        content_area.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 20))
         
-        # 右側: 期間選択 + 実行（40%）
-        right_frame = tk.Frame(container, bg=COLORS['bg_main'])
-        right_frame.pack(side=tk.LEFT, fill=tk.Y, ipadx=150)
+        # STEP 1: ファイル選択（横3つ並び）
+        self._create_file_upload_section(content_area)
         
-        self._create_file_upload_section(left_frame)
-        self._create_period_section(right_frame)
+        # STEP 2: 期間選択
+        self._create_period_section(content_area)
+        
+        # 実行ボタン（右下固定）
+        button_container = tk.Frame(main_container, bg=COLORS['bg_main'])
+        button_container.pack(side=tk.BOTTOM, fill=tk.X, padx=30, pady=(0, 30))
+        
+        self.execute_btn = ModernButton(
+            button_container, text="集計を実行", btn_type='primary',
+            command=self._execute_aggregation,
+            state='disabled'
+        )
+        self.execute_btn.pack(side=tk.RIGHT, ipadx=30, ipady=10)
 
     def _create_file_upload_section(self, parent):
-        """ファイルアップロードセクション作成"""
+        """ファイルアップロードセクション作成（横3つ並び）"""
+        # カード全体
+        card = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=20)
+        card.pack(fill=tk.X, pady=(0, 20))
+        
         # STEP 1ヘッダー
-        header_frame = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=15)
-        header_frame.pack(fill=tk.X)
+        header_frame = tk.Frame(card, bg=COLORS['bg_card'])
+        header_frame.pack(fill=tk.X, pady=(0, 20))
         
         step_badge = tk.Label(
             header_frame, text="STEP 1", font=('Consolas', 8, 'bold'),
@@ -660,74 +692,78 @@ class MonthlyAggregationPage(tk.Frame):
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
-        # ファイル選択エリア
-        files_container = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=20)
-        files_container.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
+        # ファイル選択エリア（横3つグリッド配置）
+        files_grid = tk.Frame(card, bg=COLORS['bg_card'])
+        files_grid.pack(fill=tk.X)
         
-        # 3つのファイル選択UI
-        self._create_file_select_row(files_container, "売上データ (CSV)", "📊", "sales", "*.csv")
-        self._create_file_select_row(files_container, "会員データ (CSV)", "👥", "accounts", "*.csv")
-        self._create_file_select_row(files_container, "担当者マスタ (XLSX)", "📋", "master", "*.xlsx")
+        # グリッド設定（3列）
+        files_grid.columnconfigure(0, weight=1)
+        files_grid.columnconfigure(1, weight=1)
+        files_grid.columnconfigure(2, weight=1)
+        
+        # 3つのファイル選択UI（横並び）
+        files_data = [
+            ("売上データ (CSV)", "📊", "sales", "*.csv", 0),
+            ("会員データ (CSV)", "👥", "accounts", "*.csv", 1),
+            ("担当者マスタ (XLSX)", "📋", "master", "*.xlsx", 2)
+        ]
+        
+        for label_text, icon, file_key, file_filter, col in files_data:
+            self._create_file_select_col(files_grid, label_text, icon, file_key, file_filter, col)
 
-    def _create_file_select_row(self, parent, label_text, icon, file_key, file_filter):
-        """ファイル選択行を作成（ドロップゾーンスタイル）"""
-        row_frame = tk.Frame(parent, bg=COLORS['bg_card'])
-        row_frame.pack(fill=tk.X, pady=(0, 20))
+    def _create_file_select_col(self, parent, label_text, icon, file_key, file_filter, col):
+        """ファイル選択カラムを作成（グリッド用）"""
+        col_frame = tk.Frame(parent, bg=COLORS['bg_card'])
+        col_frame.grid(row=0, column=col, padx=10, sticky='nsew')
         
         # ラベル + アイコン
-        label_frame = tk.Frame(row_frame, bg=COLORS['bg_card'])
+        label_frame = tk.Frame(col_frame, bg=COLORS['bg_card'])
         label_frame.pack(fill=tk.X, pady=(0, 10))
         
         tk.Label(
-            label_frame, text=icon, font=('Segoe UI', 14),
+            label_frame, text=icon, font=('Segoe UI', 12),
             bg=COLORS['bg_card']
-        ).pack(side=tk.LEFT, padx=(0, 8))
+        ).pack(side=tk.LEFT, padx=(0, 5))
         
         tk.Label(
-            label_frame, text=label_text, font=('Segoe UI', 10, 'bold'),
+            label_frame, text=label_text, font=('Segoe UI', 9, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
-        # チェックマーク（選択済みの場合）
-        check_label = tk.Label(
-            label_frame, text="✓", font=('Segoe UI', 12, 'bold'),
-            fg=COLORS['success'], bg=COLORS['bg_card']
-        )
-        
         # 削除ボタン（ファイル選択後に表示）
         remove_btn = tk.Label(
-            label_frame, text="削除", font=('Segoe UI', 9, 'bold'),
-            fg=COLORS['danger'], bg=COLORS['bg_card'], cursor='hand2', padx=8, pady=2
+            label_frame, text="削除", font=('Segoe UI', 8, 'bold'),
+            fg='white', bg='#991B1B', cursor='hand2', padx=6, pady=2
         )
         remove_btn.bind('<Button-1>', lambda e: self._remove_file(file_key, file_name_label, cloud_label, remove_btn))
         
         # ドロップゾーン（破線ボーダー + クラウドアイコン）
-        drop_zone = tk.Frame(row_frame, bg=COLORS['bg_main'], highlightthickness=2, 
+        drop_zone = tk.Frame(col_frame, bg=COLORS['bg_main'], highlightthickness=2, 
                              highlightbackground=COLORS['border'], highlightcolor=COLORS['border'])
-        drop_zone.pack(fill=tk.X, ipady=30)
+        drop_zone.pack(fill=tk.BOTH, expand=True, ipady=40)
         
-        # 内部コンテンツフレーム（クリック可能にするため）
+        # 内部コンテンツフレーム
         content_frame = tk.Frame(drop_zone, bg=COLORS['bg_main'], cursor='hand2')
-        content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=20)
         
         # クラウドアイコン
         cloud_label = tk.Label(
-            content_frame, text="☁", font=('Segoe UI', 32),
+            content_frame, text="☁", font=('Segoe UI', 28),
             fg=COLORS['text_secondary'], bg=COLORS['bg_main']
         )
         cloud_label.pack(pady=(0, 5))
         
         # プレースホルダーテキスト / ファイル名
         file_name_label = tk.Label(
-            content_frame, text="ファイルをドラッグ&ドロップ",
-            font=('Segoe UI', 9), fg=COLORS['text_secondary'],
-            bg=COLORS['bg_main']
+            content_frame, text="ドラッグ&ドロップ",
+            font=('Segoe UI', 8), fg=COLORS['text_secondary'],
+            bg=COLORS['bg_main'], wraplength=150
         )
         file_name_label.pack()
         
-        # クリックイベントをバインド（ドロップゾーン全体をクリック可能に）
+        # クリックイベントをバインド
         def on_click(event=None):
-            self._select_file(file_key, file_name_label, cloud_label, check_label, file_filter)
+            self._select_file(file_key, file_name_label, cloud_label, remove_btn, file_filter)
         
         drop_zone.bind('<Button-1>', on_click)
         content_frame.bind('<Button-1>', on_click)
@@ -752,7 +788,7 @@ class MonthlyAggregationPage(tk.Frame):
         content_frame.bind('<Enter>', on_enter)
         content_frame.bind('<Leave>', on_leave)
         
-        # ドラッグ&ドロップの登録（tkinterdnd2が利用可能な場合）
+        # ドラッグ&ドロップの登録
         if TKDND_AVAILABLE:
             def on_drop(event):
                 # ドロップされたファイルパスを取得
@@ -770,7 +806,7 @@ class MonthlyAggregationPage(tk.Frame):
                     # ファイルを設定
                     self.files[file_key] = dropped_file
                     file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'])
-                    cloud_label.config(text="📄", font=('Segoe UI', 24))
+                    cloud_label.config(text="📄", font=('Segoe UI', 20))
                     remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
                     self._check_can_execute()
             
@@ -806,50 +842,43 @@ class MonthlyAggregationPage(tk.Frame):
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
-        # 年度選択
-        year_frame = tk.Frame(card, bg=COLORS['bg_card'])
-        year_frame.pack(fill=tk.X, pady=(0, 15))
+        # 年度・月を横並びで表示
+        period_frame = tk.Frame(card, bg=COLORS['bg_card'])
+        period_frame.pack(fill=tk.X)
+        
+        # 年度選択（左半分）
+        year_container = tk.Frame(period_frame, bg=COLORS['bg_card'])
+        year_container.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
         
         tk.Label(
-            year_frame, text="年度", font=('Segoe UI', 9, 'bold'),
+            year_container, text="年度", font=('Segoe UI', 9, 'bold'),
             fg=COLORS['text_secondary'], bg=COLORS['bg_card']
         ).pack(anchor='w', pady=(0, 5))
         
-        # 年度のリスト（過去5年分）
         current_year = datetime.now().year
         current_month = datetime.now().month
         fiscal_year = current_year if current_month >= 4 else current_year - 1
         years = [str(y) + "年度" for y in range(fiscal_year - 4, fiscal_year + 2)]
         
-        # カスタムドロップダウン（年度）
-        year_dropdown = ModernDropdown(year_frame, years, str(fiscal_year) + "年度")
+        year_dropdown = ModernDropdown(year_container, years, str(fiscal_year) + "年度")
         year_dropdown.pack(fill=tk.X)
         self.year_dropdown = year_dropdown
         
-        # 月選択
-        month_frame = tk.Frame(card, bg=COLORS['bg_card'])
-        month_frame.pack(fill=tk.X, pady=(0, 20))
+        # 月選択（右半分）
+        month_container = tk.Frame(period_frame, bg=COLORS['bg_card'])
+        month_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         tk.Label(
-            month_frame, text="月", font=('Segoe UI', 9, 'bold'),
+            month_container, text="月", font=('Segoe UI', 9, 'bold'),
             fg=COLORS['text_secondary'], bg=COLORS['bg_card']
         ).pack(anchor='w', pady=(0, 5))
         
-        # カスタムドロップダウン（月）
         months = [str(m) + "月" for m in range(1, 13)]
-        month_dropdown = ModernDropdown(month_frame, months, str(current_month) + "月")
+        month_dropdown = ModernDropdown(month_container, months, str(current_month) + "月")
         month_dropdown.pack(fill=tk.X)
         self.month_dropdown = month_dropdown
-        
-        # 実行ボタン
-        self.execute_btn = ModernButton(
-            card, text="集計を実行", btn_type='primary',
-            command=self._execute_aggregation,
-            state='disabled'
-        )
-        self.execute_btn.pack(fill=tk.X, pady=(10, 0))
 
-    def _select_file(self, file_key, file_name_label, cloud_label, check_label, file_filter):
+    def _select_file(self, file_key, file_name_label, cloud_label, remove_btn, file_filter):
         """ファイル選択ダイアログ"""
         from tkinter import filedialog
         
@@ -869,9 +898,8 @@ class MonthlyAggregationPage(tk.Frame):
             # ファイル名のみ表示
             file_name_label.config(text=Path(filename).name, fg=COLORS['accent'])
             # クラウドアイコンを小さく、色を変更
-            cloud_label.config(text="📄", font=('Segoe UI', 24))
+            cloud_label.config(text="📄", font=('Segoe UI', 20))
             # 削除ボタン表示
-            remove_btn = getattr(self, f'{file_key}_remove_btn')
             remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
             self._check_can_execute()
     
