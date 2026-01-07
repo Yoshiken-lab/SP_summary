@@ -151,14 +151,36 @@ class ModernDropdown(tk.Frame):
             button_config['width'] = width
         
         self.button = tk.Button(self, **button_config)
+        
+        # ボタンに枠線を追加（クリック可能とわかりやすく）
+        self.button.config(
+            highlightthickness=1,
+            highlightbackground=COLORS['border'],
+            highlightcolor=COLORS['border']
+        )
         self.button.pack(fill=tk.BOTH, expand=True, ipady=8)
         
-        # ドロップダウンアイコン
+        # ドロップダウンアイコン（Frameの子として配置し、buttonの上に重ねる）
         arrow_label = tk.Label(
-            self.button, text="▼", font=('Meiryo', 8),
+            self, text="▼", font=('Meiryo', 8),
             fg=COLORS['text_secondary'], bg=COLORS['bg_main']
         )
         arrow_label.place(relx=1.0, rely=0.5, anchor='e', x=-10)
+        
+        # 矢印をクリックしてもボタンが反応するように
+        arrow_label.bind('<Button-1>', lambda e: self._toggle_menu())
+        
+        # ホバーエフェクト（矢印の後に追加）
+        def on_enter(e):
+            self.button.config(highlightbackground=COLORS['accent'], highlightcolor=COLORS['accent'])
+        
+        def on_leave(e):
+            self.button.config(highlightbackground=COLORS['border'], highlightcolor=COLORS['border'])
+        
+        self.button.bind('<Enter>', on_enter)
+        self.button.bind('<Leave>', on_leave)
+        arrow_label.bind('<Enter>', on_enter)
+        arrow_label.bind('<Leave>', on_leave)
         
         self.menu = None
         self.menu_visible = False
@@ -225,8 +247,20 @@ class ModernDropdown(tk.Frame):
         # マウスホイールでスクロール
         def on_mousewheel(event):
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        self._mousewheel_binding = on_mousewheel
-        canvas.bind_all("<MouseWheel>", on_mousewheel)
+        
+        # Canvasとscrollable_frameの両方にバインド
+        canvas.bind("<MouseWheel>", on_mousewheel)
+        scrollable_frame.bind("<MouseWheel>", on_mousewheel)
+        
+        # マウスがメニュー内にある間だけホイールを有効化
+        def bind_wheel(e):
+            canvas.bind_all("<MouseWheel>", on_mousewheel)
+        
+        def unbind_wheel(e):
+            canvas.unbind_all("<MouseWheel>")
+        
+        self.menu.bind('<Enter>', bind_wheel)
+        self.menu.bind('<Leave>', unbind_wheel)
         
         self.menu_visible = True
         self.menu.bind('<FocusOut>', lambda e: self._hide_menu())
@@ -1193,9 +1227,9 @@ class CumulativeAggregationPage(tk.Frame):
         self._update_file_list()
     
     def _create_file_drop_section(self):
-        """STEP 1: ファイル選択と一覧"""
+        """STEP 1: ファイル選択と一覧（横並びレイアウト）"""
         card = tk.Frame(self.content_area, bg=COLORS['bg_card'], padx=20, pady=20)
-        card.pack(fill=tk.X, pady=(0, 20))
+        card.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
         
         # ヘッダー
         header_frame = tk.Frame(card, bg=COLORS['bg_card'])
@@ -1212,10 +1246,18 @@ class CumulativeAggregationPage(tk.Frame):
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
+        # コンテンツエリア（横2列）
+        content_container = tk.Frame(card, bg=COLORS['bg_card'])
+        content_container.pack(fill=tk.BOTH, expand=True)
+        
+        # 左側: ドロップゾーン
+        self.drop_zone_frame = tk.Frame(content_container, bg=COLORS['bg_card'])
+        self.drop_zone_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        
         # ドロップゾーン
-        drop_zone = tk.Frame(card, bg=COLORS['bg_main'], highlightthickness=2,
+        drop_zone = tk.Frame(self.drop_zone_frame, bg=COLORS['bg_main'], highlightthickness=2,
                            highlightbackground=COLORS['border'], highlightcolor=COLORS['border'])
-        drop_zone.pack(fill=tk.X, ipady=30)
+        drop_zone.pack(fill=tk.BOTH, expand=True, ipady=30)
         
         content_frame = tk.Frame(drop_zone, bg=COLORS['bg_main'], cursor='hand2')
         content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
@@ -1270,6 +1312,10 @@ class CumulativeAggregationPage(tk.Frame):
             drop_zone.dnd_bind('<<Drop>>', on_drop)
             content_frame.drop_target_register(DND_FILES)
             content_frame.dnd_bind('<<Drop>>', on_drop)
+        
+        # 右側: ファイルリストエリア（初期状態では非表示）
+        self.file_list_container = tk.Frame(content_container, bg=COLORS['bg_card'])
+        # ファイルが追加されたときに pack(side=tk.LEFT) で表示される
     
     def _select_files(self):
         """ファイル選択ダイアログ（複数選択）"""
@@ -1306,18 +1352,17 @@ class CumulativeAggregationPage(tk.Frame):
         
         if not self.cumulative_files:
             self._check_can_execute()  # ファイルがない場合もチェック
+            # ファイルリストコンテナを非表示
+            if hasattr(self, 'file_list_container'):
+                self.file_list_container.pack_forget()
             return
         
-        # ファイルリストをドロップゾーンと同じカード内に表示（STEP 1に統合）
-        # ドロップゾーンの親カードを取得
-        drop_card = self.content_area.winfo_children()[0]  # 最初のカード（ドロップゾーン）
+        # ファイルリストコンテナを表示
+        if hasattr(self, 'file_list_container'):
+            self.file_list_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # 区切り線
-        separator = tk.Frame(drop_card, bg=COLORS['border'], height=1)
-        separator.pack(fill=tk.X, pady=(15, 15))
-        
-        # ファイルリストフレーム
-        self.file_list_frame = tk.Frame(drop_card, bg=COLORS['bg_card'])
+        # ファイルリストフレームをコンテナ内に作成
+        self.file_list_frame = tk.Frame(self.file_list_container, bg=COLORS['bg_card'])
         self.file_list_frame.pack(fill=tk.BOTH, expand=True)
         
         # テーブルヘッダー
