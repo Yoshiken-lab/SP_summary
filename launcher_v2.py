@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-スクールフォト売上集計システム - ランチャー V2 (Modern UI)
+スクールフォト売上管理システム - Desktop App (Dark Sidebar)
 
-Hybrid Proデザインのサーバー起動・停止管理アプリケーション
-モダンなフラットデザインを採用
+従来のランチャー機能に加え、WEBアプリの機能を統合するための
+メインデスクトップアプリケーション。
 """
 
 import sys
@@ -23,19 +23,27 @@ BASE_DIR = Path(__file__).parent
 APP_DIR = BASE_DIR / 'app'
 CONFIG_FILE = BASE_DIR / 'launcher_config.json'
 
-# カラーパレット (Modern)
+# 高DPI対応（Windows）
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    pass
+
+# カラーパレット (Dark Sidebar Theme)
 COLORS = {
-    'bg_main': '#F3F4F6',      # 背景色（薄いグレー）
-    'bg_card': '#FFFFFF',      # カード背景（白）
-    'text_primary': '#111827', # メインテキスト
-    'text_secondary': '#6B7280', # サブテキスト
-    'primary': '#2563EB',      # メインカラー（青）
-    'primary_hover': '#1D4ED8',
-    'danger': '#EF4444',       # 危険色（赤）
+    'bg_sidebar': '#111827',   # サイドバー背景（かなり暗い）
+    'bg_main': '#1F2937',      # メインエリア背景（暗いグレー）
+    'bg_card': '#374151',      # カード背景（少し明るいグレー）
+    'text_primary': '#F9FAFB', # メインテキスト（白に近い）
+    'text_secondary': '#9CA3AF', # サブテキスト（グレー）
+    'accent': '#3B82F6',       # アクセントカラー（青）
+    'accent_hover': '#2563EB',
+    'danger': '#EF4444',       # 赤
     'danger_hover': '#DC2626',
-    'success': '#10B981',      # 成功色（緑）
-    'border': '#E5E7EB',       # ボーダー色
-    'log_bg': '#1F2937',       # ログ背景（ダーク）
+    'success': '#10B981',      # 緑
+    'border': '#4B5563',       # 枠線
+    'sidebar_active': '#374151', # サイドバー選択中
+    'log_bg': '#111827',       # ログ背景
     'log_fg': '#D1D5DB'        # ログ文字
 }
 
@@ -45,28 +53,29 @@ DEFAULT_CONFIG = {
     'dashboard_port': 8000,
 }
 
-# 高DPI対応（Windows）
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(1)
-except Exception:
-    pass
-
-
 class ModernButton(tk.Button):
     """モダンなフラットボタン"""
     def __init__(self, master, **kwargs):
         self.btn_type = kwargs.pop('btn_type', 'primary')
-        self.default_bg = COLORS.get(self.btn_type, COLORS['primary'])
-        self.hover_bg = COLORS.get(f'{self.btn_type}_hover', self.default_bg)
+        self.default_bg = kwargs.pop('bg', COLORS['accent'])
+        if self.btn_type == 'danger':
+            self.default_bg = COLORS['danger']
+            self.hover_bg = COLORS['danger_hover']
+        else:
+            self.hover_bg = COLORS['accent_hover']
+        
+        # 初期状態の設定
+        state = kwargs.get('state', 'normal')
+        current_bg = self.default_bg if state != 'disabled' else '#6B7280'
         
         super().__init__(
             master,
             relief='flat',
             borderwidth=0,
-            cursor='hand2',
+            cursor='hand2' if state != 'disabled' else 'arrow',
             font=('Segoe UI', 9, 'bold'),
             fg='white',
-            bg=self.default_bg,
+            bg=current_bg,
             activebackground=self.hover_bg,
             activeforeground='white',
             **kwargs
@@ -85,294 +94,210 @@ class ModernButton(tk.Button):
     def configure(self, cnf=None, **kwargs):
         if cnf is None:
             cnf = {}
-        # Merge kwargs into cnf
         cnf = {**cnf, **kwargs}
-        
         if 'state' in cnf:
             if cnf['state'] == 'disabled':
-                self['bg'] = '#9CA3AF'
+                self['bg'] = '#6B7280'
                 self['cursor'] = 'arrow'
             else:
                 self['bg'] = self.default_bg
                 self['cursor'] = 'hand2'
         super().configure(cnf)
 
+class SidebarButton(tk.Button):
+    """サイドバー用ナビゲーションボタン"""
+    def __init__(self, master, text, icon, command, is_active=False):
+        self.default_bg = COLORS['bg_sidebar']
+        self.active_bg = COLORS['sidebar_active']
+        self.hover_bg = '#1F2937'
+        self.is_active = is_active
+        
+        super().__init__(
+            master,
+            text=f"  {icon}  {text}",
+            font=('Segoe UI', 10),
+            fg=COLORS['text_primary'] if is_active else COLORS['text_secondary'],
+            bg=self.active_bg if is_active else self.default_bg,
+            relief='flat',
+            bd=0,
+            anchor='w',
+            padx=20,
+            cursor='hand2',
+            activebackground=self.active_bg,
+            activeforeground=COLORS['text_primary'],
+            command=command
+        )
+        self.bind('<Enter>', self._on_enter)
+        self.bind('<Leave>', self._on_leave)
 
-class ServerLauncher:
-    """サーバーランチャー Modern UI"""
+    def _on_enter(self, e):
+        if not self.is_active:
+            self['bg'] = self.hover_bg
+            self['fg'] = COLORS['text_primary']
 
+    def _on_leave(self, e):
+        if not self.is_active:
+            self['bg'] = self.default_bg
+            self['fg'] = COLORS['text_secondary']
+
+    def set_active(self, active):
+        self.is_active = active
+        if active:
+            self['bg'] = self.active_bg
+            self['fg'] = COLORS['text_primary']
+            self['font'] = ('Segoe UI', 10, 'bold')
+        else:
+            self['bg'] = self.default_bg
+            self['fg'] = COLORS['text_secondary']
+            self['font'] = ('Segoe UI', 10)
+
+
+class MainApp:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title('スクールフォト売上管理システム')
-        self.root.geometry('780x650')
+        self.root.title('SP ADMIN PRO - スクールフォト売上管理')
+        self.root.geometry('1000x700')
         self.root.configure(bg=COLORS['bg_main'])
-        
-        # アイコン設定（もしあれば）
-        # icon_path = BASE_DIR / 'icon.ico'
-        # if icon_path.exists():
-        #     self.root.iconbitmap(str(icon_path))
 
-        # プロセス管理
+        # プロセス管理 (サーバータブで使用)
+        self.server_manager = ServerManager(self)
+        
+        # メインレイアウト
+        self._setup_layout()
+        
+        # 閉じる処理
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        
+        # 初期表示
+        self.show_page('server')
+
+    def _setup_layout(self):
+        # 1. サイドバー (左側)
+        self.sidebar = tk.Frame(self.root, bg=COLORS['bg_sidebar'], width=250)
+        self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
+        self.sidebar.pack_propagate(False) # 幅を固定
+
+        # ロゴエリア
+        logo_frame = tk.Frame(self.sidebar, bg=COLORS['bg_sidebar'], height=80)
+        logo_frame.pack(fill=tk.X)
+        logo_frame.pack_propagate(False)
+        
+        tk.Label(
+            logo_frame, 
+            text="SP ADMIN PRO", 
+            font=('Segoe UI', 16, 'bold'),
+            fg=COLORS['accent'],
+            bg=COLORS['bg_sidebar']
+        ).pack(side=tk.LEFT, padx=20, pady=25)
+
+        # メニューボタンエリア
+        self.menu_buttons = {}
+        menu_items = [
+            ('server', 'サーバー管理', '⚙'),
+            ('monthly', '月次集計', '📅'),
+            ('cumulative', '累積集計', '📈'),
+            ('results', '実績反映', '⚡'),
+            ('database', 'データベース確認', '💾'),
+        ]
+
+        for key, text, icon in menu_items:
+            btn = SidebarButton(
+                self.sidebar, 
+                text, 
+                icon, 
+                lambda k=key: self.show_page(k)
+            )
+            btn.pack(fill=tk.X, pady=2)
+            self.menu_buttons[key] = btn
+
+        # フッター (バージョン情報など)
+        footer_label = tk.Label(
+            self.sidebar,
+            text="v2.1.0",
+            font=('Segoe UI', 8),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['bg_sidebar']
+        )
+        footer_label.pack(side=tk.BOTTOM, pady=20)
+
+        # 2. メインコンテンツエリア (右側)
+        self.content_area = tk.Frame(self.root, bg=COLORS['bg_main'])
+        self.content_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # ページ保持用辞書
+        self.pages = {}
+        
+        # 各ページの初期化
+        self.pages['server'] = ServerControlPage(self.content_area, self.server_manager)
+        self.pages['monthly'] = PlaceholderPage(self.content_area, "月次集計", "CSVデータから売上を集計し、Excel報告書を作成します")
+        self.pages['cumulative'] = PlaceholderPage(self.content_area, "累積集計", "過去のデータを統合して全体の傾向を分析します")
+        self.pages['results'] = PlaceholderPage(self.content_area, "実績反映", "確定した売上データをシステムのマスタに反映させます")
+        self.pages['database'] = PlaceholderPage(self.content_area, "データベース確認", "登録されているテーブルやレコードを直接確認します")
+
+    def show_page(self, page_key):
+        # メニューボタンの見た目更新
+        for key, btn in self.menu_buttons.items():
+            btn.set_active(key == page_key)
+            
+        # ページの切り替え
+        for key, page in self.pages.items():
+            if key == page_key:
+                page.pack(fill=tk.BOTH, expand=True)
+            else:
+                page.pack_forget()
+
+    def _on_closing(self):
+        if self.server_manager.is_any_running():
+            if messagebox.askyesno('終了確認', 'サーバーが実行中です。\n停止してから終了しますか？'):
+                self.server_manager.stop_all()
+                self.root.destroy()
+        else:
+            self.root.destroy()
+
+    def run(self):
+        self.root.mainloop()
+
+
+class ServerManager:
+    """サーバープロセスの管理ロジック"""
+    def __init__(self, app):
+        self.app = app
         self.api_process = None
         self.dashboard_process = None
-        self.api_running = False
-        self.dashboard_running = False
-
-        # 設定読み込み
         self.config = self._load_config()
-
-        # UI構築
-        self._setup_ui()
-        self._center_window()
-
-        # 閉じるボタンの処理
-        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        self.log_callback = None # ログ出力先 (Page側でセット)
 
     def _load_config(self):
-        """設定ファイルの読み込み"""
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception:
-                return DEFAULT_CONFIG.copy()
+                pass
         return DEFAULT_CONFIG.copy()
 
-    def _save_config(self):
-        """設定ファイルの保存"""
+    def save_config(self, api_port, dashboard_port):
+        self.config['api_port'] = api_port
+        self.config['dashboard_port'] = dashboard_port
         try:
-            self.config['api_port'] = int(self.api_port_var.get())
-            self.config['dashboard_port'] = int(self.dashboard_port_var.get())
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            self._log(f'設定保存エラー: {e}')
+        except Exception:
+            pass
 
-    def _setup_ui(self):
-        """UIをセットアップ"""
-        # メインコンテナ（余白用）
-        container = tk.Frame(self.root, bg=COLORS['bg_main'])
-        container.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
-
-        # ヘッダー
-        self._create_header(container)
-
-        # カードエリア
-        cards_frame = tk.Frame(container, bg=COLORS['bg_main'])
-        cards_frame.pack(fill=tk.X, pady=(0, 20))
-        cards_frame.grid_columnconfigure(0, weight=1)
-        cards_frame.grid_columnconfigure(1, weight=1)
-
-        # APIサーバーカード
-        self._create_card(
-            cards_frame, 
-            column=0, 
-            title='管理APIサーバー', 
-            icon='🛠',
-            is_api=True
-        )
-
-        # 公開サーバーカード
-        self._create_card(
-            cards_frame, 
-            column=1, 
-            title='公開ダッシュボード', 
-            icon='🌐',
-            is_api=False
-        )
-
-        # ログパネル
-        self._create_log_panel(container)
-
-    def _create_header(self, parent):
-        """ヘッダー作成"""
-        header_frame = tk.Frame(parent, bg=COLORS['bg_main'])
-        header_frame.pack(fill=tk.X, pady=(0, 25))
-
-        title = tk.Label(
-            header_frame,
-            text='スクールフォト売上管理システム',
-            font=('Segoe UI', 20, 'bold'),
-            bg=COLORS['bg_main'],
-            fg=COLORS['text_primary']
-        )
-        title.pack(side=tk.LEFT)
-        
-        subtitle = tk.Label(
-            header_frame,
-            text='v2.0',
-            font=('Segoe UI', 10),
-            bg=COLORS['bg_main'],
-            fg=COLORS['text_secondary']
-        )
-        subtitle.pack(side=tk.LEFT, padx=(10, 0), anchor='sw', pady=(0, 5))
-
-    def _create_card(self, parent, column, title, icon, is_api):
-        """カードコンポーネント作成"""
-        # カードのフレーム（白背景、少し影っぽくボーダー）
-        card = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=20)
-        card.grid(row=0, column=column, padx=10, sticky='ew')
-        
-        # 枠線（擬似的な影）
-        # tk.Frameにはshadowがないので、configureでreliefなどは指定せずフラットにする
-        
-        # タイトル行
-        title_frame = tk.Frame(card, bg=COLORS['bg_card'])
-        title_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        tk.Label(
-            title_frame, text=icon, font=('Segoe UI', 16),
-            bg=COLORS['bg_card']
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        tk.Label(
-            title_frame, text=title, font=('Segoe UI', 14, 'bold'),
-            bg=COLORS['bg_card'], fg=COLORS['text_primary']
-        ).pack(side=tk.LEFT)
-
-        # ステータス表示
-        status_frame = tk.Frame(card, bg=COLORS['bg_card'])
-        status_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        # ステータスバッジ部分
-        status_canvas = tk.Canvas(
-            status_frame, width=100, height=30, 
-            bg=COLORS['bg_card'], highlightthickness=0
-        )
-        status_canvas.pack(anchor='center')
-        
-        # 状態ラベル（後で更新するために属性として保持）
-        status_label = tk.Label(
-            status_frame, text='停止中', font=('Segoe UI', 12, 'bold'),
-            bg=COLORS['bg_card'], fg=COLORS['text_secondary']
-        )
-        status_label.pack(anchor='center', pady=(5, 0))
-
-        # 設定行
-        config_frame = tk.Frame(card, bg=COLORS['bg_card'])
-        config_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        tk.Label(
-            config_frame, text='ポート', font=('Segoe UI', 9, 'bold'),
-            bg=COLORS['bg_card'], fg=COLORS['text_secondary']
-        ).pack(side=tk.LEFT)
-        
-        port_var = tk.StringVar(value=str(self.config['api_port'] if is_api else self.config['dashboard_port']))
-        
-        # カスタムエントリー
-        entry_frame = tk.Frame(config_frame, bg=COLORS['border'], padx=1, pady=1)
-        entry_frame.pack(side=tk.LEFT, padx=(10, 0))
-        
-        port_entry = tk.Entry(
-            entry_frame, textvariable=port_var, width=8,
-            font=('Consolas', 11), bd=0, relief='flat'
-        )
-        port_entry.pack(padx=5, pady=3)
-
-        # アクションボタン
-        btn_frame = tk.Frame(card, bg=COLORS['bg_card'])
-        btn_frame.pack(fill=tk.X)
-        
-        start_btn = ModernButton(
-            btn_frame, text='サーバー起動', btn_type='primary',
-            command=self._start_api if is_api else self._start_dashboard
-        )
-        start_btn.pack(fill=tk.X, pady=(0, 10))
-        
-        stop_btn = ModernButton(
-            btn_frame, text='サーバー停止', btn_type='danger',
-            command=self._stop_api if is_api else self._stop_dashboard,
-            state=tk.DISABLED
-        )
-        stop_btn.pack(fill=tk.X)
-
-        # 参照を保存
-        if is_api:
-            self.api_port_var = port_var
-            self.api_status_canvas = status_canvas
-            self.api_status_label = status_label
-            self.api_start_btn = start_btn
-            self.api_stop_btn = stop_btn
-            self._draw_status_pill(status_canvas, False)
+    def log(self, message):
+        if self.log_callback:
+            self.log_callback(message)
         else:
-            self.dashboard_port_var = port_var
-            self.dashboard_status_canvas = status_canvas
-            self.dashboard_status_label = status_label
-            self.dashboard_start_btn = start_btn
-            self.dashboard_stop_btn = stop_btn
-            self._draw_status_pill(status_canvas, False)
+            print(message)
 
-    def _create_log_panel(self, parent):
-        """ログパネル作成"""
-        # ヘッダー
-        log_header = tk.Frame(parent, bg=COLORS['bg_main'])
-        log_header.pack(fill=tk.X, pady=(10, 5))
+    def is_any_running(self):
+        return (self.api_process is not None) or (self.dashboard_process is not None)
+
+    def start_api(self, port, on_start, on_stop):
+        if self.api_process: return
         
-        tk.Label(
-            log_header, text='システムログ', font=('Segoe UI', 10, 'bold'),
-            bg=COLORS['bg_main'], fg=COLORS['text_secondary']
-        ).pack(side=tk.LEFT)
-
-        # ログ本文
-        self.log_text = scrolledtext.ScrolledText(
-            parent, height=8, font=('Consolas', 9),
-            bg=COLORS['log_bg'], fg=COLORS['log_fg'],
-            bd=0, highlightthickness=0
-        )
-        self.log_text.pack(fill=tk.BOTH, expand=True)
-
-    def _center_window(self):
-        """ウィンドウを画面中央に配置"""
-        self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        self.root.geometry(f'{width}x{height}+{x}+{y}')
-
-    def _draw_status_pill(self, canvas, is_running):
-        """状態を示すカプセル（Pill）を描画"""
-        canvas.delete('all')
-        color = COLORS['success'] if is_running else '#9CA3AF'
-        text_color = 'white'
-        
-        # 角丸背景
-        # tkinter canvas doesn't have good round rect, using oval+rect approximation or just rect
-        # 簡易的に円を描画
-        w = 100
-        h = 30
-        
-        # 枠
-        canvas.create_rectangle(0, 0, w, h, fill='', outline='') # clear
-        
-        # 状態のカプセル (背景)
-        fill_col = color + '20' # 透過っぽい色...はTkinter無理なので、背景白前提で薄い色を作るべきだが、
-        # ここではシンプルに円を描く
-        
-        r = 6
-        canvas.create_oval(w/2 - r, h/2 - r, w/2 + r, h/2 + r, fill=color, outline='')
-
-    def _log(self, message):
-        """ログを追加"""
-        timestamp = datetime.now().strftime('%H:%M:%S')
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.insert(tk.END, f'[{timestamp}] {message}\n')
-        self.log_text.see(tk.END)
-        self.log_text.config(state=tk.DISABLED)
-
-    def _start_api(self):
-        """APIサーバーを起動"""
-        if self.api_running: return
-        try:
-            port = int(self.api_port_var.get())
-        except ValueError:
-            messagebox.showerror('エラー', 'ポート番号は数値で入力してください')
-            return
-
-        self._save_config()
-        self._log(f'管理APIサーバーを起動中... (ポート: {port})')
-
-        def run_server():
+        def run():
             try:
                 script_path = APP_DIR / 'run.py'
                 self.api_process = subprocess.Popen(
@@ -384,47 +309,27 @@ class ServerLauncher:
                     bufsize=1,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                 )
-                self.api_running = True
-                self.root.after(0, self._update_api_ui_running)
-                self._log(f'管理APIサーバー起動完了: http://127.0.0.1:{port}')
-
+                self.app.root.after(0, on_start)
+                self.log(f'管理APIサーバー起動完了: http://127.0.0.1:{port}')
+                
                 for line in self.api_process.stdout:
-                    self.root.after(0, lambda l=line: self._log(f'[API] {l.strip()}'))
-
+                    self.app.root.after(0, lambda l=line: self.log(f'[API] {l.strip()}'))
             except Exception as e:
-                self.root.after(0, lambda: self._log(f'API起動エラー: {e}'))
-                self.root.after(0, self._update_api_ui_stopped)
+                self.app.root.after(0, lambda: self.log(f'API起動エラー: {e}'))
+                self.app.root.after(0, on_stop)
 
-        thread = threading.Thread(target=run_server, daemon=True)
-        thread.start()
+        threading.Thread(target=run, daemon=True).start()
 
-    def _stop_api(self):
-        """APIサーバーを停止"""
-        if not self.api_running: return
-        self._log('管理APIサーバーを停止中...')
-        try:
-            if self.api_process:
-                self.api_process.terminate()
-                self.api_process = None
-        except Exception:
-            pass
-        self.api_running = False
-        self._update_api_ui_stopped()
-        self._log('管理APIサーバー停止完了')
+    def stop_api(self):
+        if self.api_process:
+            self.api_process.terminate()
+            self.api_process = None
+            self.log('APIサーバー停止')
 
-    def _start_dashboard(self):
-        """公開サーバーを起動"""
-        if self.dashboard_running: return
-        try:
-            port = int(self.dashboard_port_var.get())
-        except ValueError:
-            messagebox.showerror('エラー', 'ポート番号は数値で入力してください')
-            return
-
-        self._save_config()
-        self._log(f'公開ダッシュボードを起動中... (ポート: {port})')
-
-        def run_server():
+    def start_dashboard(self, port, on_start, on_stop):
+        if self.dashboard_process: return
+        
+        def run():
             try:
                 script_path = APP_DIR / 'simple_server.py'
                 self.dashboard_process = subprocess.Popen(
@@ -436,76 +341,165 @@ class ServerLauncher:
                     bufsize=1,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                 )
-                self.dashboard_running = True
-                self.root.after(0, self._update_dashboard_ui_running)
-                self._log(f'公開ダッシュボード起動完了: http://localhost:{port}')
-
+                self.app.root.after(0, on_start)
+                self.log(f'公開ダッシュボード起動完了: http://localhost:{port}')
+                
                 for line in self.dashboard_process.stdout:
-                    self.root.after(0, lambda l=line: self._log(f'[Web] {l.strip()}'))
-
+                    self.app.root.after(0, lambda l=line: self.log(f'[Web] {l.strip()}'))
             except Exception as e:
-                self.root.after(0, lambda: self._log(f'公開サーバー起動エラー: {e}'))
-                self.root.after(0, self._update_dashboard_ui_stopped)
+                self.app.root.after(0, lambda: self.log(f'Dashboard起動エラー: {e}'))
+                self.app.root.after(0, on_stop)
 
-        thread = threading.Thread(target=run_server, daemon=True)
-        thread.start()
+        threading.Thread(target=run, daemon=True).start()
 
-    def _stop_dashboard(self):
-        """公開サーバーを停止"""
-        if not self.dashboard_running: return
-        self._log('公開ダッシュボードを停止中...')
-        try:
-            if self.dashboard_process:
-                self.dashboard_process.terminate()
-                self.dashboard_process = None
-        except Exception:
-            pass
-        self.dashboard_running = False
-        self._update_dashboard_ui_stopped()
-        self._log('公開ダッシュボード停止完了')
+    def stop_dashboard(self):
+        if self.dashboard_process:
+            self.dashboard_process.terminate()
+            self.dashboard_process = None
+            self.log('Dashboardサーバー停止')
 
-    def _update_api_ui_running(self):
-        self._draw_status_pill(self.api_status_canvas, True)
-        self.api_status_label.config(text='起動中', fg=COLORS['success'])
-        self.api_start_btn.config(state=tk.DISABLED)
-        self.api_stop_btn.config(state=tk.NORMAL)
+    def stop_all(self):
+        self.stop_api()
+        self.stop_dashboard()
 
-    def _update_api_ui_stopped(self):
-        self._draw_status_pill(self.api_status_canvas, False)
-        self.api_status_label.config(text='停止中', fg=COLORS['text_secondary'])
-        self.api_start_btn.config(state=tk.NORMAL)
-        self.api_stop_btn.config(state=tk.DISABLED)
 
-    def _update_dashboard_ui_running(self):
-        self._draw_status_pill(self.dashboard_status_canvas, True)
-        self.dashboard_status_label.config(text='起動中', fg=COLORS['success'])
-        self.dashboard_start_btn.config(state=tk.DISABLED)
-        self.dashboard_stop_btn.config(state=tk.NORMAL)
+class ServerControlPage(tk.Frame):
+    """サーバー管理ページ (旧ランチャー機能)"""
+    def __init__(self, parent, manager):
+        super().__init__(parent, bg=COLORS['bg_main'])
+        self.manager = manager
+        
+        # ログコールバックの登録
+        self.manager.log_callback = self._log_to_widget
 
-    def _update_dashboard_ui_stopped(self):
-        self._draw_status_pill(self.dashboard_status_canvas, False)
-        self.dashboard_status_label.config(text='停止中', fg=COLORS['text_secondary'])
-        self.dashboard_start_btn.config(state=tk.NORMAL)
-        self.dashboard_stop_btn.config(state=tk.DISABLED)
+        # ヘッダー
+        tk.Label(self, text="サーバー管理", font=('Segoe UI', 18, 'bold'), 
+                 fg=COLORS['text_primary'], bg=COLORS['bg_main']).pack(anchor='w', padx=30, pady=(30, 20))
 
-    def _on_closing(self):
-        if self.api_running or self.dashboard_running:
-            if messagebox.askyesno('終了確認', 'サーバーが実行中です。\n停止してから終了しますか？'):
-                if self.api_running: self._stop_api()
-                if self.dashboard_running: self._stop_dashboard()
-                self.root.destroy()
-        else:
-            self.root.destroy()
+        # コンテンツエリア
+        container = tk.Frame(self, bg=COLORS['bg_main'])
+        container.pack(fill=tk.BOTH, expand=True, padx=30)
+        
+        # カード配置
+        cards_frame = tk.Frame(container, bg=COLORS['bg_main'])
+        cards_frame.pack(fill=tk.X)
+        cards_frame.grid_columnconfigure(0, weight=1)
+        cards_frame.grid_columnconfigure(1, weight=1)
 
-    def run(self):
-        self._log('Launcher V2 (Modern UI) Ready')
-        self.root.mainloop()
+        # APIカード
+        self._create_card(cards_frame, 0, "管理APIサーバー", "🛠", True)
+        # Dashboardカード
+        self._create_card(cards_frame, 1, "公開ダッシュボード", "🌐", False)
+
+        # ログエリア
+        log_frame = tk.Frame(container, bg=COLORS['bg_main'])
+        log_frame.pack(fill=tk.BOTH, expand=True, pady=20)
+        tk.Label(log_frame, text="システムログ", font=('Segoe UI', 10, 'bold'),
+                 fg=COLORS['text_secondary'], bg=COLORS['bg_main']).pack(anchor='w', pady=(0, 5))
+                 
+        self.log_text = scrolledtext.ScrolledText(
+            log_frame, height=10, font=('Consolas', 9),
+            bg=COLORS['log_bg'], fg=COLORS['log_fg'],
+            bd=0, highlightthickness=0
+        )
+        self.log_text.pack(fill=tk.BOTH, expand=True)
+
+    def _create_card(self, parent, col, title, icon, is_api):
+        card = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=20)
+        card.grid(row=0, column=col, padx=10 if col==1 else (0, 10), sticky='ew')
+        
+        # タイトル
+        header = tk.Frame(card, bg=COLORS['bg_card'])
+        header.pack(fill=tk.X, pady=(0, 15))
+        tk.Label(header, text=icon, font=('Segoe UI', 16), bg=COLORS['bg_card'], fg='white').pack(side=tk.LEFT, padx=(0,10))
+        tk.Label(header, text=title, font=('Segoe UI', 14, 'bold'), bg=COLORS['bg_card'], fg='white').pack(side=tk.LEFT)
+
+        # ステータス
+        status_var = tk.StringVar(value="停止中")
+        status_lbl = tk.Label(card, textvariable=status_var, font=('Segoe UI', 11), bg=COLORS['bg_card'], fg=COLORS['text_secondary'])
+        status_lbl.pack(pady=(0, 15))
+
+        # ポート設定
+        conf_frame = tk.Frame(card, bg=COLORS['bg_card'])
+        conf_frame.pack(fill=tk.X, pady=(0, 15))
+        tk.Label(conf_frame, text="ポート", bg=COLORS['bg_card'], fg=COLORS['text_secondary']).pack(side=tk.LEFT)
+        port_var = tk.StringVar(value=str(self.manager.config['api_port'] if is_api else self.manager.config['dashboard_port']))
+        tk.Entry(conf_frame, textvariable=port_var, width=6, bg=COLORS['bg_main'], fg='white', relief='flat', insertbackground='white').pack(side=tk.LEFT, padx=10)
+
+        # コントロール
+        btn_frame = tk.Frame(card, bg=COLORS['bg_card'])
+        btn_frame.pack(fill=tk.X)
+        
+        start_btn = ModernButton(btn_frame, text="起動", btn_type="primary")
+        start_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        stop_btn = ModernButton(btn_frame, text="停止", btn_type="danger", state="disabled")
+        stop_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
+
+        # アクション設定
+        def on_start_click():
+            try:
+                p = int(port_var.get())
+                self.manager.save_config(
+                    p if is_api else self.manager.config['api_port'],
+                    p if not is_api else self.manager.config['dashboard_port']
+                )
+                if is_api:
+                    self.manager.start_api(p, lambda: update_ui(True), lambda: update_ui(False))
+                else:
+                    self.manager.start_dashboard(p, lambda: update_ui(True), lambda: update_ui(False))
+            except ValueError:
+                messagebox.showerror("エラー", "ポート番号を確認してください")
+
+        def on_stop_click():
+            if is_api:
+                self.manager.stop_api()
+            else:
+                self.manager.stop_dashboard()
+            update_ui(False)
+
+        def update_ui(running):
+            if running:
+                status_var.set("起動中")
+                status_lbl.config(fg=COLORS['success'])
+                start_btn.config(state="disabled")
+                stop_btn.config(state="normal")
+            else:
+                status_var.set("停止中")
+                status_lbl.config(fg=COLORS['text_secondary'])
+                start_btn.config(state="normal")
+                stop_btn.config(state="disabled")
+
+        start_btn.config(command=on_start_click)
+        stop_btn.config(command=on_stop_click)
+
+
+    def _log_to_widget(self, message):
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        self.log_text.config(state=tk.NORMAL)
+        self.log_text.insert(tk.END, f'[{timestamp}] {message}\n')
+        self.log_text.see(tk.END)
+        self.log_text.config(state=tk.DISABLED)
+
+
+class PlaceholderPage(tk.Frame):
+    """未実装機能のプレースホルダーページ"""
+    def __init__(self, parent, title, description):
+        super().__init__(parent, bg=COLORS['bg_main'])
+        
+        tk.Label(self, text=title, font=('Segoe UI', 24, 'bold'), 
+                 fg=COLORS['text_primary'], bg=COLORS['bg_main']).pack(anchor='center', pady=(150, 20))
+        
+        tk.Label(self, text=description, font=('Segoe UI', 12),
+                 fg=COLORS['text_secondary'], bg=COLORS['bg_main']).pack(anchor='center')
+        
+        tk.Label(self, text="この機能は現在開発中です", font=('Segoe UI', 10),
+                 fg=COLORS['accent'], bg=COLORS['bg_main']).pack(anchor='center', pady=30)
 
 
 def main():
-    app = ServerLauncher()
+    app = MainApp()
     app.run()
-
 
 if __name__ == '__main__':
     main()
