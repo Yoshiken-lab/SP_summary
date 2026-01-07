@@ -82,15 +82,20 @@ class ModernButton(tk.Button):
         if self['state'] != 'disabled':
             self['bg'] = self.default_bg
             
-    def configure(self, **kwargs):
-        if 'state' in kwargs:
-            if kwargs['state'] == 'disabled':
+    def configure(self, cnf=None, **kwargs):
+        if cnf is None:
+            cnf = {}
+        # Merge kwargs into cnf
+        cnf = {**cnf, **kwargs}
+        
+        if 'state' in cnf:
+            if cnf['state'] == 'disabled':
                 self['bg'] = '#9CA3AF'
                 self['cursor'] = 'arrow'
             else:
                 self['bg'] = self.default_bg
                 self['cursor'] = 'hand2'
-        super().configure(**kwargs)
+        super().configure(cnf)
 
 
 class ServerLauncher:
@@ -98,7 +103,7 @@ class ServerLauncher:
 
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title('スクールフォト システム')
+        self.root.title('スクールフォト売上管理システム')
         self.root.geometry('780x650')
         self.root.configure(bg=COLORS['bg_main'])
         
@@ -162,7 +167,7 @@ class ServerLauncher:
         self._create_card(
             cards_frame, 
             column=0, 
-            title='Backend API', 
+            title='管理APIサーバー', 
             icon='🛠',
             is_api=True
         )
@@ -171,7 +176,7 @@ class ServerLauncher:
         self._create_card(
             cards_frame, 
             column=1, 
-            title='Public Dashboard', 
+            title='公開ダッシュボード', 
             icon='🌐',
             is_api=False
         )
@@ -186,7 +191,7 @@ class ServerLauncher:
 
         title = tk.Label(
             header_frame,
-            text='School Photo System',
+            text='スクールフォト売上管理システム',
             font=('Segoe UI', 20, 'bold'),
             bg=COLORS['bg_main'],
             fg=COLORS['text_primary']
@@ -238,7 +243,7 @@ class ServerLauncher:
         
         # 状態ラベル（後で更新するために属性として保持）
         status_label = tk.Label(
-            status_frame, text='OFFLINE', font=('Segoe UI', 12, 'bold'),
+            status_frame, text='停止中', font=('Segoe UI', 12, 'bold'),
             bg=COLORS['bg_card'], fg=COLORS['text_secondary']
         )
         status_label.pack(anchor='center', pady=(5, 0))
@@ -248,7 +253,7 @@ class ServerLauncher:
         config_frame.pack(fill=tk.X, pady=(0, 20))
         
         tk.Label(
-            config_frame, text='PORT', font=('Segoe UI', 8, 'bold'),
+            config_frame, text='ポート', font=('Segoe UI', 9, 'bold'),
             bg=COLORS['bg_card'], fg=COLORS['text_secondary']
         ).pack(side=tk.LEFT)
         
@@ -269,13 +274,13 @@ class ServerLauncher:
         btn_frame.pack(fill=tk.X)
         
         start_btn = ModernButton(
-            btn_frame, text='Launch Server', btn_type='primary',
+            btn_frame, text='サーバー起動', btn_type='primary',
             command=self._start_api if is_api else self._start_dashboard
         )
         start_btn.pack(fill=tk.X, pady=(0, 10))
         
         stop_btn = ModernButton(
-            btn_frame, text='Stop Server', btn_type='danger',
+            btn_frame, text='サーバー停止', btn_type='danger',
             command=self._stop_api if is_api else self._stop_dashboard,
             state=tk.DISABLED
         )
@@ -304,7 +309,7 @@ class ServerLauncher:
         log_header.pack(fill=tk.X, pady=(10, 5))
         
         tk.Label(
-            log_header, text='System Log', font=('Segoe UI', 10, 'bold'),
+            log_header, text='システムログ', font=('Segoe UI', 10, 'bold'),
             bg=COLORS['bg_main'], fg=COLORS['text_secondary']
         ).pack(side=tk.LEFT)
 
@@ -361,11 +366,11 @@ class ServerLauncher:
         try:
             port = int(self.api_port_var.get())
         except ValueError:
-            messagebox.showerror('Error', 'ポート番号は数値で入力してください')
+            messagebox.showerror('エラー', 'ポート番号は数値で入力してください')
             return
 
         self._save_config()
-        self._log(f'Starting API Server on port {port}...')
+        self._log(f'管理APIサーバーを起動中... (ポート: {port})')
 
         def run_server():
             try:
@@ -381,13 +386,13 @@ class ServerLauncher:
                 )
                 self.api_running = True
                 self.root.after(0, self._update_api_ui_running)
-                self._log(f'API Server Started: http://127.0.0.1:{port}')
+                self._log(f'管理APIサーバー起動完了: http://127.0.0.1:{port}')
 
                 for line in self.api_process.stdout:
                     self.root.after(0, lambda l=line: self._log(f'[API] {l.strip()}'))
 
             except Exception as e:
-                self.root.after(0, lambda: self._log(f'API Start Error: {e}'))
+                self.root.after(0, lambda: self._log(f'API起動エラー: {e}'))
                 self.root.after(0, self._update_api_ui_stopped)
 
         thread = threading.Thread(target=run_server, daemon=True)
@@ -396,7 +401,7 @@ class ServerLauncher:
     def _stop_api(self):
         """APIサーバーを停止"""
         if not self.api_running: return
-        self._log('Stopping API Server...')
+        self._log('管理APIサーバーを停止中...')
         try:
             if self.api_process:
                 self.api_process.terminate()
@@ -405,7 +410,7 @@ class ServerLauncher:
             pass
         self.api_running = False
         self._update_api_ui_stopped()
-        self._log('API Server Stopped')
+        self._log('管理APIサーバー停止完了')
 
     def _start_dashboard(self):
         """公開サーバーを起動"""
@@ -413,11 +418,11 @@ class ServerLauncher:
         try:
             port = int(self.dashboard_port_var.get())
         except ValueError:
-            messagebox.showerror('Error', 'ポート番号は数値で入力してください')
+            messagebox.showerror('エラー', 'ポート番号は数値で入力してください')
             return
 
         self._save_config()
-        self._log(f'Starting Dashboard Server on port {port}...')
+        self._log(f'公開ダッシュボードを起動中... (ポート: {port})')
 
         def run_server():
             try:
@@ -433,13 +438,13 @@ class ServerLauncher:
                 )
                 self.dashboard_running = True
                 self.root.after(0, self._update_dashboard_ui_running)
-                self._log(f'Dashboard Server Started: http://localhost:{port}')
+                self._log(f'公開ダッシュボード起動完了: http://localhost:{port}')
 
                 for line in self.dashboard_process.stdout:
                     self.root.after(0, lambda l=line: self._log(f'[Web] {l.strip()}'))
 
             except Exception as e:
-                self.root.after(0, lambda: self._log(f'Dashboard Start Error: {e}'))
+                self.root.after(0, lambda: self._log(f'公開サーバー起動エラー: {e}'))
                 self.root.after(0, self._update_dashboard_ui_stopped)
 
         thread = threading.Thread(target=run_server, daemon=True)
@@ -448,7 +453,7 @@ class ServerLauncher:
     def _stop_dashboard(self):
         """公開サーバーを停止"""
         if not self.dashboard_running: return
-        self._log('Stopping Dashboard Server...')
+        self._log('公開ダッシュボードを停止中...')
         try:
             if self.dashboard_process:
                 self.dashboard_process.terminate()
@@ -457,35 +462,35 @@ class ServerLauncher:
             pass
         self.dashboard_running = False
         self._update_dashboard_ui_stopped()
-        self._log('Dashboard Server Stopped')
+        self._log('公開ダッシュボード停止完了')
 
     def _update_api_ui_running(self):
         self._draw_status_pill(self.api_status_canvas, True)
-        self.api_status_label.config(text='ONLINE', fg=COLORS['success'])
+        self.api_status_label.config(text='起動中', fg=COLORS['success'])
         self.api_start_btn.config(state=tk.DISABLED)
         self.api_stop_btn.config(state=tk.NORMAL)
 
     def _update_api_ui_stopped(self):
         self._draw_status_pill(self.api_status_canvas, False)
-        self.api_status_label.config(text='OFFLINE', fg=COLORS['text_secondary'])
+        self.api_status_label.config(text='停止中', fg=COLORS['text_secondary'])
         self.api_start_btn.config(state=tk.NORMAL)
         self.api_stop_btn.config(state=tk.DISABLED)
 
     def _update_dashboard_ui_running(self):
         self._draw_status_pill(self.dashboard_status_canvas, True)
-        self.dashboard_status_label.config(text='ONLINE', fg=COLORS['success'])
+        self.dashboard_status_label.config(text='起動中', fg=COLORS['success'])
         self.dashboard_start_btn.config(state=tk.DISABLED)
         self.dashboard_stop_btn.config(state=tk.NORMAL)
 
     def _update_dashboard_ui_stopped(self):
         self._draw_status_pill(self.dashboard_status_canvas, False)
-        self.dashboard_status_label.config(text='OFFLINE', fg=COLORS['text_secondary'])
+        self.dashboard_status_label.config(text='停止中', fg=COLORS['text_secondary'])
         self.dashboard_start_btn.config(state=tk.NORMAL)
         self.dashboard_stop_btn.config(state=tk.DISABLED)
 
     def _on_closing(self):
         if self.api_running or self.dashboard_running:
-            if messagebox.askyesno('Exit', 'Servers are running. Stop them and exit?'):
+            if messagebox.askyesno('終了確認', 'サーバーが実行中です。\n停止してから終了しますか？'):
                 if self.api_running: self._stop_api()
                 if self.dashboard_running: self._stop_dashboard()
                 self.root.destroy()
