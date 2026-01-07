@@ -533,7 +533,7 @@ class SidebarButton(tk.Button):
         super().__init__(
             master,
             text=f"  {icon}  {text}",
-            font=('Meiryo', 10),
+            font=('Meiryo', 13),
             fg=COLORS['text_primary'] if is_active else COLORS['text_secondary'],
             bg=self.active_bg if is_active else self.default_bg,
             relief='flat',
@@ -563,11 +563,11 @@ class SidebarButton(tk.Button):
         if active:
             self['bg'] = self.active_bg
             self['fg'] = COLORS['text_primary']
-            self['font'] = ('Meiryo', 10, 'bold')
+            self['font'] = ('Meiryo', 13, 'bold')
         else:
             self['bg'] = self.default_bg
             self['fg'] = COLORS['text_secondary']
-            self['font'] = ('Meiryo', 10)
+            self['font'] = ('Meiryo', 13)
 
 
 class MainApp:
