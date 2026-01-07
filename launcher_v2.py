@@ -1074,7 +1074,7 @@ class CumulativeAggregationPage(tk.Frame):
             state='disabled',
             width=30  # 固定幅に変更
         )
-        self.execute_btn.pack(anchor='w')
+        # self.execute_btn.pack(anchor='w')
     
     def _select_existing_file(self):
         """既存ファイル選択ダイアログ"""
@@ -1104,8 +1104,10 @@ class CumulativeAggregationPage(tk.Frame):
         
         if can_execute:
             self.execute_btn.config(state='normal')
+            self.execute_btn.pack(anchor='w')
         else:
             self.execute_btn.config(state='disabled')
+            self.execute_btn.pack_forget()
     
     def _execute_cumulative(self):
         """累積集計実行"""
@@ -1738,7 +1740,7 @@ class PerformanceReflectionPage(tk.Frame):
         ).pack(anchor='w', pady=(0, 10))
         
         self.execute_btn_frame = tk.Frame(parent, bg=COLORS['bg_main'])
-        self.execute_btn_frame.pack(fill=tk.X, pady=(5, 0))
+        # self.execute_btn_frame.pack(fill=tk.X, pady=(5, 0))
         
         self.execute_btn = ModernButton(
             self.execute_btn_frame, 
@@ -1977,8 +1979,10 @@ class PerformanceReflectionPage(tk.Frame):
         """実行可能かチェック"""
         if self.uploaded_files:
             self.execute_btn.config(state='normal')
+            self.execute_btn_frame.pack(fill=tk.X, pady=(5, 0))
         else:
             self.execute_btn.config(state='disabled')
+            self.execute_btn_frame.pack_forget()
 
     def _confirm_execution(self):
         """実行確認"""
