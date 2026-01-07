@@ -196,6 +196,11 @@ class ModernDropdown(tk.Frame):
         if len(self.values) * 35 > 300:  # スクロールが必要な場合のみ表示
             scrollbar.pack(side="right", fill="y")
         
+        # マウスホイールでスクロール
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", on_mousewheel)
+        
         self.menu_visible = True
         self.menu.bind('<FocusOut>', lambda e: self._hide_menu())
         self.menu.focus_set()
@@ -646,30 +651,15 @@ class MonthlyAggregationPage(tk.Frame):
 
     def _create_main_layout(self):
         """メインレイアウト作成（縦並び）"""
-        # スクロール可能なコンテナ
-        main_container = tk.Frame(self, bg=COLORS['bg_main'])
-        main_container.pack(fill=tk.BOTH, expand=True)
-        
         # コンテンツエリア（上部）
-        content_area = tk.Frame(main_container, bg=COLORS['bg_main'])
-        content_area.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 20))
+        content_area = tk.Frame(self, bg=COLORS['bg_main'])
+        content_area.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
         
         # STEP 1: ファイル選択（横3つ並び）
         self._create_file_upload_section(content_area)
         
-        # STEP 2: 期間選択
+        # STEP 2: 期間選択 + 実行ボタン
         self._create_period_section(content_area)
-        
-        # 実行ボタン（右下固定）
-        button_container = tk.Frame(main_container, bg=COLORS['bg_main'])
-        button_container.pack(side=tk.BOTTOM, fill=tk.X, padx=30, pady=(0, 30))
-        
-        self.execute_btn = ModernButton(
-            button_container, text="集計を実行", btn_type='primary',
-            command=self._execute_aggregation,
-            state='disabled'
-        )
-        self.execute_btn.pack(side=tk.RIGHT, ipadx=30, ipady=10)
 
     def _create_file_upload_section(self, parent):
         """ファイルアップロードセクション作成（横3つ並び）"""
@@ -756,7 +746,7 @@ class MonthlyAggregationPage(tk.Frame):
         # プレースホルダーテキスト / ファイル名
         file_name_label = tk.Label(
             content_frame, text="ドラッグ&ドロップ",
-            font=('Segoe UI', 16), fg=COLORS['text_secondary'],
+            font=('Segoe UI', 12), fg=COLORS['text_secondary'],
             bg=COLORS['bg_main'], wraplength=150
         )
         file_name_label.pack()
@@ -805,7 +795,7 @@ class MonthlyAggregationPage(tk.Frame):
                     
                     # ファイルを設定
                     self.files[file_key] = dropped_file
-                    file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'], font=('Segoe UI', 16))
+                    file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'], font=('Segoe UI', 12))
                     cloud_label.config(text="📄", font=('Segoe UI', 20))
                     remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
                     self._check_can_execute()
@@ -877,6 +867,14 @@ class MonthlyAggregationPage(tk.Frame):
         month_dropdown = ModernDropdown(month_container, months, str(current_month) + "月")
         month_dropdown.pack(fill=tk.X)
         self.month_dropdown = month_dropdown
+        
+        # 実行ボタン
+        self.execute_btn = ModernButton(
+            card, text="集計を実行", btn_type='primary',
+            command=self._execute_aggregation,
+            state='disabled'
+        )
+        self.execute_btn.pack(fill=tk.X, pady=(20, 0), ipady=12)
 
     def _select_file(self, file_key, file_name_label, cloud_label, remove_btn, file_filter):
         """ファイル選択ダイアログ"""
@@ -896,7 +894,7 @@ class MonthlyAggregationPage(tk.Frame):
         if filename:
             self.files[file_key] = filename
             # ファイル名のみ表示
-            file_name_label.config(text=Path(filename).name, fg=COLORS['accent'], font=('Segoe UI', 16))
+            file_name_label.config(text=Path(filename).name, fg=COLORS['accent'], font=('Segoe UI', 12))
             # クラウドアイコンを小さく、色を変更
             cloud_label.config(text="📄", font=('Segoe UI', 20))
             # 削除ボタン表示
