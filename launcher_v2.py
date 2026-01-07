@@ -1806,7 +1806,7 @@ class PerformanceReflectionPage(tk.Frame):
             ModernButton(
                 row, text="削除", 
                 command=lambda idx=i: self._remove_file(idx),
-                width=60, btn_type='danger'
+                width=6, btn_type='danger'
             ).pack(side=tk.RIGHT)
 
         self._check_can_execute()
@@ -1820,9 +1820,9 @@ class PerformanceReflectionPage(tk.Frame):
     def _check_can_execute(self):
         """実行可能かチェック"""
         if self.uploaded_files:
-            self.execute_btn.set_state('normal')
+            self.execute_btn.config(state='normal')
         else:
-            self.execute_btn.set_state('disabled')
+            self.execute_btn.config(state='disabled')
 
     def _confirm_execution(self):
         """実行確認"""
