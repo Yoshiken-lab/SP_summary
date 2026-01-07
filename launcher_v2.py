@@ -20,7 +20,7 @@ import ctypes
 
 # バックエンドモジュールをインポート
 sys.path.insert(0, str(Path(__file__).parent / 'app' / 'backend'))
-from aggregator import SalesAggregator, AccountsCalculator, ExcelExporter, SchoolMasterMismatchError
+from aggregator import SalesAggregator, AccountsCalculator, ExcelExporter, SchoolMasterMismatchError, CumulativeAggregator
 from services import FileHandler
 
 try:
@@ -892,8 +892,260 @@ class CumulativeAggregationPage(tk.Frame):
         # STEP 2: ファイルリストはSTEP 1の下に動的に追加される
         self.file_list_frame = None
         
-        # STEP 3: 既存ファイル選択 + 実行ボタン（右側カラム）
-        # TODO: 次のフェーズで実装
+        # STEP 3: 既存ファイル選択 + 実行ボタン
+        self.control_section_frame = None
+        self._create_control_section()
+    
+    def _create_control_section(self):
+        """STEP 3: 既存ファイル選択と実行ボタン"""
+        self.control_section_frame = tk.Frame(self.content_area, bg=COLORS['bg_card'], padx=20, pady=20)
+        self.control_section_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        # ヘッダー
+        header_frame = tk.Frame(self.control_section_frame, bg=COLORS['bg_card'])
+        header_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        step_badge = tk.Label(
+            header_frame, text="STEP 3", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
+        )
+        step_badge.pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Label(
+            header_frame, text="既存ファイル（オプション）", font=('Meiryo', 12, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_card']
+        ).pack(side=tk.LEFT)
+        
+        # 説明テキスト
+        tk.Label(
+            self.control_section_frame, text="既存のファイルに追記・上書きする場合に選択",
+            font=('Meiryo', 9), fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        ).pack(anchor='w', pady=(0, 10))
+        
+        # ファイル選択ボタン
+        btn_frame = tk.Frame(self.control_section_frame, bg=COLORS['bg_card'])
+        btn_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        select_existing_btn = ModernButton(
+            btn_frame, text="📂 ファイルを選択", btn_type='secondary',
+            command=self._select_existing_file,
+            font=('Meiryo', 10)
+        )
+        select_existing_btn.pack(fill=tk.X, ipady=8)
+        
+        # 選択されたファイル表示
+        self.existing_file_label = tk.Label(
+            self.control_section_frame, text="",
+            font=('Meiryo', 9), fg=COLORS['text_secondary'], bg=COLORS['bg_card'],
+            wraplength=500, justify='left'
+        )
+        self.existing_file_label.pack(anchor='w', pady=(5, 20))
+        
+        # 実行ボタン
+        self.execute_btn = ModernButton(
+            self.control_section_frame, text="累積集計を実行", btn_type='primary',
+            font=('Meiryo', 12),
+            command=self._execute_cumulative,
+            state='disabled'
+        )
+        self.execute_btn.pack(fill=tk.X, ipady=12)
+    
+    def _select_existing_file(self):
+        """既存ファイル選択ダイアログ"""
+        from tkinter import filedialog
+        
+        filename = filedialog.askopenfilename(
+            title="既存の累積ファイルを選択",
+            filetypes=[("Excelファイル", "*.xlsx"), ("すべてのファイル", "*.*")]
+        )
+        
+        if filename:
+            self.existing_file_path = filename
+            display_name = Path(filename).name
+            self.existing_file_label.config(
+                text=f"選択済み: {display_name}",
+                fg=COLORS['accent']
+            )
+        
+    def _check_can_execute(self):
+        """実行ボタンの有効化チェック"""
+        # 全てのファイルに年月が設定されているか確認
+        can_execute = (
+            len(self.cumulative_files) > 0 and
+            all(f['year'] is not None and f['month'] is not None for f in self.cumulative_files) and
+            not self.is_processing
+        )
+        
+        if can_execute:
+            self.execute_btn.config(state='normal')
+        else:
+            self.execute_btn.config(state='disabled')
+    
+    def _execute_cumulative(self):
+        """累積集計実行"""
+        if self.is_processing:
+            return
+        
+        # 進捗モーダル表示
+        self._show_progress_modal()
+        
+        # 別スレッドで実行
+        self.is_processing = True
+        self.execute_btn.config(state='disabled')
+        
+        thread = threading.Thread(target=self._run_cumulative_process, daemon=True)
+        thread.start()
+    
+    def _run_cumulative_process(self):
+        """累積集計処理（別スレッド）"""
+        try:
+            # ファイルを年月順にソート
+            sorted_files = sorted(self.cumulative_files, key=lambda x: (x['year'], x['month']))
+            
+            # 出力先とパラメータの準備
+            output_dir = Path.home() / 'Downloads'
+            existing_path = Path(self.existing_file_path) if self.existing_file_path else None
+            
+            # 年度計算（最初のファイルから）
+            first_file = sorted_files[0]
+            fiscal_year = first_file['year'] if first_file['month'] >= 4 else first_file['year'] - 1
+            
+            total = len(sorted_files)
+            output_path = None
+            processed_months = []
+            
+            # 各ファイルを順番に処理
+            for i, file_info in enumerate(sorted_files):
+                # 進捗更新
+                progress_msg = f"{file_info['year']}年{file_info['month']}月 処理中... ({i+1}/{total})"
+                self.after(0, lambda msg=progress_msg: self._update_progress_label(msg))
+                
+                # 2件目以降は、前回の出力を既存ファイルとして使用
+                if i > 0 and output_path:
+                    existing_path = Path(output_path)
+                
+                # CumulativeAggregator実行
+                aggregator = CumulativeAggregator(
+                    input_path=Path(file_info['file_path']),
+                    output_dir=output_dir,
+                    year=file_info['year'],
+                    month=file_info['month'],
+                    fiscal_year=fiscal_year,
+                    existing_file_path=existing_path
+                )
+                result = aggregator.process()
+                
+                output_path = result['outputPath']
+                processed_months.append(f"{file_info['year']}年{file_info['month']}月")
+            
+            # 完了
+            final_result = {
+                'fiscalYear': fiscal_year,
+                'processedCount': total,
+                'processedMonths': '、'.join(processed_months),
+                'outputPath': output_path
+            }
+            
+            self.after(0, lambda: self._hide_progress_modal())
+            self.after(0, lambda r=final_result: self._show_cumulative_result(r))
+            
+        except Exception as e:
+            self.after(0, lambda: self._hide_progress_modal())
+            self.after(0, lambda: ModernDialog.show_error(
+                self, 'エラー', f'累積集計中にエラーが発生しました', detail=str(e)
+            ))
+        finally:
+            self.is_processing = False
+            self.after(0, lambda: self.execute_btn.config(state='normal'))
+    
+    def _show_progress_modal(self):
+        """集計中モーダルを表示"""
+        self.progress_window = tk.Toplevel(self)
+        self.progress_window.title("累積集計")
+        self.progress_window.geometry("550x250")
+        self.progress_window.overrideredirect(True)
+        self.progress_window.config(bg=COLORS['bg_card'])
+        self.progress_window.attributes('-topmost', True)
+        
+        # 枠線
+        container = tk.Frame(
+            self.progress_window, bg=COLORS['bg_card'],
+            highlightthickness=1, highlightbackground=COLORS['border'], highlightcolor=COLORS['border']
+        )
+        container.pack(fill=tk.BOTH, expand=True)
+        
+        # 中央に配置
+        self.progress_window.update_idletasks()
+        x = (self.progress_window.winfo_screenwidth() // 2) - 275
+        y = (self.progress_window.winfo_screenheight() // 2) - 125
+        self.progress_window.geometry(f"+{x}+{y}")
+        
+        # コンテンツ
+        frame = tk.Frame(container, bg=COLORS['bg_card'], padx=30, pady=30)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # スピナー的なアイコン
+        tk.Label(
+            frame, text="⏳", font=('Meiryo', 32),
+            fg=COLORS['accent'], bg=COLORS['bg_card']
+        ).pack(pady=(0, 15))
+        
+        tk.Label(
+            frame, text="累積集計中...", font=('Meiryo', 14, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_card']
+        ).pack(pady=(0, 10))
+        
+        self.progress_label = tk.Label(
+            frame, text="準備中...", font=('Meiryo', 10),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card'], justify='center',
+            wraplength=480
+        )
+        self.progress_label.pack()
+        
+        self.progress_window.transient(self)
+        self.progress_window.grab_set()
+        
+        # 最前面へ
+        self.progress_window.lift()
+        self.progress_window.focus_force()
+    
+    def _update_progress_label(self, message):
+        """進捗ラベル更新"""
+        if hasattr(self, 'progress_label') and self.progress_label.winfo_exists():
+            self.progress_label.config(text=message)
+    
+    def _hide_progress_modal(self):
+        """モーダルを閉じる"""
+        if hasattr(self, 'progress_window') and self.progress_window.winfo_exists():
+            self.progress_window.destroy()
+    
+    def _show_cumulative_result(self, result):
+        """累積集計完了ダイアログ"""
+        message = f"累積集計が完了しました！\n対象年度: {result['fiscalYear']}年度\n処理ファイル数: {result['processedCount']}件"
+        detail = f"追記月: {result['processedMonths']}\n保存先:\n{result['outputPath']}"
+        
+        ModernDialog.show_success(
+            self,
+            '累積集計完了',
+            message,
+            detail=detail
+        )
+        
+        self._reset_form()
+    
+    def _reset_form(self):
+        """フォームをリセット"""
+        self.cumulative_files = []
+        self.existing_file_path = None
+        self.existing_file_label.config(text="")
+        self.execute_btn.config(state='disabled')
+        
+        # 年度ラベルをリセット
+        if hasattr(self, 'fiscal_year_label'):
+            delattr(self, 'fiscal_year_label')
+        
+        # ファイルリストを更新（空にする）
+        self._update_file_list()
     
     def _create_file_drop_section(self):
         """STEP 1: 複数ファイルドロップゾーン"""
@@ -999,6 +1251,7 @@ class CumulativeAggregationPage(tk.Frame):
                 })
         
         self._update_file_list()
+        self._check_can_execute()  # 実行ボタンの有効化チェック
     
     def _update_file_list(self):
         """ファイルリスト表示を更新"""
@@ -1007,6 +1260,7 @@ class CumulativeAggregationPage(tk.Frame):
             self.file_list_frame.destroy()
         
         if not self.cumulative_files:
+            self._check_can_execute()  # ファイルがない場合もチェック
             return
         
         # STEP 2フレーム作成
@@ -1070,6 +1324,11 @@ class CumulativeAggregationPage(tk.Frame):
         # 各ファイル行を作成
         for i, file_info in enumerate(self.cumulative_files):
             self._create_file_row(scrollable_frame, i, file_info)
+        
+        # STEP 3を再配置（STEP 2の後に表示されるように）
+        if self.control_section_frame:
+            self.control_section_frame.pack_forget()
+            self.control_section_frame.pack(fill=tk.X, pady=(0, 20))
     
     def _create_file_row(self, parent, index, file_info):
         """ファイルリストの1行を作成"""
@@ -1118,6 +1377,7 @@ class CumulativeAggregationPage(tk.Frame):
                     file_info['year'] = int(parts[0])
                     file_info['month'] = int(parts[1])
                     self._update_fiscal_year_display()
+                    self._check_can_execute()  # 実行ボタンの有効化チェック
         
         # ドロップダウンの変更を監視（値が変わったら呼ばれるように）
         period_dropdown.current_value.trace_add('write', on_period_change)
