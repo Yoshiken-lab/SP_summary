@@ -1728,7 +1728,6 @@ class PerformanceReflectionPage(tk.Frame):
             text="実績反映を実行", 
             command=self._confirm_execution,
             width=25,
-            height=45,
             state='disabled'
         )
         self.execute_btn.pack(anchor='w')
