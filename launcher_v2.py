@@ -734,7 +734,7 @@ class MonthlyAggregationPage(tk.Frame):
         
         tk.Label(
             label_frame, text=icon, font=('Segoe UI', 12),
-            bg=COLORS['bg_card']
+            fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT, padx=(0, 5))
         
         tk.Label(
