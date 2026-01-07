@@ -126,20 +126,31 @@ class ModernButton(tk.Button):
 
 class ModernDropdown(tk.Frame):
     """モダンなドロップダウンウィジェット"""
-    def __init__(self, master, values, default_value="", **kwargs):
+    def __init__(self, master, values, default_value="", width=None, **kwargs):
         super().__init__(master, bg=COLORS['bg_main'], **kwargs)
         
         self.values = values
         self.current_value = tk.StringVar(value=default_value)
         
         # ドロップダウンボタン
-        self.button = tk.Button(
-            self, textvariable=self.current_value,
-            font=('Meiryo', 10), fg=COLORS['text_primary'],
-            bg=COLORS['bg_main'], relief='flat', bd=0,
-            anchor='w', padx=10, cursor='hand2',
-            command=self._toggle_menu
-        )
+        button_config = {
+            'textvariable': self.current_value,
+            'font': ('Meiryo', 10),
+            'fg': COLORS['text_primary'],
+            'bg': COLORS['bg_main'],
+            'relief': 'flat',
+            'bd': 0,
+            'anchor': 'w',
+            'padx': 10,
+            'cursor': 'hand2',
+            'command': self._toggle_menu
+        }
+        
+        # width指定があれば適用（ピクセル単位）
+        if width:
+            button_config['width'] = width
+        
+        self.button = tk.Button(self, **button_config)
         self.button.pack(fill=tk.BOTH, expand=True, ipady=8)
         
         # ドロップダウンアイコン
@@ -940,7 +951,7 @@ class CumulativeAggregationPage(tk.Frame):
         header_frame.pack(fill=tk.X, pady=(0, 15))
         
         step_badge = tk.Label(
-            header_frame, text="STEP 3", font=('Meiryo', 9, 'bold'),
+            header_frame, text="STEP 2", font=('Meiryo', 9, 'bold'),
             fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
         )
         step_badge.pack(side=tk.LEFT, padx=(0, 10))
@@ -1315,12 +1326,17 @@ class CumulativeAggregationPage(tk.Frame):
         
         tk.Label(
             table_header, text="ファイル名", font=('Meiryo', 9, 'bold'),
-            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=35, anchor='w'
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=40, anchor='w'
         ).pack(side=tk.LEFT, padx=(0, 10))
         
         tk.Label(
-            table_header, text="対象年月", font=('Meiryo', 9, 'bold'),
-            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=20, anchor='center'
+            table_header, text="対象年", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=12, anchor='center'
+        ).pack(side=tk.LEFT, padx=(0, 5))
+        
+        tk.Label(
+            table_header, text="対象月", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=10, anchor='center'
         ).pack(side=tk.LEFT, padx=(0, 10))
         
         tk.Label(
@@ -1364,7 +1380,7 @@ class CumulativeAggregationPage(tk.Frame):
         # ファイル名
         tk.Label(
             row, text=file_info['display_name'], font=('Meiryo', 9),
-            fg=COLORS['text_primary'], bg=COLORS['bg_main'], width=35, anchor='w'
+            fg=COLORS['text_primary'], bg=COLORS['bg_main'], width=40, anchor='w'
         ).pack(side=tk.LEFT, padx=(0, 10))
         
         # 年月選択
@@ -1379,7 +1395,7 @@ class CumulativeAggregationPage(tk.Frame):
         year_frame.pack(side=tk.LEFT, padx=(0, 8))
         
         year_default = f"{file_info['year']}年" if file_info['year'] else ""
-        year_dropdown = ModernDropdown(year_frame, year_options, year_default, width=90)
+        year_dropdown = ModernDropdown(year_frame, year_options, year_default, width=12)
         year_dropdown.pack()
         
         # 月選択ドロップダウン
@@ -1389,7 +1405,7 @@ class CumulativeAggregationPage(tk.Frame):
         month_frame.pack(side=tk.LEFT)
         
         month_default = f"{file_info['month']}月" if file_info['month'] else ""
-        month_dropdown = ModernDropdown(month_frame, month_options, month_default, width=70)
+        month_dropdown = ModernDropdown(month_frame, month_options, month_default, width=10)
         month_dropdown.pack()
         
         # 選択変更時のコールバック
