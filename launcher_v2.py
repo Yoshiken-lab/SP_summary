@@ -992,6 +992,9 @@ class MonthlyAggregationPage(tk.Frame):
         self.is_processing = True
         self.execute_btn.config(state='disabled')
         
+        # 集計中モーダルを表示
+        self._show_progress_modal()
+        
         # スレッドで実行（UIをブロックしないため）
         thread = threading.Thread(target=self._run_aggregation_process)
         thread.daemon = True
@@ -1004,17 +1007,25 @@ class MonthlyAggregationPage(tk.Frame):
             result = self._run_direct_aggregation()
             if result:
                 # 成功時は結果ダイアログを表示
-                self.after(0, lambda: self._show_result_dialog(result.get('total_sales', 0)))
+                output_path = result.get('output_file', '')
+                total_sales = result.get('total_sales', 0)
+                self.after(0, lambda: self._show_result_dialog(total_sales, output_path))
         
         except SchoolMasterMismatchError as e:
             # マスタ不一致エラー
             schools = e.unmatched_schools
-            self.after(0, lambda: self._show_master_mismatch_dialog(schools))
+            self.after(0, lambda: [
+                self._hide_progress_modal(),
+                self._show_master_mismatch_dialog(schools)
+            ])
         
         except Exception as e:
             # エラーダイアログを表示
             error_msg = str(e)
-            self.after(0, lambda: self._show_error_dialog(error_msg))
+            self.after(0, lambda: [
+                self._hide_progress_modal(),
+                self._show_error_dialog(error_msg)
+            ])
         
         finally:
             # 処理完了フラグ
@@ -1048,8 +1059,8 @@ class MonthlyAggregationPage(tk.Frame):
             accounts_calc = AccountsCalculator(accounts_df)
             accounts_result_df = accounts_calc.calculate()
             
-            # Excel出力
-            output_dir = Path(__file__).parent / 'output'
+            # Excel出力（ユーザーのDownloadsフォルダ）
+            output_dir = Path.home() / 'Downloads'
             output_dir.mkdir(exist_ok=True)
             
             filename = f"SP_SalesResult_{fiscal_year}{month:02d}.xlsx"
@@ -1070,19 +1081,73 @@ class MonthlyAggregationPage(tk.Frame):
         except Exception as e:
             raise e
     
-    def _show_result_dialog(self, total_sales):
+    def _show_progress_modal(self):
+        """集計中モーダルを表示"""
+        self.progress_window = tk.Toplevel(self)
+        self.progress_window.title("月次集計")
+        self.progress_window.geometry("400x150")
+        self.progress_window.transient(self)
+        self.progress_window.grab_set()
+        
+        # 中央に配置
+        self.progress_window.update_idletasks()
+        x = (self.progress_window.winfo_screenwidth() // 2) - 200
+        y = (self.progress_window.winfo_screenheight() // 2) - 75
+        self.progress_window.geometry(f"+{x}+{y}")
+        
+        # 閉じるボタンを無効化
+        self.progress_window.protocol("WM_DELETE_WINDOW", lambda: None)
+        
+        # コンテンツ
+        frame = tk.Frame(self.progress_window, bg=COLORS['bg_card'], padx=30, pady=30)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        tk.Label(
+            frame, text="集計中...", font=('Segoe UI', 14, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_card']
+        ).pack(pady=(0, 10))
+        
+        tk.Label(
+            frame, text="しばらくお待ちください", font=('Segoe UI', 10),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        ).pack()
+    
+    def _hide_progress_modal(self):
+        """集計中モーダルを閉じる"""
+        if hasattr(self, 'progress_window') and self.progress_window:
+            self.progress_window.destroy()
+            self.progress_window = None
+    
+    def _show_result_dialog(self, total_sales, output_path):
         """集計完了ダイアログを表示"""
+        # 進捗モーダルを閉じる
+        self._hide_progress_modal()
+        
         # 総売上をフォーマット
         sales_str = f'¥{int(total_sales):,}'
         
+        # 保存先ディレクトリ
+        output_dir = Path(output_path).parent
+        
         result = messagebox.showinfo(
             '月次集計完了',
-            f'集計が完了しました！\n\n総売上: {sales_str}',
+            f'集計が完了しました！\n\n'
+            f'総売上: {sales_str}\n\n'
+            f'保存先:\n{output_path}',
             parent=self
         )
         
-        # ダイアログを閉じたらフォームをリセット
+        # ダイアログを閉じたらフォルダを開くか確認
         if result:
+            open_folder = messagebox.askyesno(
+                'フォルダを開く',
+                '保存先フォルダを開きますか？',
+                parent=self
+            )
+            if open_folder:
+                # エクスプローラーでフォルダを開く
+                os.startfile(str(output_dir))
+            
             self._reset_form()
     
     def _show_master_mismatch_dialog(self, schools):
