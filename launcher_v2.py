@@ -846,11 +846,12 @@ class ServerControlPage(tk.Frame):
 
     def _create_dashboard_panel(self, parent):
         """ダッシュボード管理パネル（新デザイン）"""
-        card = tk.Frame(parent, bg=COLORS['bg_card'], padx=25, pady=25)
-        card.pack(fill=tk.X)
+        self.dashboard_card = tk.Frame(parent, bg=COLORS['bg_card'], padx=25, pady=25,
+                                     highlightthickness=2, highlightbackground=COLORS['border'])
+        self.dashboard_card.pack(fill=tk.X)
         
         # --- ヘッダー行 (タイトル + ステータス) ---
-        header_row = tk.Frame(card, bg=COLORS['bg_card'])
+        header_row = tk.Frame(self.dashboard_card, bg=COLORS['bg_card'])
         header_row.pack(fill=tk.X, pady=(0, 20))
         
         # 左側: アイコンとタイトル
@@ -864,16 +865,16 @@ class ServerControlPage(tk.Frame):
                  fg=COLORS['text_primary'], bg=COLORS['bg_card']).pack(side=tk.LEFT)
         
         # 右側: ステータスバッジ
-        self.status_badge = tk.Label(header_row, text="● 停止中", font=('Meiryo', 10, 'bold'),
-                                     fg=COLORS['text_secondary'], bg=COLORS['bg_main'],
+        self.status_badge = tk.Label(header_row, text="● 停止中", font=('Meiryo', 12, 'bold'),
+                                     fg=COLORS['warning'], bg=COLORS['bg_main'],
                                      padx=15, pady=5)
         self.status_badge.pack(side=tk.RIGHT)
         
         # --- 仕切り線 ---
-        tk.Frame(card, bg=COLORS['border'], height=1).pack(fill=tk.X, pady=(0, 20))
+        tk.Frame(self.dashboard_card, bg=COLORS['border'], height=1).pack(fill=tk.X, pady=(0, 20))
         
         # --- コントロール行 ---
-        control_row = tk.Frame(card, bg=COLORS['bg_card'])
+        control_row = tk.Frame(self.dashboard_card, bg=COLORS['bg_card'])
         control_row.pack(fill=tk.X)
         
         # ポート設定
@@ -945,6 +946,7 @@ class ServerControlPage(tk.Frame):
         if running:
             # 起動中スタイル
             self.status_badge.config(text="● 起動中", fg=COLORS['success'], bg='#064E3B') # Dark Green BG
+            self.dashboard_card.config(highlightbackground=COLORS['success'])
             
             ip = self.manager.get_local_ip()
             port = self.manager.config.get('dashboard_port', 8000)
@@ -956,7 +958,8 @@ class ServerControlPage(tk.Frame):
             self.stop_btn.config(state="normal")
         else:
             # 停止中スタイル
-            self.status_badge.config(text="● 停止中", fg=COLORS['text_secondary'], bg=COLORS['bg_main'])
+            self.status_badge.config(text="● 停止中", fg=COLORS['warning'], bg=COLORS['bg_main'])
+            self.dashboard_card.config(highlightbackground=COLORS['warning'])
             
             self.url_frame.pack_forget() # URL非表示
             
