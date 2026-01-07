@@ -883,26 +883,229 @@ class CumulativeAggregationPage(tk.Frame):
     def _create_main_layout(self):
         """メインレイアウト作成"""
         # コンテンツエリア
-        content_area = tk.Frame(self, bg=COLORS['bg_main'])
-        content_area.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
+        self.content_area = tk.Frame(self, bg=COLORS['bg_main'])
+        self.content_area.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
         
-        # STEP 1: ファイル追加（今後実装）
-        # TODO: 複数ファイルドロップゾーン
+        # STEP 1: ファイル追加
+        self._create_file_drop_section()
         
-        # STEP 2: ファイルリスト（今後実装）
-        # TODO: テーブル形式でファイル一覧表示
+        # STEP 2: ファイルリストはSTEP 1の下に動的に追加される
+        self.file_list_frame = None
         
-        # STEP 3: 既存ファイル選択（今後実装）
-        # TODO: オプション機能
+        # STEP 3: 既存ファイル選択 + 実行ボタン（右側カラム）
+        # TODO: 次のフェーズで実装
+    
+    def _create_file_drop_section(self):
+        """STEP 1: 複数ファイルドロップゾーン"""
+        card = tk.Frame(self.content_area, bg=COLORS['bg_card'], padx=20, pady=20)
+        card.pack(fill=tk.X, pady=(0, 20))
         
-        # 実行ボタン（今後実装）
-        # TODO: 実行ボタンとロジック
+        # ヘッダー
+        header_frame = tk.Frame(card, bg=COLORS['bg_card'])
+        header_frame.pack(fill=tk.X, pady=(0, 20))
         
-        # 暫定的なプレースホルダー
+        step_badge = tk.Label(
+            header_frame, text="STEP 1", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
+        )
+        step_badge.pack(side=tk.LEFT, padx=(0, 10))
+        
         tk.Label(
-            content_area, text="累積集計機能を実装中...",
-            font=('Meiryo', 14), fg=COLORS['accent'], bg=COLORS['bg_main']
-        ).pack(anchor='center', pady=100)
+            header_frame, text="月次集計ファイルの追加", font=('Meiryo', 12, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_card']
+        ).pack(side=tk.LEFT)
+        
+        # ドロップゾーン
+        drop_zone = tk.Frame(card, bg=COLORS['bg_main'], highlightthickness=2,
+                           highlightbackground=COLORS['border'], highlightcolor=COLORS['border'])
+        drop_zone.pack(fill=tk.X, ipady=30)
+        
+        content_frame = tk.Frame(drop_zone, bg=COLORS['bg_main'], cursor='hand2')
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
+        
+        # アイコン
+        tk.Label(
+            content_frame, text="📁", font=('Meiryo', 24),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+        ).pack(pady=(0, 8))
+        
+        # テキスト
+        tk.Label(
+            content_frame, text="ファイルをドラッグ&ドロップ（複数可）",
+            font=('Meiryo', 11), fg=COLORS['text_primary'], bg=COLORS['bg_main']
+        ).pack()
+        
+        tk.Label(
+            content_frame, text="または クリックしてファイルを選択",
+            font=('Meiryo', 9), fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+        ).pack(pady=(5, 0))
+        
+        # イベントバインディング（クリックとドラッグ＆ドロップ）
+        def on_click(event):
+            self._select_files()
+        
+        drop_zone.bind('<Button-1>', on_click)
+        content_frame.bind('<Button-1>', on_click)
+        
+        # ホバーエフェクト
+        def on_enter(event):
+            drop_zone.config(highlightbackground=COLORS['accent'], highlightcolor=COLORS['accent'])
+            content_frame.config(bg='#2a3142')
+        
+        def on_leave(event):
+            drop_zone.config(highlightbackground=COLORS['border'], highlightcolor=COLORS['border'])
+            content_frame.config(bg=COLORS['bg_main'])
+        
+        drop_zone.bind('<Enter>', on_enter)
+        drop_zone.bind('<Leave>', on_leave)
+        content_frame.bind('<Enter>', on_enter)
+        content_frame.bind('<Leave>', on_leave)
+        
+        # ドラッグ&ドロップ（TkinterDnD利用可能なら）
+        if TKDND_AVAILABLE:
+            def on_drop(event):
+                files = self.winfo_toplevel().tk.splitlist(event.data)
+                xlsx_files = [f for f in files if f.lower().endswith('.xlsx')]
+                if xlsx_files:
+                    self._add_files(xlsx_files)
+            
+            drop_zone.drop_target_register(DND_FILES)
+            drop_zone.dnd_bind('<<Drop>>', on_drop)
+            content_frame.drop_target_register(DND_FILES)
+            content_frame.dnd_bind('<<Drop>>', on_drop)
+    
+    def _select_files(self):
+        """ファイル選択ダイアログ（複数選択）"""
+        from tkinter import filedialog
+        
+        filenames = filedialog.askopenfilenames(
+            title="月次集計ファイルを選択（複数可）",
+            filetypes=[("Excelファイル", "*.xlsx"), ("すべてのファイル", "*.*")]
+        )
+        
+        if filenames:
+            self._add_files(list(filenames))
+    
+    def _add_files(self, file_paths):
+        """ファイルをリストに追加"""
+        for file_path in file_paths:
+            # 重複チェック
+            if not any(f['file_path'] == file_path for f in self.cumulative_files):
+                self.cumulative_files.append({
+                    'file_path': file_path,
+                    'year': None,
+                    'month': None,
+                    'display_name': Path(file_path).name
+                })
+        
+        self._update_file_list()
+    
+    def _update_file_list(self):
+        """ファイルリスト表示を更新"""
+        # 既存のリストフレームを削除
+        if self.file_list_frame:
+            self.file_list_frame.destroy()
+        
+        if not self.cumulative_files:
+            return
+        
+        # STEP 2フレーム作成
+        self.file_list_frame = tk.Frame(self.content_area, bg=COLORS['bg_card'], padx=20, pady=20)
+        self.file_list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        
+        # ヘッダー
+        header_frame = tk.Frame(self.file_list_frame, bg=COLORS['bg_card'])
+        header_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        step_badge = tk.Label(
+            header_frame, text="STEP 2", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
+        )
+        step_badge.pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Label(
+            header_frame, text=f"追加されたファイル ({len(self.cumulative_files)}件)",
+            font=('Meiryo', 12, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_card']
+        ).pack(side=tk.LEFT)
+        
+        # テーブルヘッダー
+        table_header = tk.Frame(self.file_list_frame, bg=COLORS['bg_main'], padx=10, pady=8)
+        table_header.pack(fill=tk.X)
+        
+        tk.Label(
+            table_header, text="ファイル名", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=35, anchor='w'
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Label(
+            table_header, text="対象年月", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=20, anchor='center'
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Label(
+            table_header, text="操作", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=8, anchor='center'
+        ).pack(side=tk.LEFT)
+        
+        # ファイル一覧（スクロール可能）
+        list_container = tk.Frame(self.file_list_frame, bg=COLORS['bg_card'])
+        list_container.pack(fill=tk.BOTH, expand=True)
+        
+        canvas = tk.Canvas(list_container, bg=COLORS['bg_card'], highlightthickness=0, height=200)
+        scrollbar = tk.Scrollbar(list_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=COLORS['bg_card'])
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # 各ファイル行を作成
+        for i, file_info in enumerate(self.cumulative_files):
+            self._create_file_row(scrollable_frame, i, file_info)
+    
+    def _create_file_row(self, parent, index, file_info):
+        """ファイルリストの1行を作成"""
+        row = tk.Frame(parent, bg=COLORS['bg_main'], padx=10, pady=8)
+        row.pack(fill=tk.X, pady=2)
+        
+        # ファイル名
+        tk.Label(
+            row, text=file_info['display_name'], font=('Meiryo', 9),
+            fg=COLORS['text_primary'], bg=COLORS['bg_main'], width=35, anchor='w'
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 年月選択（仮実装：次のフェーズで実装）
+        period_frame = tk.Frame(row, bg=COLORS['bg_main'], width=200)
+        period_frame.pack(side=tk.LEFT, padx=(0, 10))
+        period_frame.pack_propagate(False)
+        
+        tk.Label(
+            period_frame, text="[TODO: 年月選択]", font=('Meiryo', 9),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], anchor='center'
+        ).pack(fill=tk.BOTH)
+        
+        # 削除ボタン
+        delete_btn = tk.Label(
+            row, text="削除", font=('Meiryo', 9),
+            fg='white', bg='#991B1B', cursor='hand2', padx=10, pady=4
+        )
+        delete_btn.pack(side=tk.LEFT)
+        delete_btn.bind('<Button-1>', lambda e, idx=index: self._remove_file(idx))
+    
+    def _remove_file(self, index):
+        """ファイルをリストから削除"""
+        if 0 <= index < len(self.cumulative_files):
+            self.cumulative_files.pop(index)
+            self._update_file_list()
+
 
 
 class MonthlyAggregationPage(tk.Frame):
