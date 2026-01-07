@@ -1082,15 +1082,45 @@ class CumulativeAggregationPage(tk.Frame):
             fg=COLORS['text_primary'], bg=COLORS['bg_main'], width=35, anchor='w'
         ).pack(side=tk.LEFT, padx=(0, 10))
         
-        # 年月選択（仮実装：次のフェーズで実装）
+        # 年月選択
         period_frame = tk.Frame(row, bg=COLORS['bg_main'], width=200)
         period_frame.pack(side=tk.LEFT, padx=(0, 10))
         period_frame.pack_propagate(False)
         
-        tk.Label(
-            period_frame, text="[TODO: 年月選択]", font=('Meiryo', 9),
-            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], anchor='center'
-        ).pack(fill=tk.BOTH)
+        # 年月選択肢を生成（過去5年分）
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+        
+        # 4月〜3月の範囲で生成
+        period_options = []
+        for year_offset in range(-5, 2):  # 5年前から1年後まで
+            year = current_year + year_offset
+            for month in range(1, 13):
+                period_options.append(f"{year}年{month}月")
+        
+        # デフォルト値の設定
+        if file_info['year'] and file_info['month']:
+            default_value = f"{file_info['year']}年{file_info['month']}月"
+        else:
+            default_value = ""
+        
+        # ModernDropdownを使用
+        period_dropdown = ModernDropdown(period_frame, period_options, default_value)
+        period_dropdown.pack(fill=tk.BOTH, expand=True)
+        
+        # 選択変更時のコールバック
+        def on_period_change(*args):
+            selected = period_dropdown.get()
+            if selected:
+                # "2024年10月" → year=2024, month=10
+                parts = selected.replace('年', ' ').replace('月', '').split()
+                if len(parts) == 2:
+                    file_info['year'] = int(parts[0])
+                    file_info['month'] = int(parts[1])
+                    self._update_fiscal_year_display()
+        
+        # ドロップダウンの変更を監視（値が変わったら呼ばれるように）
+        period_dropdown.current_value.trace_add('write', on_period_change)
         
         # 削除ボタン
         delete_btn = tk.Label(
@@ -1100,11 +1130,49 @@ class CumulativeAggregationPage(tk.Frame):
         delete_btn.pack(side=tk.LEFT)
         delete_btn.bind('<Button-1>', lambda e, idx=index: self._remove_file(idx))
     
+    def _update_fiscal_year_display(self):
+        """年度表示を更新（ファイルリスト下部）"""
+        # 年度計算
+        fiscal_year = None
+        if self.cumulative_files:
+            # 年月が設定されている最初のファイルから年度を計算
+            for file_info in self.cumulative_files:
+                if file_info['year'] and file_info['month']:
+                    year = file_info['year']
+                    month = file_info['month']
+                    fiscal_year = year if month >= 4 else year - 1
+                    break
+        
+        # 既存の年度表示ラベルがあれば更新、なければ作成
+        if not hasattr(self, 'fiscal_year_label'):
+            if fiscal_year and self.file_list_frame:
+                # 年度表示ラベルを作成
+                fiscal_year_frame = tk.Frame(self.file_list_frame, bg='#1E3A5F', padx=15, pady=10)
+                fiscal_year_frame.pack(fill=tk.X, pady=(10, 0))
+                
+                self.fiscal_year_label = tk.Label(
+                    fiscal_year_frame, text=f"対象年度: {fiscal_year}年度　（出力ファイル: SP_年度累計_{fiscal_year}.xlsx）",
+                    font=('Meiryo', 10), fg=COLORS['accent'], bg='#1E3A5F'
+                )
+                self.fiscal_year_label.pack()
+        elif hasattr(self, 'fiscal_year_label'):
+            if fiscal_year:
+                self.fiscal_year_label.config(text=f"対象年度: {fiscal_year}年度　（出力ファイル: SP_年度累計_{fiscal_year}.xlsx）")
+            else:
+                # 年度が計算できなくなった場合はラベルを削除
+                if self.fiscal_year_label.winfo_exists():
+                    self.fiscal_year_label.master.destroy()
+                delattr(self, 'fiscal_year_label')
+    
     def _remove_file(self, index):
         """ファイルをリストから削除"""
         if 0 <= index < len(self.cumulative_files):
             self.cumulative_files.pop(index)
+            # 年度ラベルをリセット
+            if hasattr(self, 'fiscal_year_label'):
+                delattr(self, 'fiscal_year_label')
             self._update_file_list()
+
 
 
 
