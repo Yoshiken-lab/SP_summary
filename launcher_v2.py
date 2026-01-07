@@ -234,6 +234,221 @@ class ModernDropdown(tk.Frame):
         return self.current_value.get()
 
 
+
+class ModernDialog(tk.Toplevel):
+    """モダンなカスタムダイアログ"""
+    def __init__(self, parent, title, message, type='info', detail=None):
+        super().__init__(parent)
+        self.result = False
+        
+        # ウィンドウ設定
+        self.overrideredirect(True)  # タイトルバーを非表示
+        self.config(bg=COLORS['bg_card'])
+        self.attributes('-topmost', True)
+        
+        # 枠線（ボーダー）を作成するためのメインフレーム
+        self.main_frame = tk.Frame(
+            self, bg=COLORS['bg_card'], 
+            highlightthickness=1, 
+            highlightbackground=COLORS['border'],
+            highlightcolor=COLORS['border']
+        )
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # ドラッグ移動機能用データ
+        self._drag_data = {"x": 0, "y": 0}
+        
+        # タイトルバー作成
+        self._create_title_bar(title)
+        
+        # コンテンツエリア
+        self._create_content(message, type, detail)
+        
+        # ボタンエリア
+        self._create_buttons(type)
+        
+        # 位置調整（親ウィンドウの中央）
+        self._center_window(parent)
+        
+        # モーダル化
+        self.transient(parent)
+        self.grab_set()
+        
+        # アニメーション（フェードイン）
+        self.attributes('-alpha', 0.0)
+        self._fade_in()
+        
+    def _center_window(self, parent):
+        self.update_idletasks()
+        width = self.winfo_width()
+        height = self.winfo_height()
+        
+        # 最小サイズ保証
+        width = max(width, 400)
+        height = max(height, 200)
+        
+        x = parent.winfo_rootx() + (parent.winfo_width() // 2) - (width // 2)
+        y = parent.winfo_rooty() + (parent.winfo_height() // 2) - (height // 2)
+        
+        self.geometry(f"{width}x{height}+{x}+{y}")
+
+    def _fade_in(self):
+        """フェードインアニメーション"""
+        alpha = self.attributes('-alpha')
+        if alpha < 1.0:
+            alpha += 0.1
+            self.attributes('-alpha', alpha)
+            self.after(20, self._fade_in)
+
+    def _create_title_bar(self, title):
+        title_bar = tk.Frame(self.main_frame, bg=COLORS['bg_main'], height=35)
+        title_bar.pack(fill=tk.X)
+        title_bar.pack_propagate(False)
+        
+        # タイトルテキスト
+        tk.Label(
+            title_bar, text=title, font=('Segoe UI', 10, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_main']
+        ).pack(side=tk.LEFT, padx=15)
+        
+        # 閉じるボタン（×）
+        close_btn = tk.Label(
+            title_bar, text="✕", font=('Segoe UI', 10),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'],
+            cursor='hand2', padx=15
+        )
+        close_btn.pack(side=tk.RIGHT, fill=tk.Y)
+        close_btn.bind('<Button-1>', lambda e: self.destroy())
+        close_btn.bind('<Enter>', lambda e: close_btn.config(bg='#ef4444', fg='white'))
+        close_btn.bind('<Leave>', lambda e: close_btn.config(bg=COLORS['bg_main'], fg=COLORS['text_secondary']))
+        
+        # ドラッグイベントバインド
+        title_bar.bind('<Button-1>', self._start_move)
+        title_bar.bind('<B1-Motion>', self._on_move)
+        
+    def _start_move(self, event):
+        self._drag_data["x"] = event.x
+        self._drag_data["y"] = event.y
+
+    def _on_move(self, event):
+        dx = event.x - self._drag_data["x"]
+        dy = event.y - self._drag_data["y"]
+        x = self.winfo_x() + dx
+        y = self.winfo_y() + dy
+        self.geometry(f"+{x}+{y}")
+
+    def _create_content(self, message, type, detail):
+        content = tk.Frame(self.main_frame, bg=COLORS['bg_card'])
+        content.pack(fill=tk.BOTH, expand=True, padx=25, pady=25)
+        
+        # アイコン選択
+        icon_char = "ℹ"
+        icon_color = COLORS['accent']
+        if type == 'error':
+            icon_char = "✕"
+            icon_color = '#ef4444' # Red
+        elif type == 'success':
+            icon_char = "✓"
+            icon_color = '#10b981' # Green
+        elif type == 'confirm':
+            icon_char = "?"
+            icon_color = '#f59e0b' # Orange
+            
+        icon_frame = tk.Frame(content, bg=COLORS['bg_card'])
+        icon_frame.pack(side=tk.LEFT, anchor='n', padx=(0, 20))
+        
+        tk.Label(
+            icon_frame, text=icon_char, font=('Segoe UI', 32),
+            fg=icon_color, bg=COLORS['bg_card']
+        ).pack()
+        
+        # メッセージエリア
+        msg_frame = tk.Frame(content, bg=COLORS['bg_card'])
+        msg_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        tk.Label(
+            msg_frame, text=message, font=('Segoe UI', 11),
+            fg=COLORS['text_primary'], bg=COLORS['bg_card'],
+            justify='left', wraplength=300
+        ).pack(anchor='w', pady=(5, 0))
+        
+        if detail:
+            detail_bg = COLORS['bg_main']
+            detail_frame = tk.Frame(msg_frame, bg=detail_bg, padx=10, pady=10)
+            detail_frame.pack(fill=tk.X, pady=(10, 0))
+            
+            # ディレクトリパスの場合はリンクのように見せる
+            is_path = ':\\' in detail or '/' in detail
+            fg_color = COLORS['accent'] if is_path else COLORS['text_secondary']
+            cursor = 'hand2' if is_path else ''
+            
+            detail_label = tk.Label(
+                detail_frame, text=detail, font=('Consolas', 9) if is_path else ('Segoe UI', 9),
+                fg=fg_color, bg=detail_bg,
+                justify='left', wraplength=280, cursor=cursor
+            )
+            detail_label.pack(anchor='w')
+            
+            if is_path:
+                detail_label.bind('<Button-1>', lambda e: os.startfile(detail) if os.path.exists(detail) else None)
+
+    def _create_buttons(self, type):
+        btn_frame = tk.Frame(self.main_frame, bg=COLORS['bg_card'])
+        btn_frame.pack(fill=tk.X, padx=25, pady=(0, 25))
+        
+        # 右寄せのためのスペーサー
+        tk.Frame(btn_frame, bg=COLORS['bg_card']).pack(side=tk.LEFT, expand=True, fill=tk.X)
+        
+        if type == 'confirm':
+             # キャンセル/いいえボタン
+            no_btn = ModernButton(
+                btn_frame, text="いいえ", btn_type='secondary',
+                command=self.destroy, width=100
+            )
+            no_btn.pack(side=tk.RIGHT, padx=(10, 0))
+            
+            # OK/はいボタン
+            yes_btn = ModernButton(
+                btn_frame, text="はい", btn_type='primary',
+                command=self._on_yes, width=100
+            )
+            yes_btn.pack(side=tk.RIGHT)
+            
+        else: # info, error, success
+            ok_btn = ModernButton(
+                btn_frame, text="OK", btn_type='primary',
+                command=self.destroy, width=100
+            )
+            ok_btn.pack(side=tk.RIGHT)
+
+    def _on_yes(self):
+        self.result = True
+        self.destroy()
+
+    @classmethod
+    def show_info(cls, parent, title, message, detail=None):
+        dialog = cls(parent, title, message, 'info', detail)
+        parent.wait_window(dialog)
+        return True
+        
+    @classmethod
+    def show_error(cls, parent, title, message, detail=None):
+        dialog = cls(parent, title, message, 'error', detail)
+        parent.wait_window(dialog)
+        return True
+        
+    @classmethod
+    def show_success(cls, parent, title, message, detail=None):
+        dialog = cls(parent, title, message, 'success', detail)
+        parent.wait_window(dialog)
+        return True
+
+    @classmethod
+    def ask_yes_no(cls, parent, title, message, detail=None):
+        dialog = cls(parent, title, message, 'confirm', detail)
+        parent.wait_window(dialog)
+        return dialog.result
+
 class SidebarButton(tk.Button):
     """サイドバー用ナビゲーションボタン"""
     def __init__(self, master, text, icon, command, is_active=False):
@@ -814,10 +1029,10 @@ class MonthlyAggregationPage(tk.Frame):
                     dropped_file = files[0]  # 最初のファイルのみ使用
                     # ファイル形式チェック
                     if file_filter == "*.csv" and not dropped_file.lower().endswith('.csv'):
-                        messagebox.showerror("エラー", "CSVファイルを選択してください")
+                        ModernDialog.show_error(self, "エラー", "CSVファイルを選択してください")
                         return
                     elif file_filter == "*.xlsx" and not dropped_file.lower().endswith('.xlsx'):
-                        messagebox.showerror("エラー", "Excelファイル(.xlsx)を選択してください")
+                        ModernDialog.show_error(self, "エラー", "Excelファイル(.xlsx)を選択してください")
                         return
                     
                     # ファイルを設定
@@ -1082,25 +1297,36 @@ class MonthlyAggregationPage(tk.Frame):
             raise e
     
     def _show_progress_modal(self):
-        """集計中モーダルを表示"""
+        """集計中モーダルを表示（カスタムデザイン）"""
         self.progress_window = tk.Toplevel(self)
         self.progress_window.title("月次集計")
-        self.progress_window.geometry("400x150")
-        self.progress_window.transient(self)
-        self.progress_window.grab_set()
+        self.progress_window.geometry("400x200")
+        self.progress_window.overrideredirect(True)
+        self.progress_window.config(bg=COLORS['bg_card'])
+        self.progress_window.attributes('-topmost', True)
+        
+        # 枠線
+        container = tk.Frame(
+            self.progress_window, bg=COLORS['bg_card'],
+            highlightthickness=1, highlightbackground=COLORS['border'], highlightcolor=COLORS['border']
+        )
+        container.pack(fill=tk.BOTH, expand=True)
         
         # 中央に配置
         self.progress_window.update_idletasks()
         x = (self.progress_window.winfo_screenwidth() // 2) - 200
-        y = (self.progress_window.winfo_screenheight() // 2) - 75
+        y = (self.progress_window.winfo_screenheight() // 2) - 100
         self.progress_window.geometry(f"+{x}+{y}")
         
-        # 閉じるボタンを無効化
-        self.progress_window.protocol("WM_DELETE_WINDOW", lambda: None)
-        
         # コンテンツ
-        frame = tk.Frame(self.progress_window, bg=COLORS['bg_card'], padx=30, pady=30)
+        frame = tk.Frame(container, bg=COLORS['bg_card'], padx=30, pady=30)
         frame.pack(fill=tk.BOTH, expand=True)
+        
+        # スピナー的なアイコン
+        tk.Label(
+            frame, text="⏳", font=('Segoe UI', 32),
+            fg=COLORS['accent'], bg=COLORS['bg_card']
+        ).pack(pady=(0, 15))
         
         tk.Label(
             frame, text="集計中...", font=('Segoe UI', 14, 'bold'),
@@ -1108,9 +1334,12 @@ class MonthlyAggregationPage(tk.Frame):
         ).pack(pady=(0, 10))
         
         tk.Label(
-            frame, text="しばらくお待ちください", font=('Segoe UI', 10),
-            fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+            frame, text="この処理には時間がかかる場合があります\nしばらくお待ちください", font=('Segoe UI', 10),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card'], justify='center'
         ).pack()
+        
+        self.progress_window.transient(self)
+        self.progress_window.grab_set()
     
     def _hide_progress_modal(self):
         """集計中モーダルを閉じる"""
@@ -1129,37 +1358,37 @@ class MonthlyAggregationPage(tk.Frame):
         # 保存先ディレクトリ
         output_dir = Path(output_path).parent
         
-        result = messagebox.showinfo(
+        ModernDialog.show_success(
+            self,
             '月次集計完了',
-            f'集計が完了しました！\n\n'
-            f'総売上: {sales_str}\n\n'
-            f'保存先:\n{output_path}',
-            parent=self
+            f'集計が完了しました！\n総売上: {sales_str}',
+            detail=f'保存先:\n{output_path}'
         )
         
-        # ダイアログを閉じたらフォルダを開くか確認
-        if result:
-            open_folder = messagebox.askyesno(
-                'フォルダを開く',
-                '保存先フォルダを開きますか？',
-                parent=self
-            )
-            if open_folder:
-                # エクスプローラーでフォルダを開く
-                os.startfile(str(output_dir))
-            
-            self._reset_form()
+        # フォルダを開くか確認
+        open_folder = ModernDialog.ask_yes_no(
+            self,
+            'フォルダを開く',
+            '保存先フォルダを開きますか？',
+            detail=str(output_dir)
+        )
+        
+        if open_folder:
+            # エクスプローラーでフォルダを開く
+            os.startfile(str(output_dir))
+        
+        self._reset_form()
     
     def _show_master_mismatch_dialog(self, schools):
         """マスタ不一致エラーダイアログを表示"""
         schools_list = '\n'.join([f'  • {school}' for school in schools])
         
-        messagebox.showerror(
+        ModernDialog.show_error(
+            self,
             '担当者マスタ不一致',
             f'以下の学校が担当者マスタ（XLSX）に登録されていません。\n'
-            f'マスタを更新してから、再度集計を実行してください。\n\n'
-            f'{schools_list}',
-            parent=self
+            f'マスタを更新してから、再度集計を実行してください。',
+            detail=schools_list
         )
         
         # エラー後はフォームをリセット
@@ -1167,7 +1396,7 @@ class MonthlyAggregationPage(tk.Frame):
     
     def _show_error_dialog(self, message):
         """エラーダイアログを表示"""
-        messagebox.showerror('エラー', message, parent=self)
+        ModernDialog.show_error(self, 'エラー', message)
     
     def _reset_form(self):
         """フォームをリセット"""
