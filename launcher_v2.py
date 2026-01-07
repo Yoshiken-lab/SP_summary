@@ -14,6 +14,7 @@ import threading
 import json
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, filedialog
+import webbrowser
 from pathlib import Path
 from datetime import datetime
 import ctypes
@@ -114,15 +115,30 @@ class ModernButton(tk.Button):
             cnf = {}
         cnf = {**cnf, **kwargs}
         
-        # まず親クラスのconfigureを呼ぶ
+        # btn_type handling
+        if 'btn_type' in cnf:
+            btn_type = cnf.pop('btn_type')
+            if btn_type == 'danger':
+                self.default_bg = COLORS['error']
+                self.hover_bg = COLORS['error_hover']
+            elif btn_type == 'secondary':
+                self.default_bg = COLORS['secondary']
+                self.hover_bg = COLORS['secondary_hover']
+            else:
+                self.default_bg = COLORS['accent']
+                self.hover_bg = COLORS['accent_hover']
+            
+            cnf['activebackground'] = self.hover_bg
+        
+        # Call super configure
         super().configure(cnf)
         
-        # 次に背景色とカーソルを更新
-        if 'state' in cnf:
-            if cnf['state'] == 'disabled':
-                super().configure(bg='#6B7280', cursor='arrow')
-            else:
-                super().configure(bg=self.default_bg, cursor='hand2')
+        # Update appearance based on state
+        current_state = cnf.get('state', self['state'])
+        if current_state == 'disabled':
+            super().configure(bg='#6B7280', cursor='arrow')
+        else:
+            super().configure(bg=self.default_bg, cursor='hand2')
     
     # configはconfigureのエイリアス
     config = configure
@@ -637,7 +653,7 @@ class MainApp:
         self.pages['server'] = ServerControlPage(self.content_area, self.server_manager)
         self.pages['monthly'] = MonthlyAggregationPage(self.content_area)
         self.pages['cumulative'] = CumulativeAggregationPage(self.content_area)
-        self.pages['results'] = PerformanceReflectionPage(self.content_area)
+        self.pages['results'] = PerformanceReflectionPage(self.content_area, self.server_manager)
         self.pages['database'] = PlaceholderPage(self.content_area, "データベース確認", "登録されているテーブルやレコードを直接確認します")
 
     def show_page(self, page_key):
@@ -767,6 +783,25 @@ class ServerManager:
     def stop_all(self):
         self.stop_api()
         self.stop_dashboard()
+
+    def is_dashboard_running(self):
+        return self.dashboard_process is not None
+
+    def get_local_ip(self):
+        try:
+            import socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                # 実際に接続はしないが、ルーティング情報を参照して自己IPを取得
+                s.connect(('8.8.8.8', 80))
+                ip = s.getsockname()[0]
+            except Exception:
+                ip = '127.0.0.1'
+            finally:
+                s.close()
+            return ip
+        except Exception:
+            return '127.0.0.1'
 
 
 class ServerControlPage(tk.Frame):
@@ -1578,8 +1613,10 @@ class CumulativeAggregationPage(tk.Frame):
 
 class PerformanceReflectionPage(tk.Frame):
     """実績反映ページ"""
-    def __init__(self, parent):
+    def __init__(self, parent, server_manager=None):
         super().__init__(parent, bg=COLORS['bg_main'])
+        
+        self.server_manager = server_manager
         
         # 状態管理
         self.uploaded_files = [] # リスト: {'path': Path, 'name': str, 'size': str}
@@ -1588,14 +1625,17 @@ class PerformanceReflectionPage(tk.Frame):
         # UI構築
         self._create_header()
         self._create_main_layout()
+        
+        # ステータス更新開始
+        self._update_status()
 
     def _create_header(self):
-        """ヘッダー作成"""
-        header = tk.Frame(self, bg=COLORS['bg_main'])
-        header.pack(fill=tk.X, padx=30, pady=(30, 20))
+        """ページヘッダー作成"""
+        header = tk.Frame(self, bg=COLORS['bg_main'], pady=20, padx=30)
+        header.pack(fill=tk.X)
         
         tk.Label(
-            header, text="実績反映", font=('Meiryo', 18, 'bold'),
+            header, text="実績反映", font=('Meiryo', 24, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_main']
         ).pack(anchor='w')
         
@@ -1605,7 +1645,7 @@ class PerformanceReflectionPage(tk.Frame):
         ).pack(anchor='w', pady=(5, 0))
 
     def _create_main_layout(self):
-        """メインレイアウト作成"""
+        """メインレイアウト作成 (左右2カラム)"""
         # コンテンツ全体をスクロール可能にするためのCanvas
         canvas = tk.Canvas(self, bg=COLORS['bg_main'], highlightthickness=0)
         self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
@@ -1636,17 +1676,29 @@ class PerformanceReflectionPage(tk.Frame):
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(30, 0))
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
+        # レイアウト分割コンテナ
+        main_container = tk.Frame(scrollable_frame, bg=COLORS['bg_main'])
+        main_container.pack(fill=tk.BOTH, expand=True, padx=0, pady=20)
+        
+        # 左カラム (60%)
+        left_col = tk.Frame(main_container, bg=COLORS['bg_main'])
+        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 20))
+        
+        # 右カラム (40% - 固定幅気味)
+        right_col = tk.Frame(main_container, bg=COLORS['bg_main'], width=380)
+        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, padx=0, anchor='n')
+        
         # コンテンツ配置
-        self._create_step1(scrollable_frame)
-        self._create_step2(scrollable_frame)
+        self._create_file_selection_area(left_col)
+        self._create_right_panel(right_col)
         
         self.scrollable_frame = scrollable_frame
         self.canvas = canvas
 
-    def _create_step1(self, parent):
-        """STEP 1: ファイル選択"""
+    def _create_file_selection_area(self, parent):
+        """STEP 1: ファイル選択 (左カラム)"""
         step_frame = tk.Frame(parent, bg=COLORS['bg_main'])
-        step_frame.pack(fill=tk.X, pady=(0, 25))
+        step_frame.pack(fill=tk.BOTH, expand=True)
         
         tk.Label(
             step_frame, text="STEP 1", font=('Meiryo', 11, 'bold'),
@@ -1654,16 +1706,16 @@ class PerformanceReflectionPage(tk.Frame):
         ).pack(anchor='w')
         
         tk.Label(
-            step_frame, text="売上報告書ファイルを選択", font=('Meiryo', 12, 'bold'),
+            step_frame, text="売上報告書ファイルを取り込む", font=('Meiryo', 12, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_main']
         ).pack(anchor='w', pady=(0, 10))
         
-        # ドロップゾーン
+        # ドロップゾーン (大きく)
         self.drop_zone = tk.Frame(
             step_frame, bg=COLORS['bg_card'],
             highlightbackground=COLORS['border'], highlightthickness=1
         )
-        self.drop_zone.pack(fill=tk.X, ipady=30)
+        self.drop_zone.pack(fill=tk.BOTH, expand=True, ipady=50) # 高さを確保
         
         # ホバーエフェクト
         def on_enter(e):
@@ -1678,26 +1730,21 @@ class PerformanceReflectionPage(tk.Frame):
             self.drop_zone.drop_target_register(DND_FILES)
             self.drop_zone.dnd_bind('<<Drop>>', self._on_drop)
         except Exception:
-            pass # DnD非対応環境
+            pass
             
         content_frame = tk.Frame(self.drop_zone, bg=COLORS['bg_card'])
         content_frame.pack(expand=True)
         
-        # アイコン（絵文字）
         tk.Label(
-            content_frame, text="📁", font=('Meiryo', 24),
+            content_frame, text="📁", font=('Meiryo', 32),
             fg=COLORS['text_secondary'], bg=COLORS['bg_card']
-        ).pack(pady=(0, 10))
+        ).pack(pady=(0, 15))
         
         tk.Label(
-            content_frame, text="ここにExcelファイルをドラッグ＆ドロップ",
-            font=('Meiryo', 12), fg=COLORS['text_secondary'], bg=COLORS['bg_card']
-        ).pack(pady=(0, 10))
-        
-        tk.Label(
-            content_frame, text="または",
-            font=('Meiryo', 10), fg=COLORS['text_secondary'], bg=COLORS['bg_card']
-        ).pack(pady=(0, 10))
+            content_frame, text="ここにExcelファイルを\nドラッグ＆ドロップ",
+            font=('Meiryo', 14), fg=COLORS['text_secondary'], bg=COLORS['bg_card'],
+            justify='center'
+        ).pack(pady=(0, 15))
         
         ModernButton(
             content_frame, text="ファイルを選択",
@@ -1708,10 +1755,21 @@ class PerformanceReflectionPage(tk.Frame):
         self.file_list_frame = tk.Frame(step_frame, bg=COLORS['bg_main'])
         self.file_list_frame.pack(fill=tk.X, pady=(15, 0))
 
-    def _create_step2(self, parent):
-        """STEP 2: 実行コントロール"""
+    def _create_right_panel(self, parent):
+        """右カラム (コントロール & ステータス)"""
+        # STEP 2: 実行コントロール
+        self._create_execution_panel(parent)
+        
+        # スペーサー
+        tk.Frame(parent, bg=COLORS['bg_main'], height=30).pack()
+        
+        # 公開ステータスパネル
+        self._create_status_panel(parent)
+        
+    def _create_execution_panel(self, parent):
+        """STEP 2: 実行ボタン"""
         step_frame = tk.Frame(parent, bg=COLORS['bg_main'])
-        step_frame.pack(fill=tk.X, pady=(0, 40))
+        step_frame.pack(fill=tk.X)
         
         tk.Label(
             step_frame, text="STEP 2", font=('Meiryo', 11, 'bold'),
@@ -1724,7 +1782,7 @@ class PerformanceReflectionPage(tk.Frame):
         ).pack(anchor='w', pady=(0, 10))
         
         self.execute_btn_frame = tk.Frame(step_frame, bg=COLORS['bg_main'])
-        self.execute_btn_frame.pack(fill=tk.X, pady=(10, 0))
+        self.execute_btn_frame.pack(fill=tk.X, pady=(5, 0))
         
         self.execute_btn = ModernButton(
             self.execute_btn_frame, 
@@ -1733,7 +1791,140 @@ class PerformanceReflectionPage(tk.Frame):
             width=25,
             state='disabled'
         )
-        self.execute_btn.pack(anchor='w')
+        self.execute_btn.pack(fill=tk.X, ipady=5)
+        
+    def _create_status_panel(self, parent):
+        """公開ステータスパネル"""
+        if not self.server_manager:
+            return
+
+        tk.Label(
+            parent, text="公開ステータス", font=('Meiryo', 11, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+        ).pack(anchor='w', pady=(0, 5))
+
+        self.status_card = tk.Frame(parent, bg=COLORS['bg_card'], padx=15, pady=15,
+                                  highlightthickness=1, highlightbackground=COLORS['border'])
+        self.status_card.pack(fill=tk.X)
+        
+        # ステータス表示部
+        status_row = tk.Frame(self.status_card, bg=COLORS['bg_card'])
+        status_row.pack(fill=tk.X, pady=(0, 10))
+        
+        self.status_indicator = tk.Label(
+            status_row, text="●", font=('Meiryo', 12),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        )
+        self.status_indicator.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.status_text = tk.Label(
+            status_row, text="停止中", font=('Meiryo', 11, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        )
+        self.status_text.pack(side=tk.LEFT)
+        
+        # URL表示部
+        self.url_frame = tk.Frame(self.status_card, bg=COLORS['bg_main'], padx=10, pady=8)
+        self.url_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        self.url_label = tk.Label(
+            self.url_frame, text="--", font=('Consolas', 10),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+        )
+        self.url_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # アクションボタン
+        btn_row = tk.Frame(self.status_card, bg=COLORS['bg_card'])
+        btn_row.pack(fill=tk.X)
+        
+        # 起動/停止ボタン
+        self.toggle_btn = ModernButton(
+            btn_row, text="起動", btn_type='secondary', width=8,
+            command=self._toggle_dashboard
+        )
+        self.toggle_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # ブラウザで開く
+        self.open_btn = ModernButton(
+            btn_row, text="開く", btn_type='secondary', width=8,
+            command=self._open_dashboard, state='disabled'
+        )
+        self.open_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # コピー
+        self.copy_btn = ModernButton(
+            btn_row, text="URLコピー", btn_type='secondary', width=10,
+            command=self._copy_url, state='disabled'
+        )
+        self.copy_btn.pack(side=tk.LEFT)
+
+    def _update_status(self):
+        """ステータス更新ループ"""
+        if not self.winfo_exists():
+            return
+            
+        if self.server_manager:
+            is_running = self.server_manager.is_dashboard_running()
+            port = self.server_manager.config.get('dashboard_port', 8000)
+            ip = self.server_manager.get_local_ip()
+            url = f"http://{ip}:{port}"
+            
+            if is_running:
+                self.status_indicator.config(fg='#10b981') # Green
+                self.status_text.config(text="公開中", fg='#10b981')
+                self.url_label.config(text=url, fg=COLORS['text_primary'])
+                self.toggle_btn.config(text="停止", btn_type='danger')
+                self.open_btn.config(state='normal')
+                self.copy_btn.config(state='normal')
+                self.status_card.config(highlightbackground='#10b981')
+            else:
+                self.status_indicator.config(fg=COLORS['text_secondary'])
+                self.status_text.config(text="停止中", fg=COLORS['text_secondary'])
+                self.url_label.config(text="(サーバー停止中)", fg=COLORS['text_secondary'])
+                self.toggle_btn.config(text="起動", btn_type='primary')
+                self.open_btn.config(state='disabled')
+                self.copy_btn.config(state='disabled')
+                self.status_card.config(highlightbackground=COLORS['border'])
+                
+        # 2秒ごとに更新
+        self.after(2000, self._update_status)
+
+    def _toggle_dashboard(self):
+        """ダッシュボードサーバーの起動/停止切り替え"""
+        if not self.server_manager:
+            return
+            
+        is_running = self.server_manager.is_dashboard_running()
+        port = self.server_manager.config.get('dashboard_port', 8000)
+        
+        if is_running:
+            self.server_manager.stop_dashboard()
+        else:
+            self.server_manager.start_dashboard(
+                port,
+                lambda: self._update_status(), # on_start
+                lambda: self._update_status()  # on_stop
+            )
+        # 即時更新
+        self.after(100, self._update_status)
+
+    def _open_dashboard(self):
+        """ブラウザで開く"""
+        if self.server_manager:
+            port = self.server_manager.config.get('dashboard_port', 8000)
+            ip = self.server_manager.get_local_ip()
+            url = f"http://{ip}:{port}"
+            webbrowser.open(url)
+
+    def _copy_url(self):
+        """URLをクリップボードにコピー"""
+        if self.server_manager:
+            port = self.server_manager.config.get('dashboard_port', 8000)
+            ip = self.server_manager.get_local_ip()
+            url = f"http://{ip}:{port}"
+            self.clipboard_clear()
+            self.clipboard_append(url)
+            ModernDialog.show_info(self, "コピー完了", "URLをクリップボードにコピーしました。")
 
     def _on_drop(self, event):
         """ファイルドロップ時の処理"""
@@ -1778,10 +1969,10 @@ class PerformanceReflectionPage(tk.Frame):
             self._check_can_execute()
             return
 
-        # ヘッダー (修正: bg_sidebarを使用)
-        header = tk.Frame(self.file_list_frame, bg=COLORS['bg_sidebar'], height=35)
+        # ヘッダー
+        header = tk.Frame(self.file_list_frame, bg=COLORS['bg_sidebar'], height=30)
         header.pack(fill=tk.X, pady=(0, 2))
-        header.pack_propagate(False) # 高さ固定
+        header.pack_propagate(False)
         
         tk.Label(
             header, text="ファイル名", font=('Meiryo', 9, 'bold'),
@@ -1798,13 +1989,11 @@ class PerformanceReflectionPage(tk.Frame):
             row = tk.Frame(self.file_list_frame, bg=COLORS['bg_card'], padx=10, pady=8)
             row.pack(fill=tk.X, pady=2)
             
-            # Label
             tk.Label(
                 row, text=file_info['name'], font=('Meiryo', 9),
                 fg=COLORS['text_primary'], bg=COLORS['bg_card']
             ).pack(side=tk.LEFT)
             
-            # Delete Button
             ModernButton(
                 row, text="削除", 
                 command=lambda idx=i: self._remove_file(idx),
@@ -1831,7 +2020,6 @@ class PerformanceReflectionPage(tk.Frame):
         if not self.uploaded_files:
             return
             
-        # UIブロック
         if self.is_processing:
             return
             
@@ -1865,10 +2053,8 @@ class PerformanceReflectionPage(tk.Frame):
             for i, file_info in enumerate(self.uploaded_files):
                 file_path = file_info['path']
                 
-                # 進捗更新
                 self._update_progress(f"処理中 ({i+1}/{total_files}):\n{file_info['name']}")
                 
-                # インポート実行
                 result = import_excel_v2(file_path)
                 
                 if result['success']:
@@ -1876,24 +2062,19 @@ class PerformanceReflectionPage(tk.Frame):
                 else:
                     error_details.append(f"{file_info['name']}: {result.get('error')}")
             
-            # ダッシュボード更新
             if success_count > 0:
                 self._update_progress("ダッシュボードを更新中...")
                 
-                # 公開用ディレクトリに出力
                 public_dir = APP_DIR / 'public_dashboards'
-                public_dir.mkdir(exist_ok=True, parents=True) # ディレクトリがない場合は作成
+                public_dir.mkdir(exist_ok=True, parents=True)
                 
-                # 生成実行
                 output_path = generate_dashboard(output_dir=public_dir)
                 
-                # index.htmlとしてコピー（アクセスしやすくするため）
                 try:
                     shutil.copy(output_path, public_dir / 'index.html')
                 except Exception as e:
                     print(f"index.html creation failed: {e}")
                 
-            # 完了処理
             self.after(0, lambda: self._handle_completion(success_count, total_files, error_details))
             
         except Exception as e:
@@ -1911,7 +2092,6 @@ class PerformanceReflectionPage(tk.Frame):
                 "すべてのファイルの反映が完了しました！",
                 detail="ダッシュボードが更新されました。"
             )
-            # リセット
             self.uploaded_files = []
             self._update_file_list()
         else:
@@ -1922,7 +2102,6 @@ class PerformanceReflectionPage(tk.Frame):
                 "一部のファイルでエラーが発生しました。",
                 detail=detail_msg
             )
-            # リセットはしない（エラーファイルを確認できるように）
             self._check_can_execute()
             
     def _handle_error(self, error_message):
