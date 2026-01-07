@@ -75,12 +75,15 @@ class ModernButton(tk.Button):
         state = kwargs.get('state', 'normal')
         current_bg = self.default_bg if state != 'disabled' else '#6B7280'
         
+        # kwargsからfontを取り出す（指定がなければデフォルト）
+        font = kwargs.pop('font', ('Segoe UI', 9, 'bold'))
+        
         super().__init__(
             master,
             relief='flat',
             borderwidth=0,
             cursor='hand2' if state != 'disabled' else 'arrow',
-            font=('Segoe UI', 9, 'bold'),
+            font=font,
             fg='white',
             bg=current_bg,
             activebackground=self.hover_bg,
@@ -102,14 +105,19 @@ class ModernButton(tk.Button):
         if cnf is None:
             cnf = {}
         cnf = {**cnf, **kwargs}
+        
+        # まず親クラスのconfigureを呼ぶ
+        super().configure(cnf)
+        
+        # 次に背景色とカーソルを更新
         if 'state' in cnf:
             if cnf['state'] == 'disabled':
-                self['bg'] = '#6B7280'
-                self['cursor'] = 'arrow'
+                super().configure(bg='#6B7280', cursor='arrow')
             else:
-                self['bg'] = self.default_bg
-                self['cursor'] = 'hand2'
-        super().configure(cnf)
+                super().configure(bg=self.default_bg, cursor='hand2')
+    
+    # configはconfigureのエイリアス
+    config = configure
 
 class ModernDropdown(tk.Frame):
     """モダンなドロップダウンウィジェット"""
@@ -180,7 +188,7 @@ class ModernDropdown(tk.Frame):
                 cursor='hand2',
                 command=lambda v=value: self._select(v)
             )
-            item.pack(fill=tk.X, ipady=5)
+            item.pack(fill=tk.BOTH, expand=True, ipady=5)
             
             # ホバーエフェクト
             def on_enter(e, btn=item):
@@ -667,6 +675,7 @@ class MonthlyAggregationPage(tk.Frame):
         
         self.execute_btn = ModernButton(
             button_frame, text="集計を実行", btn_type='primary',
+            font=('Segoe UI', 12),
             command=self._execute_aggregation,
             state='disabled'
         )
