@@ -17,7 +17,11 @@ from tkinter import ttk, messagebox, scrolledtext
 from pathlib import Path
 from datetime import datetime
 import ctypes
-import requests
+
+# バックエンドモジュールをインポート
+sys.path.insert(0, str(Path(__file__).parent / 'app' / 'backend'))
+from aggregator import SalesAggregator, AccountsCalculator, ExcelExporter, SchoolMasterMismatchError
+from services import FileHandler
 
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
@@ -996,16 +1000,16 @@ class MonthlyAggregationPage(tk.Frame):
     def _run_aggregation_process(self):
         """集計処理の実行（別スレッド）"""
         try:
-            # STEP 1: ファイルアップロード
-            session_id = self._upload_files()
-            if not session_id:
-                return
-            
-            # STEP 2: 集計実行
-            result = self._run_aggregation(session_id)
+            # 集計実行
+            result = self._run_direct_aggregation()
             if result:
                 # 成功時は結果ダイアログを表示
                 self.after(0, lambda: self._show_result_dialog(result.get('total_sales', 0)))
+        
+        except SchoolMasterMismatchError as e:
+            # マスタ不一致エラー
+            schools = e.unmatched_schools
+            self.after(0, lambda: self._show_master_mismatch_dialog(schools))
         
         except Exception as e:
             # エラーダイアログを表示
@@ -1017,85 +1021,54 @@ class MonthlyAggregationPage(tk.Frame):
             self.is_processing = False
             self.after(0, lambda: self.execute_btn.config(state='normal' if all(self.files.values()) else 'disabled'))
     
-    def _upload_files(self):
-        """ファイルアップロード処理"""
+    def _run_direct_aggregation(self):
+        """集計実行処理（直接Pythonモジュール呼び出し）"""
         try:
-            # APIエンドポイント（ローカル）
-            url = 'http://localhost:8080/api/upload'
-            
-            # ファイルを開く
-            files_data = {
-                'sales_file': open(self.files['sales'], 'rb'),
-                'accounts_file': open(self.files['accounts'], 'rb'),
-                'master_file': open(self.files['master'], 'rb')
-            }
-            
-            # POSTリクエスト送信
-            response = requests.post(url, files=files_data, timeout=30)
-            
-            # ファイルを閉じる
-            for f in files_data.values():
-                f.close()
-            
-            # レスポンス確認
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('status') == 'success':
-                    return data.get('session_id')
-                else:
-                    raise Exception(data.get('message', 'アップロードに失敗しました'))
-            else:
-                raise Exception(f'サーバーエラー: {response.status_code}')
-        
-        except requests.exceptions.ConnectionError:
-            self.after(0, lambda: self._show_error_dialog('APIサーバーに接続できません。\nサーバーが起動しているか確認してください。'))
-            return None
-        except Exception as e:
-            error_msg = f'ファイルアップロード中にエラーが発生しました:\n{str(e)}'
-            self.after(0, lambda: self._show_error_dialog(error_msg))
-            return None
-    
-    def _run_aggregation(self, session_id):
-        """集計実行処理"""
-        try:
-            # APIエンドポイント
-            url = 'http://localhost:8080/api/aggregate'
-            
-            # 年度・月を抽出（"2025年度" → 2025, "1月" → 1）
+            # 年度・月を抽出
             year_str = self.year_var.get()
             month_str = self.month_var.get()
             
             fiscal_year = int(year_str.replace('年度', ''))
             month = int(month_str.replace('月', ''))
             
-            # POSTリクエスト送信
-            payload = {
-                'session_id': session_id,
-                'fiscal_year': fiscal_year,
-                'month': month
+            # ファイルハンドラーで読み込み
+            upload_dir = Path(__file__).parent / 'temp_uploads'
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            file_handler = FileHandler(upload_dir)
+            
+            sales_df = file_handler.read_sales_csv(Path(self.files['sales']))
+            accounts_df = file_handler.read_accounts_csv(Path(self.files['accounts']))
+            master_df = file_handler.read_master_excel(Path(self.files['master']))
+            
+            # 集計実行
+            aggregator = SalesAggregator(sales_df, master_df)
+            result = aggregator.aggregate_all()
+            
+            # 会員率計算
+            accounts_calc = AccountsCalculator(accounts_df)
+            accounts_result_df = accounts_calc.calculate()
+            
+            # Excel出力
+            output_dir = Path(__file__).parent / 'output'
+            output_dir.mkdir(exist_ok=True)
+            
+            filename = f"SP_SalesResult_{fiscal_year}{month:02d}.xlsx"
+            exporter = ExcelExporter(
+                result,
+                output_dir=output_dir,
+                filename=filename,
+                accounts_df=accounts_result_df
+            )
+            output_path = exporter.export()
+            
+            # 結果を返す
+            return {
+                'total_sales': result.summary.total_sales,
+                'output_file': str(output_path)
             }
-            
-            response = requests.post(url, json=payload, timeout=60)
-            
-            # レスポンス確認
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('status') == 'success':
-                    return data.get('summary', {})
-                elif data.get('error_type') == 'master_mismatch':
-                    # マスタ不一致エラー
-                    schools = data.get('unmatched_schools', [])
-                    self.after(0, lambda: self._show_master_mismatch_dialog(schools))
-                    return None
-                else:
-                    raise Exception(data.get('message', '集計に失敗しました'))
-            else:
-                raise Exception(f'サーバーエラー: {response.status_code}')
         
         except Exception as e:
-            error_msg = f'集計処理中にエラーが発生しました:\n{str(e)}'
-            self.after(0, lambda: self._show_error_dialog(error_msg))
-            return None
+            raise e
     
     def _show_result_dialog(self, total_sales):
         """集計完了ダイアログを表示"""
