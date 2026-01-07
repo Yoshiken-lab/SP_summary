@@ -1672,7 +1672,7 @@ class PerformanceReflectionPage(tk.Frame):
         """STEP 1: ファイル選択 (左カラム)"""
         # 親フレームのサイズに合わせて広げる
         step_frame = tk.Frame(parent, bg=COLORS['bg_main'])
-        step_frame.pack(fill=tk.BOTH, expand=True)
+        step_frame.pack(fill=tk.X, expand=False, anchor='n')
         
         tk.Label(
             step_frame, text="STEP 1", font=('Meiryo', 11, 'bold'),
@@ -1689,7 +1689,7 @@ class PerformanceReflectionPage(tk.Frame):
             step_frame, bg=COLORS['bg_card'],
             highlightbackground=COLORS['border'], highlightthickness=1
         )
-        self.drop_zone.pack(fill=tk.BOTH, expand=True, ipady=30)
+        self.drop_zone.pack(fill=tk.X, expand=False, ipady=20)
         
         # ホバーエフェクト
         def on_enter(e):
@@ -1944,10 +1944,7 @@ class PerformanceReflectionPage(tk.Frame):
             fg=COLORS['text_primary'], bg=COLORS['bg_sidebar']
         ).pack(side=tk.LEFT, padx=10)
         
-        tk.Label(
-            header, text="操作", font=('Meiryo', 9, 'bold'),
-            fg=COLORS['text_primary'], bg=COLORS['bg_sidebar']
-        ).pack(side=tk.RIGHT, padx=10)
+
 
         # ファイル一覧
         for i, file_info in enumerate(self.uploaded_files):
