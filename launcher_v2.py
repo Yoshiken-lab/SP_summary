@@ -181,14 +181,16 @@ class ModernDropdown(tk.Frame):
         
         # 選択肢を追加
         for value in self.values:
+            # シンプルなButton（横幅いっぱいに広げる）
             item = tk.Button(
                 scrollable_frame, text=value, font=('Segoe UI', 10),
                 fg=COLORS['text_primary'], bg=COLORS['bg_card'],
-                relief='flat', bd=0, anchor='w', padx=10,
-                cursor='hand2',
+                relief='flat', bd=0, anchor='w',
+                cursor='hand2', padx=10,
                 command=lambda v=value: self._select(v)
             )
-            item.pack(fill=tk.BOTH, expand=True, ipady=5)
+            # fill='x'ではなくfill='both'で高さも確保
+            item.pack(fill='both', ipady=5)
             
             # ホバーエフェクト
             def on_enter(e, btn=item):
@@ -832,7 +834,7 @@ class MonthlyAggregationPage(tk.Frame):
         setattr(self, f'{file_key}_remove_btn', remove_btn)
 
     def _create_period_section(self, parent):
-        """期間選択セクション作成"""
+        """期間選択セクション作成（スタイル付きCombobox）"""
         # STEP 2カード
         card = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=20)
         card.pack(fill=tk.X)
@@ -852,6 +854,45 @@ class MonthlyAggregationPage(tk.Frame):
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
+        # Comboboxのスタイル設定（よりモダンに）
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # ドロップダウンリスト（Listbox）のスタイル設定
+        # 標準のComboboxでもリスト部分はOS標準色になりがちなので、個別に設定
+        self.option_add('*TCombobox*Listbox.background', COLORS['bg_card'])
+        self.option_add('*TCombobox*Listbox.foreground', COLORS['text_primary'])
+        self.option_add('*TCombobox*Listbox.selectBackground', COLORS['accent'])
+        self.option_add('*TCombobox*Listbox.selectForeground', 'white')
+        self.option_add('*TCombobox*Listbox.font', ('Segoe UI', 10))
+        self.option_add('*TCombobox*Listbox.relief', 'flat')
+        self.option_add('*TCombobox*Listbox.borderwidth', '0')
+        
+        # Combobox本体のスタイル（フラットデザイン）
+        style.configure('Modern.TCombobox',
+            fieldbackground=COLORS['bg_main'],    # 入力欄の背景
+            background=COLORS['bg_main'],         # 矢印ボタンの背景
+            foreground=COLORS['text_primary'],    # 文字色
+            arrowcolor=COLORS['text_secondary'],  # 矢印の色
+            bordercolor=COLORS['border'],         # 枠線の色
+            lightcolor=COLORS['bg_main'],         # 3D効果除去
+            darkcolor=COLORS['bg_main'],          # 3D効果除去
+            relief='flat',                        # フラットに
+            borderwidth=1,                        # 枠線は細く
+            arrowsize=16,                         # 矢印を少し大きく
+            padding=5                             # 内部パディングで広さを出す
+        )
+        
+        # 状態によるスタイルの変化
+        style.map('Modern.TCombobox',
+            fieldbackground=[('readonly', COLORS['bg_main']), ('active', COLORS['sidebar_active'])],
+            background=[('active', COLORS['sidebar_active'])], # ホバー時のボタン背景
+            arrowcolor=[('active', 'white')],                 # ホバー時の矢印
+            bordercolor=[('focus', COLORS['accent'])],         # フォーカス時の枠線
+            lightcolor=[('focus', COLORS['accent'])],
+            darkcolor=[('focus', COLORS['accent'])]
+        )
+        
         # 年度・月を横並びで表示
         period_frame = tk.Frame(card, bg=COLORS['bg_card'])
         period_frame.pack(fill=tk.X)
@@ -868,11 +909,15 @@ class MonthlyAggregationPage(tk.Frame):
         current_year = datetime.now().year
         current_month = datetime.now().month
         fiscal_year = current_year if current_month >= 4 else current_year - 1
-        years = [str(y) + "年度" for y in range(fiscal_year - 4, fiscal_year + 2)]
+        years = [f"{y}年度" for y in range(fiscal_year - 4, fiscal_year + 2)]
         
-        year_dropdown = ModernDropdown(year_container, years, str(fiscal_year) + "年度")
-        year_dropdown.pack(fill=tk.X)
-        self.year_dropdown = year_dropdown
+        self.year_var = tk.StringVar(value=f"{fiscal_year}年度")
+        year_combo = ttk.Combobox(
+            year_container, textvariable=self.year_var, values=years,
+            state='readonly', font=('Segoe UI', 10),
+            style='Modern.TCombobox', cursor='hand2'
+        )
+        year_combo.pack(fill=tk.X, ipady=5)
         
         # 月選択（右半分）
         month_container = tk.Frame(period_frame, bg=COLORS['bg_card'])
@@ -883,10 +928,14 @@ class MonthlyAggregationPage(tk.Frame):
             fg=COLORS['text_secondary'], bg=COLORS['bg_card']
         ).pack(anchor='w', pady=(0, 5))
         
-        months = [str(m) + "月" for m in range(1, 13)]
-        month_dropdown = ModernDropdown(month_container, months, str(current_month) + "月")
-        month_dropdown.pack(fill=tk.X)
-        self.month_dropdown = month_dropdown
+        months = [f"{m}月" for m in range(1, 13)]
+        self.month_var = tk.StringVar(value=f"{current_month}月")
+        month_combo = ttk.Combobox(
+            month_container, textvariable=self.month_var, values=months,
+            state='readonly', font=('Segoe UI', 10),
+            style='Modern.TCombobox', cursor='hand2'
+        )
+        month_combo.pack(fill=tk.X, ipady=5)
 
     def _select_file(self, file_key, file_name_label, cloud_label, remove_btn, file_filter):
         """ファイル選択ダイアログ"""
