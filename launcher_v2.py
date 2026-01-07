@@ -56,6 +56,7 @@ COLORS = {
     'accent_hover': '#2563EB',
     'danger': '#EF4444',       # 赤
     'danger_hover': '#DC2626',
+    'warning': '#F59E0B',      # オレンジ
     'success': '#10B981',      # 緑
     'border': '#4B5563',       # 枠線
     'sidebar_active': '#374151', # サイドバー選択中
@@ -1828,8 +1829,9 @@ class PerformanceReflectionPage(tk.Frame):
             ip = self.server_manager.get_local_ip()
             url = f"http://{ip}:{port}"
             
-            # 最終更新日時の取得
+            # 最終更新日時の取得とデータ有無判定
             last_updated = "未作成"
+            has_data = False
             try:
                 index_path = self.server_manager.dashboard_dir / "index.html"
                 if index_path.exists():
@@ -1837,22 +1839,33 @@ class PerformanceReflectionPage(tk.Frame):
                     from datetime import datetime
                     dt = datetime.fromtimestamp(mtime)
                     last_updated = f"最終作成: {dt.strftime('%Y/%m/%d %H:%M')}"
+                    has_data = True
             except Exception:
                 pass
             
             self.last_updated_label.config(text=last_updated)
 
             if is_running:
-                self.status_indicator.config(fg='#10b981') # Green
-                self.status_text.config(text="公開中", fg='#10b981')
+                # 公開中 (Green)
+                self.status_indicator.config(fg=COLORS['success'])
+                self.status_text.config(text="公開中", fg=COLORS['success'])
                 self.url_label.config(text=url, fg=COLORS['text_primary'])
                 self.open_btn.config(state='normal')
                 self.copy_btn.config(state='normal')
-                self.status_card.config(highlightbackground='#10b981')
-            else:
-                self.status_indicator.config(fg=COLORS['text_secondary'])
-                self.status_text.config(text="停止中", fg=COLORS['text_secondary'])
+                self.status_card.config(highlightbackground=COLORS['success'])
+            elif has_data:
+                # 停止中・データあり (Orange)
+                self.status_indicator.config(fg=COLORS['warning'])
+                self.status_text.config(text="公開停止中", fg=COLORS['warning'])
                 self.url_label.config(text="(サーバー停止中)", fg=COLORS['text_secondary'])
+                self.open_btn.config(state='disabled')
+                self.copy_btn.config(state='disabled')
+                self.status_card.config(highlightbackground=COLORS['warning'])
+            else:
+                # 未作成 (Grey)
+                self.status_indicator.config(fg=COLORS['text_secondary'])
+                self.status_text.config(text="未作成", fg=COLORS['text_secondary'])
+                self.url_label.config(text="--", fg=COLORS['text_secondary'])
                 self.open_btn.config(state='disabled')
                 self.copy_btn.config(state='disabled')
                 self.status_card.config(highlightbackground=COLORS['border'])
