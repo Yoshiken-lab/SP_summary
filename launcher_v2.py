@@ -658,8 +658,19 @@ class MonthlyAggregationPage(tk.Frame):
         # STEP 1: ファイル選択（横3つ並び）
         self._create_file_upload_section(content_area)
         
-        # STEP 2: 期間選択 + 実行ボタン
+        # STEP 2: 期間選択
         self._create_period_section(content_area)
+        
+        # 実行ボタン（STEP 2の真下、独立）
+        button_frame = tk.Frame(content_area, bg=COLORS['bg_main'])
+        button_frame.pack(fill=tk.X, pady=(20, 0))
+        
+        self.execute_btn = ModernButton(
+            button_frame, text="集計を実行", btn_type='primary',
+            command=self._execute_aggregation,
+            state='disabled'
+        )
+        self.execute_btn.pack(fill=tk.X, ipady=12)
 
     def _create_file_upload_section(self, parent):
         """ファイルアップロードセクション作成（横3つ並び）"""
@@ -867,14 +878,6 @@ class MonthlyAggregationPage(tk.Frame):
         month_dropdown = ModernDropdown(month_container, months, str(current_month) + "月")
         month_dropdown.pack(fill=tk.X)
         self.month_dropdown = month_dropdown
-        
-        # 実行ボタン
-        self.execute_btn = ModernButton(
-            card, text="集計を実行", btn_type='primary',
-            command=self._execute_aggregation,
-            state='disabled'
-        )
-        self.execute_btn.pack(fill=tk.X, pady=(20, 0), ipady=12)
 
     def _select_file(self, file_key, file_name_label, cloud_label, remove_btn, file_filter):
         """ファイル選択ダイアログ"""
