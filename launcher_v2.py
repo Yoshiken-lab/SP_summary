@@ -686,6 +686,7 @@ class ServerManager:
         self.app = app
         self.api_process = None
         self.dashboard_process = None
+        self.dashboard_dir = APP_DIR / 'public_dashboards'
         self.config = self._load_config()
         self.log_callback = None # ログ出力先 (Page側でセット)
 
