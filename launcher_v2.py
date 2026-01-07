@@ -935,9 +935,19 @@ class CumulativeAggregationPage(tk.Frame):
         container = tk.Frame(self, bg=COLORS['bg_main'])
         container.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
         
+        # Custom Scrollbar Style
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("Dark.Vertical.TScrollbar",
+            background=COLORS['bg_card'],
+            troughcolor=COLORS['bg_main'],
+            bordercolor=COLORS['bg_main'],
+            arrowcolor=COLORS['text_secondary'],
+            relief='flat')
+            
         # Canvasとスクロールバーを作成
         canvas = tk.Canvas(container, bg=COLORS['bg_main'], highlightthickness=0)
-        scrollbar = tk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview, style="Dark.Vertical.TScrollbar")
         
         # スクロール可能なフレーム
         self.content_area = tk.Frame(canvas, bg=COLORS['bg_main'])
@@ -1252,9 +1262,10 @@ class CumulativeAggregationPage(tk.Frame):
         content_container = tk.Frame(card, bg=COLORS['bg_card'])
         content_container.pack(fill=tk.BOTH, expand=True)
         
-        # 左側: ドロップゾーン
-        self.drop_zone_frame = tk.Frame(content_container, bg=COLORS['bg_card'])
-        self.drop_zone_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        # 左側: ドロップゾーン（幅を固定または比率を設定）
+        self.drop_zone_frame = tk.Frame(content_container, bg=COLORS['bg_card'], width=450, height=200)
+        self.drop_zone_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False, padx=(0, 10))
+        self.drop_zone_frame.pack_propagate(False) # サイズ固定
         
         # ドロップゾーン
         drop_zone = tk.Frame(self.drop_zone_frame, bg=COLORS['bg_main'], highlightthickness=2,
@@ -1367,36 +1378,54 @@ class CumulativeAggregationPage(tk.Frame):
         self.file_list_frame = tk.Frame(self.file_list_container, bg=COLORS['bg_card'])
         self.file_list_frame.pack(fill=tk.BOTH, expand=True)
         
-        # テーブルヘッダー
+        # テーブルヘッダー（固定幅Frame戦略で完全整列）
         table_header = tk.Frame(self.file_list_frame, bg=COLORS['bg_main'], padx=10, pady=8)
         table_header.pack(fill=tk.X)
         
+        # 右側のカラムから順に配置 (pack side=RIGHT) - Frameで幅固定
+        
+        # 操作カラム（80px固定）
+        action_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=80)
+        action_col.pack(side=tk.RIGHT, padx=(5, 0))
+        action_col.pack_propagate(False)
+        
+        tk.Label(
+            action_col, text="操作", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], anchor='center'
+        ).pack(expand=True, fill=tk.BOTH)
+        
+        # 対象月カラム（100px固定）
+        month_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=100)
+        month_col.pack(side=tk.RIGHT, padx=(5, 5))
+        month_col.pack_propagate(False)
+        
+        tk.Label(
+            month_col, text="対象月", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], anchor='center'
+        ).pack(expand=True, fill=tk.BOTH)
+        
+        # 対象年カラム（120px固定）
+        year_col = tk.Frame(table_header, bg=COLORS['bg_main'], width=120)
+        year_col.pack(side=tk.RIGHT, padx=(10, 5))
+        year_col.pack_propagate(False)
+        
+        tk.Label(
+            year_col, text="対象年", font=('Meiryo', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], anchor='center'
+        ).pack(expand=True, fill=tk.BOTH)
+        
+        # ファイル名カラム（残りのスペースを埋める）
         tk.Label(
             table_header, text="ファイル名", font=('Meiryo', 9, 'bold'),
-            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=40, anchor='w'
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        tk.Label(
-            table_header, text="対象年", font=('Meiryo', 9, 'bold'),
-            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=12, anchor='center'
-        ).pack(side=tk.LEFT, padx=(0, 5))
-        
-        tk.Label(
-            table_header, text="対象月", font=('Meiryo', 9, 'bold'),
-            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=10, anchor='center'
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        tk.Label(
-            table_header, text="操作", font=('Meiryo', 9, 'bold'),
-            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], width=8, anchor='center'
-        ).pack(side=tk.LEFT)
+            fg=COLORS['text_secondary'], bg=COLORS['bg_main'], anchor='w'
+        ).pack(side=tk.LEFT, padx=(0, 10), fill=tk.X, expand=True)
         
         # ファイル一覧（スクロール可能）
         list_container = tk.Frame(self.file_list_frame, bg=COLORS['bg_card'])
         list_container.pack(fill=tk.BOTH, expand=True)
         
         canvas = tk.Canvas(list_container, bg=COLORS['bg_card'], highlightthickness=0, height=200)
-        scrollbar = tk.Scrollbar(list_container, orient="vertical", command=canvas.yview)
+        scrollbar = ttk.Scrollbar(list_container, orient="vertical", command=canvas.yview, style="Dark.Vertical.TScrollbar")
         scrollable_frame = tk.Frame(canvas, bg=COLORS['bg_card'])
         
         scrollable_frame.bind(
@@ -1424,63 +1453,71 @@ class CumulativeAggregationPage(tk.Frame):
         row = tk.Frame(parent, bg=COLORS['bg_main'], padx=10, pady=8)
         row.pack(fill=tk.X, pady=2)
         
-        # ファイル名
-        tk.Label(
-            row, text=file_info['display_name'], font=('Meiryo', 9),
-            fg=COLORS['text_primary'], bg=COLORS['bg_main'], width=40, anchor='w'
-        ).pack(side=tk.LEFT, padx=(0, 10))
+        # 右側の要素から順に配置 (pack side=RIGHT) - Frameで幅固定
         
-        # 年月選択
-        period_frame = tk.Frame(row, bg=COLORS['bg_main'])
-        period_frame.pack(side=tk.LEFT, padx=(0, 10), fill=tk.BOTH, expand=True)
+        # 削除ボタン（80px固定）
+        action_col = tk.Frame(row, bg=COLORS['bg_main'], width=80, height=40)
+        action_col.pack(side=tk.RIGHT, padx=(5, 0))
+        action_col.pack_propagate(False)
         
-        # 年選択ドロップダウン
+        delete_btn = ModernButton(
+            action_col, text="削除", btn_type='danger',
+            command=lambda i=index: self._remove_file(i),
+            font=('Meiryo', 9), width=6
+        )
+        delete_btn.pack(expand=True)
+        
+        # 月選択ドロップダウン（100px固定）
+        month_col = tk.Frame(row, bg=COLORS['bg_main'], width=100, height=40)
+        month_col.pack(side=tk.RIGHT, padx=(5, 5))
+        month_col.pack_propagate(False)
+        
+        month_options = [f"{month}月" for month in range(1, 13)]
+        month_default = f"{file_info['month']}月" if file_info['month'] else ""
+        month_dropdown = ModernDropdown(month_col, month_options, month_default, width=8)
+        month_dropdown.pack(expand=True)
+        
+        # 年選択ドロップダウン（120px固定）
+        year_col = tk.Frame(row, bg=COLORS['bg_main'], width=120, height=40)
+        year_col.pack(side=tk.RIGHT, padx=(10, 5))
+        year_col.pack_propagate(False)
+        
         current_year = datetime.now().year
         year_options = [f"{year}年" for year in range(current_year - 5, current_year + 2)]
-        
-        year_frame = tk.Frame(period_frame, bg=COLORS['bg_main'])
-        year_frame.pack(side=tk.LEFT, padx=(0, 8))
-        
         year_default = f"{file_info['year']}年" if file_info['year'] else ""
-        year_dropdown = ModernDropdown(year_frame, year_options, year_default, width=12)
-        year_dropdown.pack()
+        year_dropdown = ModernDropdown(year_col, year_options, year_default, width=10)
+        year_dropdown.pack(expand=True)
         
-        # 月選択ドロップダウン
-        month_options = [f"{month}月" for month in range(1, 13)]
-        
-        month_frame = tk.Frame(period_frame, bg=COLORS['bg_main'])
-        month_frame.pack(side=tk.LEFT)
-        
-        month_default = f"{file_info['month']}月" if file_info['month'] else ""
-        month_dropdown = ModernDropdown(month_frame, month_options, month_default, width=10)
-        month_dropdown.pack()
-        
-        # 選択変更時のコールバック
+        # ファイル名（残りのスペースを埋める）
+        tk.Label(
+            row, text=file_info['display_name'], font=('Meiryo', 9),
+            fg=COLORS['text_primary'], bg=COLORS['bg_main'], anchor='w'
+        ).pack(side=tk.LEFT, padx=(0, 10), fill=tk.X, expand=True)
+
+        # コールバック関数
         def on_year_change(*args):
-            selected = year_dropdown.get()
-            if selected:
-                file_info['year'] = int(selected.replace('年', ''))
-                self._update_fiscal_year_display()
-                self._check_can_execute()
-        
+            val = year_dropdown.current_value.get()
+            if val:
+                try:
+                    self.cumulative_files[index]['year'] = int(val.replace("年", ""))
+                    self._update_fiscal_year_display()
+                    self._check_can_execute()
+                except ValueError:
+                    pass
+
         def on_month_change(*args):
-            selected = month_dropdown.get()
-            if selected:
-                file_info['month'] = int(selected.replace('月', ''))
-                self._update_fiscal_year_display()
-                self._check_can_execute()
+            val = month_dropdown.current_value.get()
+            if val:
+                try:
+                    self.cumulative_files[index]['month'] = int(val.replace("月", ""))
+                    self._update_fiscal_year_display()
+                    self._check_can_execute()
+                except ValueError:
+                    pass
         
-        # ドロップダウンの変更を監視
-        year_dropdown.current_value.trace_add('write', on_year_change)
-        month_dropdown.current_value.trace_add('write', on_month_change)
-        
-        # 削除ボタン
-        delete_btn = tk.Label(
-            row, text="削除", font=('Meiryo', 9),
-            fg='white', bg='#991B1B', cursor='hand2', padx=10, pady=4
-        )
-        delete_btn.pack(side=tk.LEFT)
-        delete_btn.bind('<Button-1>', lambda e, idx=index: self._remove_file(idx))
+        # 変数の監視
+        year_dropdown.current_value.trace_add("write", on_year_change)
+        month_dropdown.current_value.trace_add("write", on_month_change)
     
     def _update_fiscal_year_display(self):
         """年度表示を更新（ファイルリスト下部）"""
