@@ -17,6 +17,8 @@ from tkinter import ttk, messagebox, scrolledtext, filedialog
 from pathlib import Path
 from datetime import datetime
 import ctypes
+from importer_v2 import import_excel_v2
+from dashboard_v2 import generate_dashboard
 
 # バックエンドモジュールをインポート
 sys.path.insert(0, str(Path(__file__).parent / 'app' / 'backend'))
@@ -1828,13 +1830,150 @@ class PerformanceReflectionPage(tk.Frame):
         if not self.uploaded_files:
             return
             
-        # 仮実装：確認ダイアログ
-        response = messagebox.askyesno(
+        # UIブロック
+        if self.is_processing:
+            return
+            
+        response = ModernDialog.ask_yes_no(
+            self,
             "実行確認",
-            f"{len(self.uploaded_files)}個のファイルを反映しますか？\\n\\n※この処理は取り消せません。"
+            f"{len(self.uploaded_files)}個のファイルを反映しますか？",
+            detail="※この処理は取り消せません。\n※反映には数分かかる場合があります。"
         )
+        
         if response:
-            messagebox.showinfo("処理開始", "機能を実装中です...")
+            self._start_import_process()
+
+    def _start_import_process(self):
+        """インポート処理開始（スレッド）"""
+        self.is_processing = True
+        self.execute_btn.config(state='disabled')
+        self._show_progress_modal()
+        
+        thread = threading.Thread(target=self._run_import_process)
+        thread.daemon = True
+        thread.start()
+    
+    def _run_import_process(self):
+        """インポート実行（別スレッド）"""
+        try:
+            success_count = 0
+            error_details = []
+            total_files = len(self.uploaded_files)
+            
+            for i, file_info in enumerate(self.uploaded_files):
+                file_path = file_info['path']
+                
+                # 進捗更新
+                self._update_progress(f"処理中 ({i+1}/{total_files}):\n{file_info['name']}")
+                
+                # インポート実行
+                result = import_excel_v2(file_path)
+                
+                if result['success']:
+                    success_count += 1
+                else:
+                    error_details.append(f"{file_info['name']}: {result.get('error')}")
+            
+            # ダッシュボード更新
+            if success_count > 0:
+                self._update_progress("ダッシュボードを更新中...")
+                generate_dashboard()
+                
+            # 完了処理
+            self.after(0, lambda: self._handle_completion(success_count, total_files, error_details))
+            
+        except Exception as e:
+            self.after(0, lambda: self._handle_error(str(e)))
+            
+    def _handle_completion(self, success_count, total_files, error_details):
+        """完了時処理"""
+        self._hide_progress_modal()
+        self.is_processing = False
+        
+        if success_count == total_files:
+            ModernDialog.show_success(
+                self,
+                "処理完了",
+                "すべてのファイルの反映が完了しました！",
+                detail="ダッシュボードが更新されました。"
+            )
+            # リセット
+            self.uploaded_files = []
+            self._update_file_list()
+        else:
+            detail_msg = f"成功: {success_count}件\n失敗: {len(error_details)}件\n\nエラー詳細:\n" + "\n".join(error_details)
+            ModernDialog.show_warning(
+                self,
+                "一部完了",
+                "一部のファイルでエラーが発生しました。",
+                detail=detail_msg
+            )
+            # リセットはしない（エラーファイルを確認できるように）
+            self._check_can_execute()
+            
+    def _handle_error(self, error_message):
+        """エラー時処理"""
+        self._hide_progress_modal()
+        self.is_processing = False
+        self._check_can_execute()
+        
+        ModernDialog.show_error(
+            self,
+            "エラー",
+            "予期せぬエラーが発生しました",
+            detail=error_message
+        )
+
+    def _show_progress_modal(self):
+        """進捗モーダル表示"""
+        self.progress_window = tk.Toplevel(self)
+        self.progress_window.title("処理中")
+        self.progress_window.geometry("400x200")
+        self.progress_window.overrideredirect(True)
+        self.progress_window.config(bg=COLORS['bg_card'])
+        self.progress_window.attributes('-topmost', True)
+        
+        # 中央配置
+        self.update_idletasks() # 親ウィンドウのサイズ確定待ち
+        try:
+            x = self.winfo_rootx() + (self.winfo_width() // 2) - 200
+            y = self.winfo_rooty() + (self.winfo_height() // 2) - 100
+        except:
+             x = (self.winfo_screenwidth() // 2) - 200
+             y = (self.winfo_screenheight() // 2) - 100
+        self.progress_window.geometry(f"+{x}+{y}")
+        
+        frame = tk.Frame(
+            self.progress_window, bg=COLORS['bg_card'],
+            highlightthickness=1, highlightbackground=COLORS['border']
+        )
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        tk.Label(
+            frame, text="⏳", font=('Meiryo', 32),
+            bg=COLORS['bg_card'], fg=COLORS['accent']
+        ).pack(pady=(30, 10))
+        
+        tk.Label(
+            frame, text="実績データを反映中...", font=('Meiryo', 12, 'bold'),
+            bg=COLORS['bg_card'], fg=COLORS['text_primary']
+        ).pack()
+        
+        self.progress_label = tk.Label(
+            frame, text="準備中...", font=('Meiryo', 9),
+            bg=COLORS['bg_card'], fg=COLORS['text_secondary']
+        )
+        self.progress_label.pack(pady=(5, 0))
+        
+    def _update_progress(self, message):
+        """進捗メッセージ更新"""
+        self.after(0, lambda: self.progress_label.config(text=message) if hasattr(self, 'progress_label') else None)
+        
+    def _hide_progress_modal(self):
+        """モーダルを閉じる"""
+        if hasattr(self, 'progress_window') and self.progress_window.winfo_exists():
+            self.progress_window.destroy()
 
 
 class MonthlyAggregationPage(tk.Frame):
