@@ -154,7 +154,9 @@ class ModernDropdown(tk.Frame):
         # 位置を計算
         x = self.winfo_rootx()
         y = self.winfo_rooty() + self.winfo_height()
-        self.menu.geometry(f"{self.winfo_width()}x+{x}+{y}")
+        # メニューの高さを計算（各アイテムx30px程度）
+        menu_height = min(len(self.values) * 30, 300)
+        self.menu.geometry(f"{self.winfo_width()}x{menu_height}+{x}+{y}")
         
         # 選択肢を追加
         for value in self.values:
@@ -694,10 +696,10 @@ class MonthlyAggregationPage(tk.Frame):
         
         # 削除ボタン（ファイル選択後に表示）
         remove_btn = tk.Label(
-            label_frame, text="×", font=('Segoe UI', 16, 'bold'),
-            fg=COLORS['danger'], bg=COLORS['bg_card'], cursor='hand2'
+            label_frame, text="削除", font=('Segoe UI', 9, 'bold'),
+            fg=COLORS['danger'], bg=COLORS['bg_card'], cursor='hand2', padx=8, pady=2
         )
-        remove_btn.bind('<Button-1>', lambda e: self._remove_file(file_key, file_name_label, cloud_label, check_label, remove_btn))
+        remove_btn.bind('<Button-1>', lambda e: self._remove_file(file_key, file_name_label, cloud_label, remove_btn))
         
         # ドロップゾーン（破線ボーダー + クラウドアイコン）
         drop_zone = tk.Frame(row_frame, bg=COLORS['bg_main'], highlightthickness=2, 
@@ -769,7 +771,6 @@ class MonthlyAggregationPage(tk.Frame):
                     self.files[file_key] = dropped_file
                     file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'])
                     cloud_label.config(text="📄", font=('Segoe UI', 24))
-                    check_label.pack(side=tk.RIGHT, padx=(5, 0))
                     remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
                     self._check_can_execute()
             
@@ -782,7 +783,6 @@ class MonthlyAggregationPage(tk.Frame):
         # 参照を保存
         setattr(self, f'{file_key}_name_label', file_name_label)
         setattr(self, f'{file_key}_cloud_label', cloud_label)
-        setattr(self, f'{file_key}_check', check_label)
         setattr(self, f'{file_key}_remove_btn', remove_btn)
 
     def _create_period_section(self, parent):
@@ -870,19 +870,17 @@ class MonthlyAggregationPage(tk.Frame):
             file_name_label.config(text=Path(filename).name, fg=COLORS['accent'])
             # クラウドアイコンを小さく、色を変更
             cloud_label.config(text="📄", font=('Segoe UI', 24))
-            # チェックマークと削除ボタン表示
-            check_label.pack(side=tk.RIGHT, padx=(5, 0))
+            # 削除ボタン表示
             remove_btn = getattr(self, f'{file_key}_remove_btn')
             remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
             self._check_can_execute()
     
-    def _remove_file(self, file_key, file_name_label, cloud_label, check_label, remove_btn):
+    def _remove_file(self, file_key, file_name_label, cloud_label, remove_btn):
         """選択したファイルを削除"""
         self.files[file_key] = None
         # UI を初期状態に戻す
         file_name_label.config(text="ファイルをドラッグ&ドロップ", fg=COLORS['text_secondary'])
         cloud_label.config(text="☁", font=('Segoe UI', 32))
-        check_label.pack_forget()
         remove_btn.pack_forget()
         self._check_can_execute()
 
