@@ -1645,58 +1645,32 @@ class PerformanceReflectionPage(tk.Frame):
         ).pack(anchor='w', pady=(5, 0))
 
     def _create_main_layout(self):
-        """メインレイアウト作成 (左右2カラム)"""
-        # コンテンツ全体をスクロール可能にするためのCanvas
-        canvas = tk.Canvas(self, bg=COLORS['bg_main'], highlightthickness=0)
-        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=COLORS['bg_main'])
+        """メインレイアウト作成 (左右2カラム 4:6)"""
+        # メインコンテナ (スクロールなし)
+        # グリッドレイアウトを使用して比率制御
+        main_container = tk.Frame(self, bg=COLORS['bg_main'])
+        main_container.pack(fill=tk.BOTH, expand=True, padx=30, pady=20)
         
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        # グリッド設定 (4:6)
+        main_container.grid_columnconfigure(0, weight=4)
+        main_container.grid_columnconfigure(1, weight=6)
+        main_container.grid_rowconfigure(0, weight=1)
         
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=self.scrollbar.set)
-        
-        # キャンバス幅調整
-        def on_canvas_configure(event):
-            canvas.itemconfig(canvas.find_withtag("all")[0], width=event.width)
-        
-        canvas.bind("<Configure>", on_canvas_configure)
-        
-        # マウスホイールスクロール（全体）
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        
-        # キャンバスにマウスがある時だけスクロール有効化
-        canvas.bind('<Enter>', lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
-        canvas.bind('<Leave>', lambda e: canvas.unbind_all("<MouseWheel>"))
-
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(30, 0))
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # レイアウト分割コンテナ
-        main_container = tk.Frame(scrollable_frame, bg=COLORS['bg_main'])
-        main_container.pack(fill=tk.BOTH, expand=True, padx=0, pady=20)
-        
-        # 左カラム (60%)
+        # 左カラム (40%)
         left_col = tk.Frame(main_container, bg=COLORS['bg_main'])
-        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 20))
+        left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 20))
         
-        # 右カラム (40% - 固定幅気味)
-        right_col = tk.Frame(main_container, bg=COLORS['bg_main'], width=380)
-        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, padx=0, anchor='n')
+        # 右カラム (60%)
+        right_col = tk.Frame(main_container, bg=COLORS['bg_main'])
+        right_col.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
         
         # コンテンツ配置
         self._create_file_selection_area(left_col)
         self._create_right_panel(right_col)
-        
-        self.scrollable_frame = scrollable_frame
-        self.canvas = canvas
 
     def _create_file_selection_area(self, parent):
         """STEP 1: ファイル選択 (左カラム)"""
+        # 親フレームのサイズに合わせて広げる
         step_frame = tk.Frame(parent, bg=COLORS['bg_main'])
         step_frame.pack(fill=tk.BOTH, expand=True)
         
@@ -1710,12 +1684,12 @@ class PerformanceReflectionPage(tk.Frame):
             fg=COLORS['text_primary'], bg=COLORS['bg_main']
         ).pack(anchor='w', pady=(0, 10))
         
-        # ドロップゾーン (大きく)
+        # ドロップゾーン
         self.drop_zone = tk.Frame(
             step_frame, bg=COLORS['bg_card'],
             highlightbackground=COLORS['border'], highlightthickness=1
         )
-        self.drop_zone.pack(fill=tk.BOTH, expand=True, ipady=50) # 高さを確保
+        self.drop_zone.pack(fill=tk.BOTH, expand=True, ipady=30)
         
         # ホバーエフェクト
         def on_enter(e):
@@ -1837,13 +1811,6 @@ class PerformanceReflectionPage(tk.Frame):
         btn_row = tk.Frame(self.status_card, bg=COLORS['bg_card'])
         btn_row.pack(fill=tk.X)
         
-        # 起動/停止ボタン
-        self.toggle_btn = ModernButton(
-            btn_row, text="起動", btn_type='secondary', width=8,
-            command=self._toggle_dashboard
-        )
-        self.toggle_btn.pack(side=tk.LEFT, padx=(0, 5))
-        
         # ブラウザで開く
         self.open_btn = ModernButton(
             btn_row, text="開く", btn_type='secondary', width=8,
@@ -1873,7 +1840,6 @@ class PerformanceReflectionPage(tk.Frame):
                 self.status_indicator.config(fg='#10b981') # Green
                 self.status_text.config(text="公開中", fg='#10b981')
                 self.url_label.config(text=url, fg=COLORS['text_primary'])
-                self.toggle_btn.config(text="停止", btn_type='danger')
                 self.open_btn.config(state='normal')
                 self.copy_btn.config(state='normal')
                 self.status_card.config(highlightbackground='#10b981')
@@ -1881,7 +1847,6 @@ class PerformanceReflectionPage(tk.Frame):
                 self.status_indicator.config(fg=COLORS['text_secondary'])
                 self.status_text.config(text="停止中", fg=COLORS['text_secondary'])
                 self.url_label.config(text="(サーバー停止中)", fg=COLORS['text_secondary'])
-                self.toggle_btn.config(text="起動", btn_type='primary')
                 self.open_btn.config(state='disabled')
                 self.copy_btn.config(state='disabled')
                 self.status_card.config(highlightbackground=COLORS['border'])
