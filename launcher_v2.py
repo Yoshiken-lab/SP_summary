@@ -1806,7 +1806,7 @@ class PerformanceReflectionPage(tk.Frame):
             ModernButton(
                 row, text="削除", 
                 command=lambda idx=i: self._remove_file(idx),
-                width=60, bg_color=COLORS['danger'], hover_color=COLORS['danger_hover']
+                width=60, btn_type='danger'
             ).pack(side=tk.RIGHT)
 
         self._check_can_execute()
