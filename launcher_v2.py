@@ -229,7 +229,7 @@ class MainApp:
         
         # 各ページの初期化
         self.pages['server'] = ServerControlPage(self.content_area, self.server_manager)
-        self.pages['monthly'] = PlaceholderPage(self.content_area, "月次集計", "CSVデータから売上を集計し、Excel報告書を作成します")
+        self.pages['monthly'] = MonthlyAggregationPage(self.content_area)
         self.pages['cumulative'] = PlaceholderPage(self.content_area, "累積集計", "過去のデータを統合して全体の傾向を分析します")
         self.pages['results'] = PlaceholderPage(self.content_area, "実績反映", "確定した売上データをシステムのマスタに反映させます")
         self.pages['database'] = PlaceholderPage(self.content_area, "データベース確認", "登録されているテーブルやレコードを直接確認します")
@@ -495,6 +495,236 @@ class PlaceholderPage(tk.Frame):
         
         tk.Label(self, text="この機能は現在開発中です", font=('Segoe UI', 10),
                  fg=COLORS['accent'], bg=COLORS['bg_main']).pack(anchor='center', pady=30)
+
+
+class MonthlyAggregationPage(tk.Frame):
+    """月次集計ページ"""
+    def __init__(self, parent):
+        super().__init__(parent, bg=COLORS['bg_main'])
+        
+        # 状態管理
+        self.files = {
+            'sales': None,
+            'accounts': None,
+            'master': None
+        }
+        self.is_processing = False
+        
+        # UI構築
+        self._create_header()
+        self._create_main_layout()
+
+    def _create_header(self):
+        """ヘッダー作成"""
+        header = tk.Frame(self, bg=COLORS['bg_main'])
+        header.pack(fill=tk.X, padx=30, pady=(30, 20))
+        
+        tk.Label(
+            header, text="月次集計", font=('Segoe UI', 18, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_main']
+        ).pack(anchor='w')
+        
+        tk.Label(
+            header, text="CSVデータから売上を集計し、Excel報告書を作成します",
+            font=('Segoe UI', 10), fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+        ).pack(anchor='w', pady=(5, 0))
+
+    def _create_main_layout(self):
+        """メインレイアウト作成"""
+        container = tk.Frame(self, bg=COLORS['bg_main'])
+        container.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
+        
+        # 左右2カラムレイアウト
+        # 左側: ファイル選択（60%）
+        left_frame = tk.Frame(container, bg=COLORS['bg_main'])
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 15))
+        
+        # 右側: 期間選択 + 実行（40%）
+        right_frame = tk.Frame(container, bg=COLORS['bg_main'])
+        right_frame.pack(side=tk.LEFT, fill=tk.Y, ipadx=150)
+        
+        self._create_file_upload_section(left_frame)
+        self._create_period_section(right_frame)
+
+    def _create_file_upload_section(self, parent):
+        """ファイルアップロードセクション作成"""
+        # STEP 1ヘッダー
+        header_frame = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=15)
+        header_frame.pack(fill=tk.X)
+        
+        step_badge = tk.Label(
+            header_frame, text="STEP 1", font=('Consolas', 8, 'bold'),
+            fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
+        )
+        step_badge.pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Label(
+            header_frame, text="ファイル選択", font=('Segoe UI', 11, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_card']
+        ).pack(side=tk.LEFT)
+        
+        # ファイル選択エリア
+        files_container = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=20)
+        files_container.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
+        
+        # 3つのファイル選択UI
+        self._create_file_select_row(files_container, "売上データ (CSV)", "📊", "sales", "*.csv")
+        self._create_file_select_row(files_container, "会員データ (CSV)", "👥", "accounts", "*.csv")
+        self._create_file_select_row(files_container, "担当者マスタ (XLSX)", "📋", "master", "*.xlsx")
+
+    def _create_file_select_row(self, parent, label_text, icon, file_key, file_filter):
+        """ファイル選択行を作成"""
+        row_frame = tk.Frame(parent, bg=COLORS['bg_card'])
+        row_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        # ラベル + アイコン
+        label_frame = tk.Frame(row_frame, bg=COLORS['bg_card'])
+        label_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        tk.Label(
+            label_frame, text=icon, font=('Segoe UI', 14),
+            bg=COLORS['bg_card']
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        
+        tk.Label(
+            label_frame, text=label_text, font=('Segoe UI', 10, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_card']
+        ).pack(side=tk.LEFT)
+        
+        # チェックマーク（選択済みの場合）
+        check_label = tk.Label(
+            label_frame, text="✓", font=('Segoe UI', 12, 'bold'),
+            fg=COLORS['success'], bg=COLORS['bg_card']
+        )
+        # 初期状態では非表示
+        
+        # ファイル選択ボックス
+        input_frame = tk.Frame(row_frame, bg=COLORS['bg_main'], padx=1, pady=1)
+        input_frame.pack(fill=tk.X)
+        
+        inner_frame = tk.Frame(input_frame, bg=COLORS['bg_main'])
+        inner_frame.pack(fill=tk.X, padx=2, pady=2)
+        
+        # ファイル名表示
+        file_var = tk.StringVar(value="ファイルを選択してください")
+        file_entry = tk.Entry(
+            inner_frame, textvariable=file_var, state='readonly',
+            font=('Segoe UI', 9), fg=COLORS['text_secondary'],
+            bg=COLORS['bg_main'], relief='flat', bd=0
+        )
+        file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10, pady=8)
+        
+        # 選択ボタン
+        select_btn = ModernButton(
+            inner_frame, text="参照", btn_type='primary',
+            command=lambda: self._select_file(file_key, file_var, check_label, file_filter)
+        )
+        select_btn.pack(side=tk.RIGHT, padx=10)
+        
+        # 参照を保存
+        setattr(self, f'{file_key}_var', file_var)
+        setattr(self, f'{file_key}_check', check_label)
+
+    def _create_period_section(self, parent):
+        """期間選択セクション作成"""
+        # STEP 2カード
+        card = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=20)
+        card.pack(fill=tk.X)
+        
+        # ヘッダー
+        header_frame = tk.Frame(card, bg=COLORS['bg_card'])
+        header_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        step_badge = tk.Label(
+            header_frame, text="STEP 2", font=('Consolas', 8, 'bold'),
+            fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
+        )
+        step_badge.pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Label(
+            header_frame, text="対象期間", font=('Segoe UI', 11, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_card']
+        ).pack(side=tk.LEFT)
+        
+        # 年度選択
+        year_frame = tk.Frame(card, bg=COLORS['bg_card'])
+        year_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        tk.Label(
+            year_frame, text="年度", font=('Segoe UI', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        ).pack(anchor='w', pady=(0, 5))
+        
+        # 年度のリスト（過去5年分）
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+        fiscal_year = current_year if current_month >= 4 else current_year - 1
+        years = [str(y) + "年度" for y in range(fiscal_year - 4, fiscal_year + 2)]
+        
+        self.year_var = tk.StringVar(value=str(fiscal_year) + "年度")
+        year_combo = ttk.Combobox(
+            year_frame, textvariable=self.year_var, values=years,
+            state='readonly', font=('Segoe UI', 10)
+        )
+        year_combo.pack(fill=tk.X)
+        
+        # 月選択
+        month_frame = tk.Frame(card, bg=COLORS['bg_card'])
+        month_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        tk.Label(
+            month_frame, text="月", font=('Segoe UI', 9, 'bold'),
+            fg=COLORS['text_secondary'], bg=COLORS['bg_card']
+        ).pack(anchor='w', pady=(0, 5))
+        
+        months = [str(m) + "月" for m in range(1, 13)]
+        self.month_var = tk.StringVar(value=str(current_month) + "月")
+        month_combo = ttk.Combobox(
+            month_frame, textvariable=self.month_var, values=months,
+            state='readonly', font=('Segoe UI', 10)
+        )
+        month_combo.pack(fill=tk.X)
+        
+        # 実行ボタン
+        self.execute_btn = ModernButton(
+            card, text="集計を実行", btn_type='primary',
+            command=self._execute_aggregation,
+            state='disabled'
+        )
+        self.execute_btn.pack(fill=tk.X, pady=(10, 0))
+
+    def _select_file(self, file_key, file_var, check_label, file_filter):
+        """ファイル選択ダイアログ"""
+        from tkinter import filedialog
+        
+        filetypes = []
+        if file_filter == "*.csv":
+            filetypes = [("CSVファイル", "*.csv"), ("すべてのファイル", "*.*")]
+        elif file_filter == "*.xlsx":
+            filetypes = [("Excelファイル", "*.xlsx"), ("すべてのファイル", "*.*")]
+        
+        filename = filedialog.askopenfilename(
+            title=f"{file_key}ファイルを選択",
+            filetypes=filetypes
+        )
+        
+        if filename:
+            self.files[file_key] = filename
+            file_var.set(Path(filename).name)
+            check_label.pack(side=tk.RIGHT)
+            self._check_can_execute()
+
+    def _check_can_execute(self):
+        """実行ボタンの活性化チェック"""
+        if all(self.files.values()) and not self.is_processing:
+            self.execute_btn.config(state='normal')
+        else:
+            self.execute_btn.config(state='disabled')
+
+    def _execute_aggregation(self):
+        """集計実行"""
+        # TODO: 次のステップで実装
+        messagebox.showinfo("開発中", "集計機能は次のステップで実装します")
 
 
 def main():
