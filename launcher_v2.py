@@ -1230,7 +1230,7 @@ class CumulativeAggregationPage(tk.Frame):
         )
         self.progress_label.pack()
         
-        self.progress_window.transient(self)
+        self.progress_window.transient(self.winfo_toplevel())
         self.progress_window.grab_set()
         
         # 最前面へ
@@ -2126,6 +2126,12 @@ class PerformanceReflectionPage(tk.Frame):
             bg=COLORS['bg_card'], fg=COLORS['text_secondary']
         )
         self.progress_label.pack(pady=(5, 0))
+
+        # モーダル設定（操作ブロック）
+        self.progress_window.transient(self.winfo_toplevel())
+        self.progress_window.grab_set()
+        self.progress_window.lift()
+        self.progress_window.focus_force()
         
     def _update_progress(self, message):
         """進捗メッセージ更新"""
