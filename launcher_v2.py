@@ -584,7 +584,7 @@ class MainApp:
         # 各ページの初期化
         self.pages['server'] = ServerControlPage(self.content_area, self.server_manager)
         self.pages['monthly'] = MonthlyAggregationPage(self.content_area)
-        self.pages['cumulative'] = PlaceholderPage(self.content_area, "累積集計", "過去のデータを統合して全体の傾向を分析します")
+        self.pages['cumulative'] = CumulativeAggregationPage(self.content_area)
         self.pages['results'] = PlaceholderPage(self.content_area, "実績反映", "確定した売上データをシステムのマスタに反映させます")
         self.pages['database'] = PlaceholderPage(self.content_area, "データベース確認", "登録されているテーブルやレコードを直接確認します")
 
@@ -849,6 +849,60 @@ class PlaceholderPage(tk.Frame):
         
         tk.Label(self, text="この機能は現在開発中です", font=('Meiryo', 10),
                  fg=COLORS['accent'], bg=COLORS['bg_main']).pack(anchor='center', pady=30)
+
+
+class CumulativeAggregationPage(tk.Frame):
+    """累積集計ページ"""
+    def __init__(self, parent):
+        super().__init__(parent, bg=COLORS['bg_main'])
+        
+        # 状態管理
+        self.cumulative_files = []  # ファイル情報リスト
+        self.existing_file_path = None  # 既存ファイルパス（オプション）
+        self.is_processing = False
+        
+        # UI構築
+        self._create_header()
+        self._create_main_layout()
+    
+    def _create_header(self):
+        """ヘッダー作成"""
+        header = tk.Frame(self, bg=COLORS['bg_main'])
+        header.pack(fill=tk.X, padx=30, pady=(30, 20))
+        
+        tk.Label(
+            header, text="累積集計", font=('Meiryo', 18, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_main']
+        ).pack(anchor='w')
+        
+        tk.Label(
+            header, text="複数の月次集計ファイルを元に、年度の累積報告書を作成します",
+            font=('Meiryo', 10), fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+        ).pack(anchor='w', pady=(5, 0))
+    
+    def _create_main_layout(self):
+        """メインレイアウト作成"""
+        # コンテンツエリア
+        content_area = tk.Frame(self, bg=COLORS['bg_main'])
+        content_area.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
+        
+        # STEP 1: ファイル追加（今後実装）
+        # TODO: 複数ファイルドロップゾーン
+        
+        # STEP 2: ファイルリスト（今後実装）
+        # TODO: テーブル形式でファイル一覧表示
+        
+        # STEP 3: 既存ファイル選択（今後実装）
+        # TODO: オプション機能
+        
+        # 実行ボタン（今後実装）
+        # TODO: 実行ボタンとロジック
+        
+        # 暫定的なプレースホルダー
+        tk.Label(
+            content_area, text="累積集計機能を実装中...",
+            font=('Meiryo', 14), fg=COLORS['accent'], bg=COLORS['bg_main']
+        ).pack(anchor='center', pady=100)
 
 
 class MonthlyAggregationPage(tk.Frame):
