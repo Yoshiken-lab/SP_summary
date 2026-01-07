@@ -823,96 +823,145 @@ class ServerControlPage(tk.Frame):
         container = tk.Frame(self, bg=COLORS['bg_main'])
         container.pack(fill=tk.BOTH, expand=True, padx=30)
         
-        # カード配置
-        cards_frame = tk.Frame(container, bg=COLORS['bg_main'])
-        cards_frame.pack(fill=tk.X)
-        cards_frame.grid_columnconfigure(0, weight=1)
-        cards_frame.grid_columnconfigure(1, weight=1)
-
-        # Dashboardカード
-        self._create_card(cards_frame, 0, "公開ダッシュボード", "🌐", False)
+        # コントロールパネルの作成
+        self._create_dashboard_panel(container)
 
         # ログエリア
         log_frame = tk.Frame(container, bg=COLORS['bg_main'])
         log_frame.pack(fill=tk.BOTH, expand=True, pady=20)
-        tk.Label(log_frame, text="システムログ", font=('Meiryo', 10, 'bold'),
-                 fg=COLORS['text_secondary'], bg=COLORS['bg_main']).pack(anchor='w', pady=(0, 5))
+        
+        label_row = tk.Frame(log_frame, bg=COLORS['bg_main'])
+        label_row.pack(fill=tk.X, pady=(0, 5))
+        
+        tk.Label(label_row, text="システムログ", font=('Meiryo', 10, 'bold'),
+                 fg=COLORS['text_secondary'], bg=COLORS['bg_main']).pack(side=tk.LEFT)
                  
         self.log_text = scrolledtext.ScrolledText(
-            log_frame, height=10, font=('Meiryo', 9),
+            log_frame, height=12, font=('Consolas', 9),
             bg=COLORS['log_bg'], fg=COLORS['log_fg'],
-            bd=0, highlightthickness=0
+            bd=1, relief='flat', highlightthickness=1,
+            highlightbackground=COLORS['border']
         )
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
-    def _create_card(self, parent, col, title, icon, is_api):
-        card = tk.Frame(parent, bg=COLORS['bg_card'], padx=20, pady=20)
-        card.grid(row=0, column=col, padx=10 if col==1 else (0, 10), sticky='ew')
+    def _create_dashboard_panel(self, parent):
+        """ダッシュボード管理パネル（新デザイン）"""
+        card = tk.Frame(parent, bg=COLORS['bg_card'], padx=25, pady=25)
+        card.pack(fill=tk.X)
         
-        # タイトル
-        header = tk.Frame(card, bg=COLORS['bg_card'])
-        header.pack(fill=tk.X, pady=(0, 15))
-        tk.Label(header, text=icon, font=('Meiryo', 16), bg=COLORS['bg_card'], fg='white').pack(side=tk.LEFT, padx=(0,10))
-        tk.Label(header, text=title, font=('Meiryo', 14, 'bold'), bg=COLORS['bg_card'], fg='white').pack(side=tk.LEFT)
-
-        # ステータス
-        status_var = tk.StringVar(value="停止中")
-        status_lbl = tk.Label(card, textvariable=status_var, font=('Meiryo', 11), bg=COLORS['bg_card'], fg=COLORS['text_secondary'])
-        status_lbl.pack(pady=(0, 15))
-
+        # --- ヘッダー行 (タイトル + ステータス) ---
+        header_row = tk.Frame(card, bg=COLORS['bg_card'])
+        header_row.pack(fill=tk.X, pady=(0, 20))
+        
+        # 左側: アイコンとタイトル
+        title_box = tk.Frame(header_row, bg=COLORS['bg_card'])
+        title_box.pack(side=tk.LEFT)
+        
+        tk.Label(title_box, text="🌐", font=('Meiryo', 20), 
+                 fg=COLORS['accent'], bg=COLORS['bg_card']).pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Label(title_box, text="公開ダッシュボード", font=('Meiryo', 16, 'bold'),
+                 fg=COLORS['text_primary'], bg=COLORS['bg_card']).pack(side=tk.LEFT)
+        
+        # 右側: ステータスバッジ
+        self.status_badge = tk.Label(header_row, text="● 停止中", font=('Meiryo', 10, 'bold'),
+                                     fg=COLORS['text_secondary'], bg=COLORS['bg_main'],
+                                     padx=15, pady=5)
+        self.status_badge.pack(side=tk.RIGHT)
+        
+        # --- 仕切り線 ---
+        tk.Frame(card, bg=COLORS['border'], height=1).pack(fill=tk.X, pady=(0, 20))
+        
+        # --- コントロール行 ---
+        control_row = tk.Frame(card, bg=COLORS['bg_card'])
+        control_row.pack(fill=tk.X)
+        
         # ポート設定
-        conf_frame = tk.Frame(card, bg=COLORS['bg_card'])
-        conf_frame.pack(fill=tk.X, pady=(0, 15))
-        tk.Label(conf_frame, text="ポート", bg=COLORS['bg_card'], fg=COLORS['text_secondary']).pack(side=tk.LEFT)
-        port_var = tk.StringVar(value=str(self.manager.config['api_port'] if is_api else self.manager.config['dashboard_port']))
-        tk.Entry(conf_frame, textvariable=port_var, width=6, bg=COLORS['bg_main'], fg='white', relief='flat', insertbackground='white').pack(side=tk.LEFT, padx=10)
-
-        # コントロール
-        btn_frame = tk.Frame(card, bg=COLORS['bg_card'])
-        btn_frame.pack(fill=tk.X)
+        port_frame = tk.Frame(control_row, bg=COLORS['bg_card'])
+        port_frame.pack(side=tk.LEFT)
         
-        start_btn = ModernButton(btn_frame, text="起動", btn_type="primary")
-        start_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        tk.Label(port_frame, text="ポート番号", font=('Meiryo', 9),
+                 fg=COLORS['text_secondary'], bg=COLORS['bg_card']).pack(anchor='w', pady=(0, 2))
+                 
+        self.port_var = tk.StringVar(value=str(self.manager.config['dashboard_port']))
         
-        stop_btn = ModernButton(btn_frame, text="停止", btn_type="danger", state="disabled")
-        stop_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
+        port_entry = tk.Entry(
+            port_frame, textvariable=self.port_var, width=10, 
+            font=('Consolas', 11), bg=COLORS['bg_main'], fg='white',
+            relief='flat', insertbackground='white', justify='center'
+        )
+        port_entry.pack(ipady=3)
+        
+        # URL表示（起動時のみ有効化）
+        self.url_frame = tk.Frame(control_row, bg=COLORS['bg_card'])
+        self.url_frame.pack(side=tk.LEFT, padx=(30, 0), fill=tk.Y)
+        
+        tk.Label(self.url_frame, text="アクセスURL", font=('Meiryo', 9),
+                 fg=COLORS['text_secondary'], bg=COLORS['bg_card']).pack(anchor='w', pady=(0, 2))
+                 
+        self.url_link = tk.Label(
+            self.url_frame, text="running...", font=('Consolas', 11, 'underline'),
+            fg=COLORS['accent'], bg=COLORS['bg_card'], cursor='hand2'
+        )
+        self.url_link.pack(anchor='w')
+        self.url_link.bind('<Button-1>', lambda e: webbrowser.open(self.url_link.cget("text")))
+        
+        # アクションボタン（右寄せ）
+        btn_box = tk.Frame(control_row, bg=COLORS['bg_card'])
+        btn_box.pack(side=tk.RIGHT, anchor='s')
+        
+        self.start_btn = ModernButton(
+            btn_box, text="サーバー起動", btn_type="primary", width=14,
+            command=self._on_start_click
+        )
+        self.start_btn.pack(side=tk.LEFT)
+        
+        self.stop_btn = ModernButton(
+            btn_box, text="停止", btn_type="danger", width=10,
+            command=self._on_stop_click, state="disabled"
+        )
+        self.stop_btn.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # 初期表示更新
+        self._update_ui(self.manager.is_dashboard_running())
 
-        # アクション設定
-        def on_start_click():
-            try:
-                p = int(port_var.get())
-                self.manager.save_config(
-                    p if is_api else self.manager.config['api_port'],
-                    p if not is_api else self.manager.config['dashboard_port']
-                )
-                if is_api:
-                    self.manager.start_api(p, lambda: update_ui(True), lambda: update_ui(False))
-                else:
-                    self.manager.start_dashboard(p, lambda: update_ui(True), lambda: update_ui(False))
-            except ValueError:
-                messagebox.showerror("エラー", "ポート番号を確認してください")
+    def _on_start_click(self):
+        try:
+            port = int(self.port_var.get())
+            self.manager.save_config(self.manager.config['api_port'], port)
+            self.manager.start_dashboard(
+                port, 
+                lambda: self._update_ui(True), 
+                lambda: self._update_ui(False)
+            )
+        except ValueError:
+            ModernDialog.show_error(self, "エラー", "ポート番号を正しく入力してください")
 
-        def on_stop_click():
-            if is_api:
-                self.manager.stop_api()
-            else:
-                self.manager.stop_dashboard()
-            update_ui(False)
+    def _on_stop_click(self):
+        self.manager.stop_dashboard()
+        self._update_ui(False)
 
-        def update_ui(running):
-            if running:
-                status_var.set("起動中")
-                status_lbl.config(fg=COLORS['success'])
-                start_btn.config(state="disabled")
-                stop_btn.config(state="normal")
-            else:
-                status_var.set("停止中")
-                status_lbl.config(fg=COLORS['text_secondary'])
-                start_btn.config(state="normal")
-                stop_btn.config(state="disabled")
-
-        start_btn.config(command=on_start_click)
-        stop_btn.config(command=on_stop_click)
+    def _update_ui(self, running):
+        if running:
+            # 起動中スタイル
+            self.status_badge.config(text="● 起動中", fg=COLORS['success'], bg='#064E3B') # Dark Green BG
+            
+            ip = self.manager.get_local_ip()
+            port = self.manager.config.get('dashboard_port', 8000)
+            url = f"http://{ip}:{port}"
+            self.url_link.config(text=url, state='normal')
+            self.url_frame.pack(side=tk.LEFT, padx=(30, 0), fill=tk.Y) # 表示
+            
+            self.start_btn.config(state="disabled")
+            self.stop_btn.config(state="normal")
+        else:
+            # 停止中スタイル
+            self.status_badge.config(text="● 停止中", fg=COLORS['text_secondary'], bg=COLORS['bg_main'])
+            
+            self.url_frame.pack_forget() # URL非表示
+            
+            self.start_btn.config(state="normal")
+            self.stop_btn.config(state="disabled")
 
 
     def _log_to_widget(self, message):
