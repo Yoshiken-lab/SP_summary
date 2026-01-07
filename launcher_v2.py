@@ -81,7 +81,7 @@ class ModernButton(tk.Button):
         current_bg = self.default_bg if state != 'disabled' else '#6B7280'
         
         # kwargsからfontを取り出す（指定がなければデフォルト）
-        font = kwargs.pop('font', ('Segoe UI', 9, 'bold'))
+        font = kwargs.pop('font', ('Meiryo', 9, 'bold'))
         
         super().__init__(
             master,
@@ -135,7 +135,7 @@ class ModernDropdown(tk.Frame):
         # ドロップダウンボタン
         self.button = tk.Button(
             self, textvariable=self.current_value,
-            font=('Segoe UI', 10), fg=COLORS['text_primary'],
+            font=('Meiryo', 10), fg=COLORS['text_primary'],
             bg=COLORS['bg_main'], relief='flat', bd=0,
             anchor='w', padx=10, cursor='hand2',
             command=self._toggle_menu
@@ -144,7 +144,7 @@ class ModernDropdown(tk.Frame):
         
         # ドロップダウンアイコン
         arrow_label = tk.Label(
-            self.button, text="▼", font=('Segoe UI', 8),
+            self.button, text="▼", font=('Meiryo', 8),
             fg=COLORS['text_secondary'], bg=COLORS['bg_main']
         )
         arrow_label.place(relx=1.0, rely=0.5, anchor='e', x=-10)
@@ -188,7 +188,7 @@ class ModernDropdown(tk.Frame):
         for value in self.values:
             # シンプルなButton（横幅いっぱいに広げる）
             item = tk.Button(
-                scrollable_frame, text=value, font=('Segoe UI', 10),
+                scrollable_frame, text=value, font=('Meiryo', 10),
                 fg=COLORS['text_primary'], bg=COLORS['bg_card'],
                 relief='flat', bd=0, anchor='w',
                 cursor='hand2', padx=10,
@@ -311,13 +311,13 @@ class ModernDialog(tk.Toplevel):
         
         # タイトルテキスト
         tk.Label(
-            title_bar, text=title, font=('Segoe UI', 10, 'bold'),
+            title_bar, text=title, font=('Meiryo', 10, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_main']
         ).pack(side=tk.LEFT, padx=15)
         
         # 閉じるボタン（×）
         close_btn = tk.Label(
-            title_bar, text="✕", font=('Segoe UI', 10),
+            title_bar, text="✕", font=('Meiryo', 10),
             fg=COLORS['text_secondary'], bg=COLORS['bg_main'],
             cursor='hand2', padx=15
         )
@@ -362,7 +362,7 @@ class ModernDialog(tk.Toplevel):
         icon_frame.pack(side=tk.LEFT, anchor='n', padx=(0, 20))
         
         tk.Label(
-            icon_frame, text=icon_char, font=('Segoe UI', 32),
+            icon_frame, text=icon_char, font=('Meiryo', 32),
             fg=icon_color, bg=COLORS['bg_card']
         ).pack()
         
@@ -371,7 +371,7 @@ class ModernDialog(tk.Toplevel):
         msg_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         tk.Label(
-            msg_frame, text=message, font=('Segoe UI', 11),
+            msg_frame, text=message, font=('Meiryo', 11),
             fg=COLORS['text_primary'], bg=COLORS['bg_card'],
             justify='left', wraplength=380
         ).pack(anchor='w', pady=(5, 0))
@@ -387,7 +387,7 @@ class ModernDialog(tk.Toplevel):
             cursor = 'hand2' if is_path else ''
             
             detail_label = tk.Label(
-                detail_frame, text=detail, font=('Consolas', 9) if is_path else ('Segoe UI', 9),
+                detail_frame, text=detail, font=('Meiryo', 9) if is_path else ('Meiryo', 9),
                 fg=fg_color, bg=detail_bg,
                 justify='left', wraplength=360, cursor=cursor
             )
@@ -407,21 +407,21 @@ class ModernDialog(tk.Toplevel):
              # キャンセル/いいえボタン
             no_btn = ModernButton(
                 btn_frame, text="いいえ", btn_type='secondary',
-                command=self.destroy, width=100
+                command=self.destroy, width=15
             )
             no_btn.pack(side=tk.RIGHT, padx=(10, 0))
             
             # OK/はいボタン
             yes_btn = ModernButton(
                 btn_frame, text="はい", btn_type='primary',
-                command=self._on_yes, width=100
+                command=self._on_yes, width=15
             )
             yes_btn.pack(side=tk.RIGHT)
             
         else: # info, error, success
             ok_btn = ModernButton(
                 btn_frame, text="OK", btn_type='primary',
-                command=self.destroy, width=100
+                command=self.destroy, width=15
             )
             ok_btn.pack(side=tk.RIGHT)
 
@@ -464,7 +464,7 @@ class SidebarButton(tk.Button):
         super().__init__(
             master,
             text=f"  {icon}  {text}",
-            font=('Segoe UI', 10),
+            font=('Meiryo', 10),
             fg=COLORS['text_primary'] if is_active else COLORS['text_secondary'],
             bg=self.active_bg if is_active else self.default_bg,
             relief='flat',
@@ -494,11 +494,11 @@ class SidebarButton(tk.Button):
         if active:
             self['bg'] = self.active_bg
             self['fg'] = COLORS['text_primary']
-            self['font'] = ('Segoe UI', 10, 'bold')
+            self['font'] = ('Meiryo', 10, 'bold')
         else:
             self['bg'] = self.default_bg
             self['fg'] = COLORS['text_secondary']
-            self['font'] = ('Segoe UI', 10)
+            self['font'] = ('Meiryo', 10)
 
 
 class MainApp:
@@ -539,7 +539,7 @@ class MainApp:
         tk.Label(
             logo_frame, 
             text="SP ADMIN PRO", 
-            font=('Segoe UI', 16, 'bold'),
+            font=('Meiryo', 16, 'bold'),
             fg=COLORS['accent'],
             bg=COLORS['bg_sidebar']
         ).pack(side=tk.LEFT, padx=20, pady=25)
@@ -568,7 +568,7 @@ class MainApp:
         footer_label = tk.Label(
             self.sidebar,
             text="v2.1.0",
-            font=('Segoe UI', 8),
+            font=('Meiryo', 8),
             fg=COLORS['text_secondary'],
             bg=COLORS['bg_sidebar']
         )
@@ -727,7 +727,7 @@ class ServerControlPage(tk.Frame):
         self.manager.log_callback = self._log_to_widget
 
         # ヘッダー
-        tk.Label(self, text="サーバー管理", font=('Segoe UI', 18, 'bold'), 
+        tk.Label(self, text="サーバー管理", font=('Meiryo', 18, 'bold'), 
                  fg=COLORS['text_primary'], bg=COLORS['bg_main']).pack(anchor='w', padx=30, pady=(30, 20))
 
         # コンテンツエリア
@@ -748,11 +748,11 @@ class ServerControlPage(tk.Frame):
         # ログエリア
         log_frame = tk.Frame(container, bg=COLORS['bg_main'])
         log_frame.pack(fill=tk.BOTH, expand=True, pady=20)
-        tk.Label(log_frame, text="システムログ", font=('Segoe UI', 10, 'bold'),
+        tk.Label(log_frame, text="システムログ", font=('Meiryo', 10, 'bold'),
                  fg=COLORS['text_secondary'], bg=COLORS['bg_main']).pack(anchor='w', pady=(0, 5))
                  
         self.log_text = scrolledtext.ScrolledText(
-            log_frame, height=10, font=('Consolas', 9),
+            log_frame, height=10, font=('Meiryo', 9),
             bg=COLORS['log_bg'], fg=COLORS['log_fg'],
             bd=0, highlightthickness=0
         )
@@ -765,12 +765,12 @@ class ServerControlPage(tk.Frame):
         # タイトル
         header = tk.Frame(card, bg=COLORS['bg_card'])
         header.pack(fill=tk.X, pady=(0, 15))
-        tk.Label(header, text=icon, font=('Segoe UI', 16), bg=COLORS['bg_card'], fg='white').pack(side=tk.LEFT, padx=(0,10))
-        tk.Label(header, text=title, font=('Segoe UI', 14, 'bold'), bg=COLORS['bg_card'], fg='white').pack(side=tk.LEFT)
+        tk.Label(header, text=icon, font=('Meiryo', 16), bg=COLORS['bg_card'], fg='white').pack(side=tk.LEFT, padx=(0,10))
+        tk.Label(header, text=title, font=('Meiryo', 14, 'bold'), bg=COLORS['bg_card'], fg='white').pack(side=tk.LEFT)
 
         # ステータス
         status_var = tk.StringVar(value="停止中")
-        status_lbl = tk.Label(card, textvariable=status_var, font=('Segoe UI', 11), bg=COLORS['bg_card'], fg=COLORS['text_secondary'])
+        status_lbl = tk.Label(card, textvariable=status_var, font=('Meiryo', 11), bg=COLORS['bg_card'], fg=COLORS['text_secondary'])
         status_lbl.pack(pady=(0, 15))
 
         # ポート設定
@@ -841,13 +841,13 @@ class PlaceholderPage(tk.Frame):
     def __init__(self, parent, title, description):
         super().__init__(parent, bg=COLORS['bg_main'])
         
-        tk.Label(self, text=title, font=('Segoe UI', 24, 'bold'), 
+        tk.Label(self, text=title, font=('Meiryo', 24, 'bold'), 
                  fg=COLORS['text_primary'], bg=COLORS['bg_main']).pack(anchor='center', pady=(150, 20))
         
-        tk.Label(self, text=description, font=('Segoe UI', 12),
+        tk.Label(self, text=description, font=('Meiryo', 12),
                  fg=COLORS['text_secondary'], bg=COLORS['bg_main']).pack(anchor='center')
         
-        tk.Label(self, text="この機能は現在開発中です", font=('Segoe UI', 10),
+        tk.Label(self, text="この機能は現在開発中です", font=('Meiryo', 10),
                  fg=COLORS['accent'], bg=COLORS['bg_main']).pack(anchor='center', pady=30)
 
 
@@ -874,13 +874,13 @@ class MonthlyAggregationPage(tk.Frame):
         header.pack(fill=tk.X, padx=30, pady=(30, 20))
         
         tk.Label(
-            header, text="月次集計", font=('Segoe UI', 18, 'bold'),
+            header, text="月次集計", font=('Meiryo', 18, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_main']
         ).pack(anchor='w')
         
         tk.Label(
             header, text="CSVデータから売上を集計し、Excel報告書を作成します",
-            font=('Segoe UI', 10), fg=COLORS['text_secondary'], bg=COLORS['bg_main']
+            font=('Meiryo', 10), fg=COLORS['text_secondary'], bg=COLORS['bg_main']
         ).pack(anchor='w', pady=(5, 0))
 
     def _create_main_layout(self):
@@ -901,7 +901,7 @@ class MonthlyAggregationPage(tk.Frame):
         
         self.execute_btn = ModernButton(
             button_frame, text="集計を実行", btn_type='primary',
-            font=('Segoe UI', 12),
+            font=('Meiryo', 12),
             command=self._execute_aggregation,
             state='disabled'
         )
@@ -918,13 +918,13 @@ class MonthlyAggregationPage(tk.Frame):
         header_frame.pack(fill=tk.X, pady=(0, 20))
         
         step_badge = tk.Label(
-            header_frame, text="STEP 1", font=('Consolas', 9, 'bold'),
+            header_frame, text="STEP 1", font=('Meiryo', 9, 'bold'),
             fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
         )
         step_badge.pack(side=tk.LEFT, padx=(0, 10))
         
         tk.Label(
-            header_frame, text="ファイル選択", font=('Segoe UI', 12, 'bold'),
+            header_frame, text="ファイル選択", font=('Meiryo', 12, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
@@ -957,18 +957,18 @@ class MonthlyAggregationPage(tk.Frame):
         label_frame.pack(fill=tk.X, pady=(0, 10))
         
         tk.Label(
-            label_frame, text=icon, font=('Segoe UI', 12),
+            label_frame, text=icon, font=('Meiryo', 12),
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT, padx=(0, 5))
         
         tk.Label(
-            label_frame, text=label_text, font=('Segoe UI', 10, 'bold'),
+            label_frame, text=label_text, font=('Meiryo', 10, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
         # 削除ボタン（ファイル選択後に表示）
         remove_btn = tk.Label(
-            label_frame, text="削除", font=('Segoe UI', 9),
+            label_frame, text="削除", font=('Meiryo', 9),
             fg='white', bg='#991B1B', cursor='hand2', padx=6, pady=2
         )
         remove_btn.bind('<Button-1>', lambda e: self._remove_file(file_key, file_name_label, cloud_label, remove_btn))
@@ -984,7 +984,7 @@ class MonthlyAggregationPage(tk.Frame):
         
         # クラウドアイコン
         cloud_label = tk.Label(
-            content_frame, text="☁", font=('Segoe UI', 28),
+            content_frame, text="☁", font=('Meiryo', 28),
             fg=COLORS['text_secondary'], bg=COLORS['bg_main']
         )
         cloud_label.pack(pady=(0, 5))
@@ -992,7 +992,7 @@ class MonthlyAggregationPage(tk.Frame):
         # プレースホルダーテキスト / ファイル名
         file_name_label = tk.Label(
             content_frame, text="ドラッグ&ドロップ",
-            font=('Segoe UI', 12), fg=COLORS['text_secondary'],
+            font=('Meiryo', 12), fg=COLORS['text_secondary'],
             bg=COLORS['bg_main'], wraplength=150
         )
         file_name_label.pack()
@@ -1041,8 +1041,8 @@ class MonthlyAggregationPage(tk.Frame):
                     
                     # ファイルを設定
                     self.files[file_key] = dropped_file
-                    file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'], font=('Segoe UI', 12))
-                    cloud_label.config(text="📄", font=('Segoe UI', 20))
+                    file_name_label.config(text=Path(dropped_file).name, fg=COLORS['accent'], font=('Meiryo', 12))
+                    cloud_label.config(text="📄", font=('Meiryo', 20))
                     remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
                     self._check_can_execute()
             
@@ -1068,13 +1068,13 @@ class MonthlyAggregationPage(tk.Frame):
         header_frame.pack(fill=tk.X, pady=(0, 20))
         
         step_badge = tk.Label(
-            header_frame, text="STEP 2", font=('Consolas', 9, 'bold'),
+            header_frame, text="STEP 2", font=('Meiryo', 9, 'bold'),
             fg=COLORS['accent'], bg='#1E3A5F', padx=8, pady=2
         )
         step_badge.pack(side=tk.LEFT, padx=(0, 10))
         
         tk.Label(
-            header_frame, text="対象期間", font=('Segoe UI', 12, 'bold'),
+            header_frame, text="対象期間", font=('Meiryo', 12, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
@@ -1088,7 +1088,7 @@ class MonthlyAggregationPage(tk.Frame):
         self.option_add('*TCombobox*Listbox.foreground', COLORS['text_primary'])
         self.option_add('*TCombobox*Listbox.selectBackground', COLORS['accent'])
         self.option_add('*TCombobox*Listbox.selectForeground', 'white')
-        self.option_add('*TCombobox*Listbox.font', ('Segoe UI', 10))
+        self.option_add('*TCombobox*Listbox.font', ('Meiryo', 10))
         self.option_add('*TCombobox*Listbox.relief', 'flat')
         self.option_add('*TCombobox*Listbox.borderwidth', '0')
         
@@ -1126,7 +1126,7 @@ class MonthlyAggregationPage(tk.Frame):
         year_container.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
         
         tk.Label(
-            year_container, text="年度", font=('Segoe UI', 9, 'bold'),
+            year_container, text="年度", font=('Meiryo', 9, 'bold'),
             fg=COLORS['text_secondary'], bg=COLORS['bg_card']
         ).pack(anchor='w', pady=(0, 5))
         
@@ -1138,7 +1138,7 @@ class MonthlyAggregationPage(tk.Frame):
         self.year_var = tk.StringVar(value=f"{fiscal_year}年度")
         year_combo = ttk.Combobox(
             year_container, textvariable=self.year_var, values=years,
-            state='readonly', font=('Segoe UI', 10),
+            state='readonly', font=('Meiryo', 10),
             style='Modern.TCombobox', cursor='hand2'
         )
         year_combo.pack(fill=tk.X, ipady=5)
@@ -1148,7 +1148,7 @@ class MonthlyAggregationPage(tk.Frame):
         month_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         tk.Label(
-            month_container, text="月", font=('Segoe UI', 9, 'bold'),
+            month_container, text="月", font=('Meiryo', 9, 'bold'),
             fg=COLORS['text_secondary'], bg=COLORS['bg_card']
         ).pack(anchor='w', pady=(0, 5))
         
@@ -1156,7 +1156,7 @@ class MonthlyAggregationPage(tk.Frame):
         self.month_var = tk.StringVar(value=f"{current_month}月")
         month_combo = ttk.Combobox(
             month_container, textvariable=self.month_var, values=months,
-            state='readonly', font=('Segoe UI', 10),
+            state='readonly', font=('Meiryo', 10),
             style='Modern.TCombobox', cursor='hand2'
         )
         month_combo.pack(fill=tk.X, ipady=5)
@@ -1179,9 +1179,9 @@ class MonthlyAggregationPage(tk.Frame):
         if filename:
             self.files[file_key] = filename
             # ファイル名のみ表示
-            file_name_label.config(text=Path(filename).name, fg=COLORS['accent'], font=('Segoe UI', 12))
+            file_name_label.config(text=Path(filename).name, fg=COLORS['accent'], font=('Meiryo', 12))
             # クラウドアイコンを小さく、色を変更
-            cloud_label.config(text="📄", font=('Segoe UI', 20))
+            cloud_label.config(text="📄", font=('Meiryo', 20))
             # 削除ボタン表示
             remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
             self._check_can_execute()
@@ -1191,7 +1191,7 @@ class MonthlyAggregationPage(tk.Frame):
         self.files[file_key] = None
         # UI を初期状態に戻す
         file_name_label.config(text="ファイルをドラッグ&ドロップ", fg=COLORS['text_secondary'])
-        cloud_label.config(text="☁", font=('Segoe UI', 32))
+        cloud_label.config(text="☁", font=('Meiryo', 32))
         remove_btn.pack_forget()
         self._check_can_execute()
 
@@ -1328,17 +1328,17 @@ class MonthlyAggregationPage(tk.Frame):
         
         # スピナー的なアイコン
         tk.Label(
-            frame, text="⏳", font=('Segoe UI', 32),
+            frame, text="⏳", font=('Meiryo', 32),
             fg=COLORS['accent'], bg=COLORS['bg_card']
         ).pack(pady=(0, 15))
         
         tk.Label(
-            frame, text="集計中...", font=('Segoe UI', 14, 'bold'),
+            frame, text="集計中...", font=('Meiryo', 14, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(pady=(0, 10))
         
         tk.Label(
-            frame, text="この処理には時間がかかる場合があります\nしばらくお待ちください", font=('Segoe UI', 10),
+            frame, text="この処理には時間がかかる場合があります\nしばらくお待ちください", font=('Meiryo', 10),
             fg=COLORS['text_secondary'], bg=COLORS['bg_card'], justify='center',
             wraplength=480
         ).pack()
@@ -1375,18 +1375,6 @@ class MonthlyAggregationPage(tk.Frame):
             detail=f'保存先:\n{output_path}'
         )
         
-        # フォルダを開くか確認
-        open_folder = ModernDialog.ask_yes_no(
-            self,
-            'フォルダを開く',
-            '保存先フォルダを開きますか？',
-            detail=str(output_dir)
-        )
-        
-        if open_folder:
-            # エクスプローラーでフォルダを開く
-            os.startfile(str(output_dir))
-        
         self._reset_form()
     
     def _show_master_mismatch_dialog(self, schools):
@@ -1420,8 +1408,8 @@ class MonthlyAggregationPage(tk.Frame):
                 cloud_label = getattr(self, f'{file_key}_cloud_label')
                 remove_btn = getattr(self, f'{file_key}_remove_btn')
                 
-                name_label.config(text="ドラッグ&ドロップ", fg=COLORS['text_secondary'], font=('Segoe UI', 12))
-                cloud_label.config(text="☁", font=('Segoe UI', 28))
+                name_label.config(text="ドラッグ&ドロップ", fg=COLORS['text_secondary'], font=('Meiryo', 12))
+                cloud_label.config(text="☁", font=('Meiryo', 28))
                 remove_btn.pack_forget()
         
         # ボタンを無効化
