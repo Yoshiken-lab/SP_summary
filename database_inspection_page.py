@@ -324,8 +324,8 @@ class DatabaseInspectionPage(tk.Frame):
         # 横方向のみ広げる（縦方向はheightで固定）
         self.tree.pack(fill=tk.X, expand=False, padx=0, pady=0)
         
-        # ページネーション（視認性のため背景色を明示的に設定）
-        pagination_frame = tk.Frame(view_frame, bg='#4B5563', bd=2, relief='solid')
+        # ページネーション
+        pagination_frame = tk.Frame(view_frame, bg=COLORS['bg_main'])
         pagination_frame.pack(fill=tk.X, pady=(15, 0))
         
         # ページ情報（左）
@@ -349,16 +349,14 @@ class DatabaseInspectionPage(tk.Frame):
             command=lambda: self._change_page('prev')
         ).pack(side=tk.LEFT, padx=(0, 5))
         
-        self.page_number_label = tk.Label(
-            page_buttons, text="1/1", font=('Meiryo', 10, 'bold'),
-            fg=COLORS['text_primary'], bg=COLORS['bg_main']
-        )
-        self.page_number_label.pack(side=tk.LEFT, padx=10)
+        # ページ番号ボタンのコンテナ
+        self.page_numbers_container = tk.Frame(page_buttons, bg=COLORS['bg_main'])
+        self.page_numbers_container.pack(side=tk.LEFT, padx=5)
         
         self.ModernButton(
             page_buttons, text=">", width=3,
             command=lambda: self._change_page('next')
-        ).pack(side=tk.LEFT, padx=(0, 5))
+        ).pack(side=tk.LEFT, padx=(5, 5))
         
         self.ModernButton(
             page_buttons, text=">>", width=3,
@@ -540,12 +538,61 @@ class DatabaseInspectionPage(tk.Frame):
             start_num = offset + 1 if self.total_records > 0 else 0
             end_num = min(offset + self.records_per_page, self.total_records)
             self.page_info_label.config(text=f"{self.total_records}件中 {start_num}-{end_num}件")
-            self.page_number_label.config(text=f"{self.current_page}/{total_pages}")
+            
+            # ページ番号ボタン更新
+            self._update_page_buttons(total_pages)
             
         except Exception as e:
             print(f"データ取得エラー: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _update_page_buttons(self, total_pages):
+        """ページ番号ボタンを動的に生成・更新"""
+        # 既存のボタンをクリア
+        for widget in self.page_numbers_container.winfo_children():
+            widget.destroy()
+        
+        if total_pages <= 1:
+            return
+        
+        # ページ番号を計算（省略形）
+        current = self.current_page
+        pages_to_show = []
+        
+        if total_pages <= 8:
+            # 8ページ以下ならすべて表示
+            pages_to_show = list(range(1, total_pages + 1))
+        else:
+            # 9ページ以上の場合: 最初の4ページ + ... + 最後の4ページ
+            pages_to_show = [1, 2, 3, 4, '...', 
+                           total_pages - 3, total_pages - 2, 
+                           total_pages - 1, total_pages]
+        
+        # ボタン生成
+        for page in pages_to_show:
+            if page == '...':
+                # 省略記号はラベルとして表示
+                label = tk.Label(
+                    self.page_numbers_container,
+                    text='...',
+                    font=('Meiryo', 10),
+                    fg=COLORS['text_secondary'],
+                    bg=COLORS['bg_main'],
+                    padx=5
+                )
+                label.pack(side=tk.LEFT, padx=2)
+            else:
+                # ページ番号ボタン
+                btn_type = 'primary' if page == current else 'secondary'
+                btn = self.ModernButton(
+                    self.page_numbers_container,
+                    text=str(page),
+                    btn_type=btn_type,
+                    width=4,
+                    command=lambda p=page: self._change_page(p)
+                )
+                btn.pack(side=tk.LEFT, padx=2)
     
     def _select_table(self, table_id):
         """テーブル選択"""
@@ -590,7 +637,10 @@ class DatabaseInspectionPage(tk.Frame):
         """ページ変更"""
         total_pages = max(1, (self.total_records + self.records_per_page - 1) // self.records_per_page)
         
-        if direction == 'first':
+        # 直接ページ番号が指定された場合
+        if isinstance(direction, int):
+            self.current_page = max(1, min(direction, total_pages))
+        elif direction == 'first':
             self.current_page = 1
         elif direction == 'last':
             self.current_page = total_pages
