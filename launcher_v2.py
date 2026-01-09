@@ -886,12 +886,16 @@ class ServerControlPage(tk.Frame):
                  
         self.port_var = tk.StringVar(value=str(self.manager.config['dashboard_port']))
         
-        port_entry = tk.Entry(
+        # 数字のみ入力可能にする検証関数
+        vcmd = (self.register(self._validate_port), '%P')
+        
+        self.port_entry = tk.Entry(
             port_frame, textvariable=self.port_var, width=10, 
             font=('Consolas', 11), bg=COLORS['bg_main'], fg='white',
-            relief='flat', insertbackground='white', justify='center'
+            relief='flat', insertbackground='white', justify='center',
+            validate='key', validatecommand=vcmd
         )
-        port_entry.pack(ipady=3)
+        self.port_entry.pack(ipady=3)
         
         # URL表示（起動時のみ有効化）
         self.url_frame = tk.Frame(control_row, bg=COLORS['bg_card'])
@@ -926,6 +930,16 @@ class ServerControlPage(tk.Frame):
         # 初期表示更新
         self._update_ui(self.manager.is_dashboard_running())
 
+    def _validate_port(self, value):
+        """ポート番号の検証（数字のみ、空文字もOK）"""
+        if value == "":
+            return True
+        try:
+            int(value)
+            return True
+        except ValueError:
+            return False
+
     def _on_start_click(self):
         try:
             port = int(self.port_var.get())
@@ -956,6 +970,7 @@ class ServerControlPage(tk.Frame):
             
             self.start_btn.config(state="disabled")
             self.stop_btn.config(state="normal")
+            self.port_entry.config(state="disabled")  # ポート入力を無効化
         else:
             # 停止中スタイル
             self.status_badge.config(text="● 停止中", fg=COLORS['warning'], bg=COLORS['bg_main'])
@@ -965,6 +980,7 @@ class ServerControlPage(tk.Frame):
             
             self.start_btn.config(state="normal")
             self.stop_btn.config(state="disabled")
+            self.port_entry.config(state="normal")  # ポート入力を有効化
 
 
     def _log_to_widget(self, message):
@@ -1785,11 +1801,12 @@ class PerformanceReflectionPage(tk.Frame):
         
     def _create_execution_panel(self, parent):
         """実行ボタン配置"""
-        # タイトル: 実績反映を実行
-        tk.Label(
+        # タイトル: 実績反映を実行（ファイル選択時に表示）
+        self.execution_title = tk.Label(
             parent, text="実績反映を実行", font=('Meiryo', 12, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_main']
-        ).pack(anchor='w', pady=(0, 10))
+        )
+        # self.execution_title.pack(anchor='w', pady=(0, 10))  # 初期非表示
         
         self.execute_btn_frame = tk.Frame(parent, bg=COLORS['bg_main'])
         # self.execute_btn_frame.pack(fill=tk.X, pady=(5, 0))
@@ -2043,9 +2060,11 @@ class PerformanceReflectionPage(tk.Frame):
         """実行可能かチェック"""
         if self.uploaded_files:
             self.execute_btn.config(state='normal')
+            self.execution_title.pack(anchor='w', pady=(0, 10))  # タイトル表示
             self.execute_btn_frame.pack(fill=tk.X, pady=(5, 0))
         else:
             self.execute_btn.config(state='disabled')
+            self.execution_title.pack_forget()  # タイトル非表示
             self.execute_btn_frame.pack_forget()
 
     def _confirm_execution(self):
