@@ -321,7 +321,7 @@ class DatabaseInspectionPage(tk.Frame):
         self.tree.tag_configure('odd', background=COLORS['bg_main'], foreground=COLORS['text_primary'])
         self.tree.tag_configure('even', background='#2D3748', foreground=COLORS['text_primary'])
         
-        self.tree.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
+        self.tree.pack(fill=tk.BOTH, expand=False, padx=0, pady=0)
         
         # ページネーション
         pagination_frame = tk.Frame(view_frame, bg=COLORS['bg_main'])
@@ -520,7 +520,7 @@ class DatabaseInspectionPage(tk.Frame):
                 self.tree.column(col_id, width=width, anchor='w' if i > 0 else 'center')
             
             # データ挿入
-            for row in rows:
+            for row_idx, row in enumerate(rows):
                 # 数値フォーマット
                 formatted_row = []
                 for i, value in enumerate(row):
@@ -531,8 +531,8 @@ class DatabaseInspectionPage(tk.Frame):
                     else:
                         formatted_row.append(str(value))
                 
-                # ストライプ用のタグ設定
-                tags = ('even',) if i % 2 == 0 else ('odd',)
+                # ストライプ用のタグ設定（行インデックスを使用）
+                tags = ('even',) if row_idx % 2 == 0 else ('odd',)
                 self.tree.insert('', 'end', values=formatted_row, tags=tags)
             
             # ページ情報更新
