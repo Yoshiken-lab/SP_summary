@@ -263,12 +263,56 @@ class DatabaseInspectionPage(tk.Frame):
         scrollbar = ttk.Scrollbar(tree_container)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
+        # Treeviewスタイル設定 (Hybrid Modern)
+        style = ttk.Style()
+        style.theme_use('clam')  # カスタマイズしやすいテーマを使用
+        
+        # Treeview全体のスタイル
+        style.configure(
+            "Modern.Treeview",
+            background=COLORS['bg_main'],
+            foreground=COLORS['text_primary'],
+            fieldbackground=COLORS['bg_main'],
+            borderwidth=0,
+            rowheight=30,  # 行間を少し広げて見やすく
+            font=('Meiryo', 10)
+        )
+        
+        # ヘッダーのスタイル（フラット & ダーク）
+        style.configure(
+            "Modern.Treeview.Heading",
+            background="#374151",  # 少し明るいグレー
+            foreground="#FFFFFF",
+            relief="flat",
+            font=('Meiryo', 10, 'bold'),
+            padding=(10, 5)
+        )
+        
+        # ヘッダーのホバー効果
+        style.map(
+            "Modern.Treeview.Heading",
+            background=[('active', '#4B5563')]
+        )
+        
+        # 選択行のスタイル
+        style.map(
+            "Modern.Treeview",
+            background=[('selected', COLORS['accent'])],
+            foreground=[('selected', '#FFFFFF')]
+        )
+        
         self.tree = ttk.Treeview(
             tree_container,
             yscrollcommand=scrollbar.set,
-            selectmode='browse',  # 読み取り専用
-            height=15
+            selectmode='browse',
+            height=15,
+            style="Modern.Treeview"
         )
+        
+        # ストライプ（縞模様）用のタグ設定
+        self.tree.tag_configure('odd', background=COLORS['bg_main'])
+        self.tree.tag_configure('even', background='#252F3E')  # 少し明るい背景色
+        
         self.tree.pack(fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.tree.yview)
         
@@ -480,7 +524,9 @@ class DatabaseInspectionPage(tk.Frame):
                     else:
                         formatted_row.append(str(value))
                 
-                self.tree.insert('', 'end', values=formatted_row)
+                # ストライプ用のタグ設定
+                tags = ('even',) if i % 2 == 0 else ('odd',)
+                self.tree.insert('', 'end', values=formatted_row, tags=tags)
             
             # ページ情報更新
             start_num = offset + 1 if self.total_records > 0 else 0
