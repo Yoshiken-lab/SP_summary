@@ -85,11 +85,31 @@ class DatabaseInspectionPage(tk.Frame):
     
     def _create_statistics_dashboard(self):
         """統計ダッシュボード作成（4つのカード）"""
-        stats_frame = tk.Frame(self, bg=COLORS['bg_main'])
-        stats_frame.pack(fill=tk.X, padx=30, pady=(0, 20))
+        # メインフレーム
+        self.stats_main_frame = tk.Frame(self, bg=COLORS['bg_main'])
+        self.stats_main_frame.pack(fill=tk.X, padx=30, pady=(0, 20))
         
-        # カードコンテナ
-        cards_container = tk.Frame(stats_frame, bg=COLORS['bg_main'])
+        # ヘッダー（タイトル + 折りたたみボタン）
+        header = tk.Frame(self.stats_main_frame, bg=COLORS['bg_main'])
+        header.pack(fill=tk.X, pady=(0, 10))
+        
+        tk.Label(
+            header, text="📊 ダッシュボード", 
+            font=('Meiryo', 11, 'bold'),
+            fg=COLORS['text_primary'], bg=COLORS['bg_main']
+        ).pack(side=tk.LEFT)
+        
+        self.stats_toggle_btn = self.ModernButton(
+            header, text="▼", width=3, btn_type='secondary',
+            command=self._toggle_statistics
+        )
+        self.stats_toggle_btn.pack(side=tk.RIGHT)
+        
+        # カードコンテナ（折りたたみ可能）
+        self.stats_content = tk.Frame(self.stats_main_frame, bg=COLORS['bg_main'])
+        self.stats_content.pack(fill=tk.X)
+        
+        cards_container = tk.Frame(self.stats_content, bg=COLORS['bg_main'])
         cards_container.pack(fill=tk.X)
         cards_container.grid_columnconfigure(0, weight=1)
         cards_container.grid_columnconfigure(1, weight=1)
@@ -109,6 +129,9 @@ class DatabaseInspectionPage(tk.Frame):
         self.last_update_label = self._create_stat_card(
             cards_container, 3, "🕒", "最終更新", "--"
         )
+        
+        # 初期状態は展開
+        self.stats_collapsed = False
     
     def _create_stat_card(self, parent, column, icon, title, value):
         """統計カード作成"""
@@ -140,11 +163,11 @@ class DatabaseInspectionPage(tk.Frame):
     
     def _create_table_selection(self):
         """STEP 1: テーブル選択タブ"""
-        section = tk.Frame(self, bg=COLORS['bg_card'], padx=20, pady=20)
-        section.pack(fill=tk.X, padx=30, pady=(0, 15))
+        self.table_section = tk.Frame(self, bg=COLORS['bg_card'], padx=20, pady=20)
+        self.table_section.pack(fill=tk.X, padx=30, pady=(0, 15))
         
         # ヘッダー
-        header_frame = tk.Frame(section, bg=COLORS['bg_card'])
+        header_frame = tk.Frame(self.table_section, bg=COLORS['bg_card'])
         header_frame.pack(fill=tk.X, pady=(0, 15))
         
         step_badge = tk.Label(
@@ -158,8 +181,19 @@ class DatabaseInspectionPage(tk.Frame):
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
+        # 折りたたみボタン
+        self.table_toggle_btn = self.ModernButton(
+            header_frame, text="▼", width=3, btn_type='secondary',
+            command=self._toggle_table_selection
+        )
+        self.table_toggle_btn.pack(side=tk.RIGHT)
+        
+        # コンテンツ（折りたたみ可能）
+        self.table_content = tk.Frame(self.table_section, bg=COLORS['bg_card'])
+        self.table_content.pack(fill=tk.X)
+        
         # タブボタン
-        tabs_frame = tk.Frame(section, bg=COLORS['bg_card'])
+        tabs_frame = tk.Frame(self.table_content, bg=COLORS['bg_card'])
         tabs_frame.pack(fill=tk.X, pady=(0, 10))
         
         self.tab_buttons = {}
@@ -182,18 +216,21 @@ class DatabaseInspectionPage(tk.Frame):
         
         # 説明テキスト
         self.table_description = tk.Label(
-            section, text="→ 月ごとの売上概要", font=('Meiryo', 9),
+            self.table_content, text="→ 月ごとの売上概要", font=('Meiryo', 9),
             fg=COLORS['text_secondary'], bg=COLORS['bg_card']
         )
         self.table_description.pack(anchor='w')
+        
+        # 初期状態は展開
+        self.table_collapsed = False
     
     def _create_filter_panel(self):
-        """STEP 2: 検索条件パネル"""
-        section = tk.Frame(self, bg=COLORS['bg_card'], padx=20, pady=20)
-        section.pack(fill=tk.X, padx=30, pady=(0, 15))
+        """検索条件パネル"""
+        self.filter_section = tk.Frame(self, bg=COLORS['bg_card'], padx=20, pady=20)
+        self.filter_section.pack(fill=tk.X, padx=30, pady=(0, 15))
         
         # ヘッダー
-        header_frame = tk.Frame(section, bg=COLORS['bg_card'])
+        header_frame = tk.Frame(self.filter_section, bg=COLORS['bg_card'])
         header_frame.pack(fill=tk.X, pady=(0, 15))
         
         step_badge = tk.Label(
@@ -207,8 +244,19 @@ class DatabaseInspectionPage(tk.Frame):
             fg=COLORS['text_primary'], bg=COLORS['bg_card']
         ).pack(side=tk.LEFT)
         
+        # 折りたたみボタン
+        self.filter_toggle_btn = self.ModernButton(
+            header_frame, text="▼", width=3, btn_type='secondary',
+            command=self._toggle_filter
+        )
+        self.filter_toggle_btn.pack(side=tk.RIGHT)
+        
+        # コンテンツ
+        self.filter_content = tk.Frame(self.filter_section, bg=COLORS['bg_card'])
+        self.filter_content.pack(fill=tk.X)
+        
         # フィルタ行
-        filter_row = tk.Frame(section, bg=COLORS['bg_card'])
+        filter_row = tk.Frame(self.filter_content, bg=COLORS['bg_card'])
         filter_row.pack(fill=tk.X)
         
         # 年度フィルタ
@@ -250,6 +298,9 @@ class DatabaseInspectionPage(tk.Frame):
             btn_frame, text="検索", btn_type='primary', width=10,
             command=self._apply_filters
         ).pack(side=tk.LEFT)
+        
+        # 初期状態は展開
+        self.filter_collapsed = False
     
     def _create_data_view(self):
         """データ表示エリア（Treeview + ページネーション）"""
@@ -362,6 +413,50 @@ class DatabaseInspectionPage(tk.Frame):
             page_buttons, text=">>", width=3,
             command=lambda: self._change_page('last')
         ).pack(side=tk.LEFT)
+    
+    
+    # ========================================
+    # 折りたたみメソッド
+    # ========================================
+    
+    def _toggle_statistics(self):
+        """統計ダッシュボードの折りたたみ切り替え"""
+        if self.stats_collapsed:
+            # 展開
+            self.stats_content.pack(fill=tk.X)
+            self.stats_toggle_btn.config(text="▼")
+            self.stats_collapsed = False
+        else:
+            # 折りたたみ
+            self.stats_content.pack_forget()
+            self.stats_toggle_btn.config(text="▶")
+            self.stats_collapsed = True
+    
+    def _toggle_table_selection(self):
+        """テーブル選択の折りたたみ切り替え"""
+        if self.table_collapsed:
+            # 展開
+            self.table_content.pack(fill=tk.X)
+            self.table_toggle_btn.config(text="▼")
+            self.table_collapsed = False
+        else:
+            # 折りたたみ
+            self.table_content.pack_forget()
+            self.table_toggle_btn.config(text="▶")
+            self.table_collapsed = True
+    
+    def _toggle_filter(self):
+        """フィルタパネルの折りたたみ切り替え"""
+        if self.filter_collapsed:
+            # 展開
+            self.filter_content.pack(fill=tk.X)
+            self.filter_toggle_btn.config(text="▼")
+            self.filter_collapsed = False
+        else:
+            # 折りたたみ
+            self.filter_content.pack_forget()
+            self.filter_toggle_btn.config(text="▶")
+            self.filter_collapsed = True
     
     # ========================================
     # データ取得・表示メソッド
