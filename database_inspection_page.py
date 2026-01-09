@@ -564,10 +564,22 @@ class DatabaseInspectionPage(tk.Frame):
             # 8ページ以下ならすべて表示
             pages_to_show = list(range(1, total_pages + 1))
         else:
-            # 9ページ以上の場合: 最初の4ページ + ... + 最後の4ページ
-            pages_to_show = [1, 2, 3, 4, '...', 
-                           total_pages - 3, total_pages - 2, 
-                           total_pages - 1, total_pages]
+            # 9ページ以上の場合: スライディングウィンドウ形式
+            if current <= 4:
+                # 最初の方にいる場合: [1] [2] [3] [4] [5] ... [n-3] [n-2] [n-1] [n]
+                pages_to_show = [1, 2, 3, 4, 5, '...', 
+                               total_pages - 3, total_pages - 2, 
+                               total_pages - 1, total_pages]
+            elif current >= total_pages - 3:
+                # 最後の方にいる場合: [1] [2] [3] [4] ... [n-4] [n-3] [n-2] [n-1] [n]
+                pages_to_show = [1, 2, 3, 4, '...',
+                               total_pages - 4, total_pages - 3, total_pages - 2, 
+                               total_pages - 1, total_pages]
+            else:
+                # 中間にいる場合: [current-2] [current-1] [current] [current+1] [current+2] ... [n-3] [n-2] [n-1] [n]
+                pages_to_show = [current - 2, current - 1, current, current + 1, current + 2, 
+                               '...', total_pages - 3, total_pages - 2, 
+                               total_pages - 1, total_pages]
         
         # ボタン生成
         for page in pages_to_show:
