@@ -54,7 +54,7 @@ class DatabaseInspectionPage(tk.Frame):
         
         # ページネーション
         self.current_page = 1
-        self.records_per_page = 50
+        self.records_per_page = 8  # Treeviewの高さに合わせる（少なくしてスペース確保）
         self.total_records = 0
         
         # UI構築
@@ -259,7 +259,7 @@ class DatabaseInspectionPage(tk.Frame):
         # Treeview
         # コンテナの背景をメイン背景と合わせる
         tree_container = tk.Frame(view_frame, bg=COLORS['bg_main'], bd=0, highlightthickness=0)
-        tree_container.pack(fill=tk.BOTH, expand=True)
+        tree_container.pack(fill=tk.X, expand=False)  # expandをFalseにしてページネーション表示を確保
         
         # Treeviewスタイル設定 (Hybrid Modern)
         style = ttk.Style()
@@ -273,7 +273,7 @@ class DatabaseInspectionPage(tk.Frame):
             foreground=COLORS['text_primary'],
             borderwidth=0,
             relief="flat",
-            rowheight=35,
+            rowheight=28,  # 高さを抑えてスペース確保
             font=('Meiryo', 10)
         )
         
@@ -306,14 +306,14 @@ class DatabaseInspectionPage(tk.Frame):
             foreground=[('selected', '#FFFFFF')]
         )
         
-        # Treeview作成（スクロールバーなし、ページネーション表示）
-        # heightを大きめに設定して、ページ内の全データを表示
+        # Treeview作成（ページネーション表示専用）
+        # heightを小さくしてページネーションボタンのスペースを確保
         self.tree = ttk.Treeview(
             tree_container,
             selectmode='browse',
-            height=20,  # 50件分の高さ（1ページあたり）
+            height=8,  # 8行に減らしてスペース確保
             style="Modern.Treeview",
-            show='tree headings'  # ツリー表示を無効化して表のみ
+            show='headings'  # ヘッダーのみ表示（ツリー列を非表示）
         )
         
         # ストライプ（縞模様）用のタグ設定
@@ -321,11 +321,12 @@ class DatabaseInspectionPage(tk.Frame):
         self.tree.tag_configure('odd', background=COLORS['bg_main'], foreground=COLORS['text_primary'])
         self.tree.tag_configure('even', background='#2D3748', foreground=COLORS['text_primary'])
         
-        self.tree.pack(fill=tk.BOTH, expand=False, padx=0, pady=0)
+        # 横方向のみ広げる（縦方向はheightで固定）
+        self.tree.pack(fill=tk.X, expand=False, padx=0, pady=0)
         
-        # ページネーション
-        pagination_frame = tk.Frame(view_frame, bg=COLORS['bg_main'])
-        pagination_frame.pack(fill=tk.X, pady=(10, 0))
+        # ページネーション（視認性のため背景色を明示的に設定）
+        pagination_frame = tk.Frame(view_frame, bg='#4B5563', bd=2, relief='solid')
+        pagination_frame.pack(fill=tk.X, pady=(15, 0))
         
         # ページ情報（左）
         self.page_info_label = tk.Label(
