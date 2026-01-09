@@ -21,6 +21,8 @@ import ctypes
 import shutil
 from importer_v2 import import_excel_v2
 from dashboard_v2 import generate_dashboard
+import database_v2
+from database_inspection_page import DatabaseInspectionPage
 
 # バックエンドモジュールをインポート
 sys.path.insert(0, str(Path(__file__).parent / 'app' / 'backend'))
@@ -655,7 +657,7 @@ class MainApp:
         self.pages['monthly'] = MonthlyAggregationPage(self.content_area)
         self.pages['cumulative'] = CumulativeAggregationPage(self.content_area)
         self.pages['results'] = PerformanceReflectionPage(self.content_area, self.server_manager)
-        self.pages['database'] = PlaceholderPage(self.content_area, "データベース確認", "登録されているテーブルやレコードを直接確認します")
+        self.pages['database'] = DatabaseInspectionPage(self.content_area, ModernButton, ModernDropdown)
 
     def show_page(self, page_key):
         # メニューボタンの見た目更新
@@ -1368,14 +1370,15 @@ class CumulativeAggregationPage(tk.Frame):
         content_container.pack(fill=tk.BOTH, expand=True)
         
         # 左側: ドロップゾーン（幅を固定または比率を設定）
-        self.drop_zone_frame = tk.Frame(content_container, bg=COLORS['bg_card'], width=450, height=200)
+        self.drop_zone_frame = tk.Frame(content_container, bg=COLORS['bg_card'], width=450, height=400)
         self.drop_zone_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False, padx=(0, 10))
         self.drop_zone_frame.pack_propagate(False) # サイズ固定
         
         # ドロップゾーン
-        drop_zone = tk.Frame(self.drop_zone_frame, bg=COLORS['bg_main'], highlightthickness=2,
+        drop_zone = tk.Frame(self.drop_zone_frame, bg=COLORS['bg_main'], height=200, highlightthickness=2,
                            highlightbackground=COLORS['border'], highlightcolor=COLORS['border'])
-        drop_zone.pack(fill=tk.BOTH, expand=True, ipady=30)
+        drop_zone.pack(side=tk.TOP, fill=tk.X, expand=False)
+        drop_zone.pack_propagate(False)
         
         content_frame = tk.Frame(drop_zone, bg=COLORS['bg_main'], cursor='hand2')
         content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
@@ -1705,7 +1708,7 @@ class PerformanceReflectionPage(tk.Frame):
         header.pack(fill=tk.X)
         
         tk.Label(
-            header, text="実績反映", font=('Meiryo', 24, 'bold'),
+            header, text="実績反映", font=('Meiryo', 18, 'bold'),
             fg=COLORS['text_primary'], bg=COLORS['bg_main']
         ).pack(anchor='w')
         
