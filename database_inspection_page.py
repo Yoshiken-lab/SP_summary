@@ -257,35 +257,40 @@ class DatabaseInspectionPage(tk.Frame):
         view_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
         
         # Treeview
-        tree_container = tk.Frame(view_frame, bg=COLORS['bg_card'])
+        # コンテナの背景をメイン背景と合わせる
+        tree_container = tk.Frame(view_frame, bg=COLORS['bg_main'], bd=0, highlightthickness=0)
         tree_container.pack(fill=tk.BOTH, expand=True)
-        
-        scrollbar = ttk.Scrollbar(tree_container)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # Treeviewスタイル設定 (Hybrid Modern)
         style = ttk.Style()
-        style.theme_use('clam')  # カスタマイズしやすいテーマを使用
+        # defaultテーマに変更 - タグの背景色がより確実に効く
+        style.theme_use('default')
         
         # Treeview全体のスタイル
         style.configure(
             "Modern.Treeview",
             background=COLORS['bg_main'],
             foreground=COLORS['text_primary'],
-            fieldbackground=COLORS['bg_main'],
             borderwidth=0,
-            rowheight=30,  # 行間を少し広げて見やすく
+            relief="flat",
+            rowheight=35,
             font=('Meiryo', 10)
         )
+        
+        # Treeviewのレイアウトを修正して境界線を完全に削除
+        style.layout("Modern.Treeview", [
+            ('Modern.Treeview.treearea', {'sticky': 'nswe'})
+        ])
         
         # ヘッダーのスタイル（フラット & ダーク）
         style.configure(
             "Modern.Treeview.Heading",
-            background="#374151",  # 少し明るいグレー
+            background="#374151",
             foreground="#FFFFFF",
             relief="flat",
+            borderwidth=0,
             font=('Meiryo', 10, 'bold'),
-            padding=(10, 5)
+            padding=(10, 8)
         )
         
         # ヘッダーのホバー効果
@@ -301,20 +306,22 @@ class DatabaseInspectionPage(tk.Frame):
             foreground=[('selected', '#FFFFFF')]
         )
         
+        # Treeview作成（スクロールバーなし、ページネーション表示）
+        # heightを大きめに設定して、ページ内の全データを表示
         self.tree = ttk.Treeview(
             tree_container,
-            yscrollcommand=scrollbar.set,
             selectmode='browse',
-            height=15,
-            style="Modern.Treeview"
+            height=20,  # 50件分の高さ（1ページあたり）
+            style="Modern.Treeview",
+            show='tree headings'  # ツリー表示を無効化して表のみ
         )
         
         # ストライプ（縞模様）用のタグ設定
-        self.tree.tag_configure('odd', background=COLORS['bg_main'])
-        self.tree.tag_configure('even', background='#252F3E')  # 少し明るい背景色
+        # コントラストを上げて視認性向上
+        self.tree.tag_configure('odd', background=COLORS['bg_main'], foreground=COLORS['text_primary'])
+        self.tree.tag_configure('even', background='#2D3748', foreground=COLORS['text_primary'])
         
-        self.tree.pack(fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.tree.yview)
+        self.tree.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
         
         # ページネーション
         pagination_frame = tk.Frame(view_frame, bg=COLORS['bg_main'])
