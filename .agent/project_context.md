@@ -190,25 +190,30 @@ COLORS = {
 
 ---
 
-## ⚠️ 既知の問題・注意点
+## ⚙️ config.py 設定
 
-### 1. ModernDialog.show_warning() 未実装
+### MANAGER_DISPLAY_ORDER（担当者表示順）
 
-**症状**: `AttributeError: type object 'ModernDialog' has no attribute 'show_warning'`
-
-**該当箇所**: `launcher_v2.py` 2178行目
+月次集計Excel（`SP_SalesResult_YYYYMM.xlsx`）の「集計結果」シートで出力される担当者別売上の並び順。
+報告書フォーマットに合わせた固定順。
 
 ```python
-# 問題のコード
-ModernDialog.show_warning(self, "一部完了", ...)
-
-# 現在利用可能な代替
-ModernDialog.show_error(self, "一部完了", ...)  # または show_info
+MANAGER_DISPLAY_ORDER = [
+    '早乙女', '金子（貴）', '宇梶', '三室', '林', '池田', '星野', '若林',
+    '廣瀬', '兵藤', '金子（孝）', '佐藤（邦）', '瀬端', '成田', '佐藤（恵）',
+    '春山', '野口', '小池', '田中',
+]
 ```
 
-**対応方針**: 他のダイアログメソッドと同様のパターンで `show_warning()` を追加する。
+**新規担当者追加時**: このリストに追加する。リストにない担当者は末尾に配置される。
 
-### 2. 学校名の表記揺れ
+**実装箇所**: `app/backend/aggregator/excel_output.py` の `_write_summary_sheet()`
+
+---
+
+## ⚠️ 既知の問題・注意点
+
+### 1. 学校名の表記揺れ
 
 異なる表記の同一学校が別レコードになる問題。
 
@@ -221,7 +226,7 @@ SCHOOL_NAME_MAPPINGS = {
 }
 ```
 
-### 3. ダッシュボード生成時のエスケープ
+### 2. ダッシュボード生成時のエスケープ
 
 `dashboard_v2.py` でf-string内にJavaScriptを生成する際、波括弧をエスケープする必要がある。
 
