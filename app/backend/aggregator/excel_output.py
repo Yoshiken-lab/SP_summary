@@ -111,9 +111,29 @@ class ExcelExporter:
         # 担当者別（12行目 + 事業所数 から）
         if self.result.salesman_sales:
             start_row = 7 + len(self.result.branch_sales) + 2
+            
+            # 担当者表示順を取得（config.pyから）
+            try:
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+                from config import Config
+                display_order = Config.MANAGER_DISPLAY_ORDER
+            except Exception:
+                display_order = []
+            
+            # 順番通りにソート（リストにない担当者は末尾に配置）
+            def get_sort_key(record):
+                try:
+                    return display_order.index(record.salesman)
+                except ValueError:
+                    return len(display_order)  # リストにない場合は末尾
+            
+            sorted_salesman_sales = sorted(self.result.salesman_sales, key=get_sort_key)
+            
             salesman_data = {
-                "担当者": [s.salesman for s in self.result.salesman_sales],
-                "売り上げ": [s.sales for s in self.result.salesman_sales]
+                "担当者": [s.salesman for s in sorted_salesman_sales],
+                "売り上げ": [s.sales for s in sorted_salesman_sales]
             }
             salesman_df = pd.DataFrame(salesman_data)
             salesman_df.to_excel(
