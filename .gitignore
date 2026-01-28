@@ -12,19 +12,36 @@ venv/
 dashboard_*.html
 member_rate_chart.html
 dashboard/
+app/dashboard_*.html
+app/public_dashboards/
 
-# Samples
+# Samples and test data
 samples/
 
-# Debug/test files
+# Debug/test/check files (development only)
 check_*.py
 debug_*.py
 test_*.py
 fix_*.py
+fix*.py
+inspect_*.py
+investigate_*.py
+cleanup_*.py
+quick_*.py
 merge_*.py
+run_*.py
+find_*.py
+list_*.py
+
+# Debug output
 *_result.txt
 excel_structure.txt
 attribute_check.txt
+debug_*.txt
+debug_*.json
+*.log
+log*.txt
+error_log.txt
 
 # Test output
 test_output.xlsx
@@ -32,6 +49,8 @@ test_output.xlsx
 # Old/deprecated tools
 sales_summary_tool.py
 web_app/
+web_appbackend/
+web_appfrontend/
 
 # Node.js
 node_modules/
@@ -40,11 +59,21 @@ app/frontend/dist/
 
 # Upload/temp files
 app/uploads/
+temp_uploads/
+download/
+output/
 
 # IDE
 .vscode/
 .idea/
+.claude/
 
 # Misc
 nul
-*.log
+
+# Config files (local settings)
+launcher_config.json
+config.json
+
+# UI proposals (design mockups)
+ui_proposals*.html

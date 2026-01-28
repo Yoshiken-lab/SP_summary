@@ -268,7 +268,13 @@ class ModernDropdown(tk.Frame):
         
         # マウスホイールでスクロール
         def on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            try:
+                # ウィジェットが存在するかチェック
+                if canvas.winfo_exists():
+                    canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except tk.TclError:
+                # エラーが発生した場合は無視
+                pass
         
         # Canvasとscrollable_frameの両方にバインド
         canvas.bind("<MouseWheel>", on_mousewheel)
@@ -290,11 +296,15 @@ class ModernDropdown(tk.Frame):
     
     def _hide_menu(self):
         if self.menu:
-            # マウスホイールイベントをアンバインド
-            if hasattr(self, '_mousewheel_binding'):
+            try:
+                # マウスホイールイベントをアンバインド（常に実行）
                 self.unbind_all("<MouseWheel>")
-            self.menu.destroy()
-            self.menu = None
+                self.menu.destroy()
+            except tk.TclError:
+                # エラーが発生しても続行
+                pass
+            finally:
+                self.menu = None
         self.menu_visible = False
     
     def _select(self, value):
@@ -1663,6 +1673,20 @@ class CumulativeAggregationPage(tk.Frame):
                 )
                 self.fiscal_year_label.pack()
         elif hasattr(self, 'fiscal_year_label'):
+            # ウィジェットが既に削除されている可能性があるのでチェック
+            try:
+                if not self.fiscal_year_label.winfo_exists():
+                    # ウィジェットが削除されている場合は属性を削除
+                    delattr(self, 'fiscal_year_label')
+                    # 再帰的に呼び出して再作成
+                    self._update_fiscal_year_display()
+                    return
+            except tk.TclError:
+                # TclErrorが発生した場合も属性を削除
+                delattr(self, 'fiscal_year_label')
+                self._update_fiscal_year_display()
+                return
+            
             if fiscal_year:
                 self.fiscal_year_label.config(text=f"対象年度: {fiscal_year}年度　（出力ファイル: SP_年度累計_{fiscal_year}.xlsx）")
             else:
