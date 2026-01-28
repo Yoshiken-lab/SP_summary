@@ -13,7 +13,8 @@ from database_v2 import (
     get_connection, get_rapid_growth_schools, get_new_schools, get_no_events_schools, get_declining_schools,
     get_events_for_date_filter, get_all_schools, get_improved_member_rate_schools, get_yearly_event_comparison,
     get_sales_unit_price_analysis, get_studio_decline_analysis
-)    
+)
+from config import Config    
 
 
 def get_available_fiscal_years(db_path=None):
@@ -730,6 +731,9 @@ def generate_dashboard(db_path=None, output_dir=None):
         studio_decline_all[y] = studio_data
     studio_decline_all_json = json.dumps(studio_decline_all, ensure_ascii=False)
 
+    # 担当者表示順データをJSON変換
+    manager_display_order_json = json.dumps(Config.MANAGER_DISPLAY_ORDER, ensure_ascii=False)
+
     # HTMLファイル名
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     output_file = output_dir / f'dashboard_{timestamp}.html'
@@ -1115,6 +1119,7 @@ def generate_dashboard(db_path=None, output_dir=None):
         const improvedAllData = {improved_all_json};
         const unitPriceAllData = {unit_price_all_json};
         const studioDeclineAllData = {studio_decline_all_json};
+        const managerDisplayOrder = {manager_display_order_json};
         
         let monthlyChart, branchChart, schoolChart, branchMonthlyChart, managerChart, eventChart, memberChart;
         let currentMonthlySalesYear = {default_year};
@@ -1320,7 +1325,18 @@ def generate_dashboard(db_path=None, output_dir=None):
                 return;
             }}
             
-            Object.keys(managerMonthlyData).forEach(manager => {{
+            // 担当者リストを取得してソート
+            const managers = Object.keys(managerMonthlyData);
+            managers.sort((a, b) => {{
+                const indexA = managerDisplayOrder.indexOf(a);
+                const indexB = managerDisplayOrder.indexOf(b);
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                if (indexA !== -1) return -1;
+                if (indexB !== -1) return 1;
+                return a.localeCompare(b);
+            }});
+            
+            managers.forEach(manager => {{
                 const option = document.createElement('option');
                 option.value = manager;
                 option.textContent = manager;
@@ -1778,15 +1794,34 @@ def generate_dashboard(db_path=None, output_dir=None):
                         .filter(s => s.branch === branch)
                         .map(s => s.manager)
                         .filter(m => m)
-                )].sort();
+                )];
             }} else {{
                 // 全ての担当者
                 filteredManagers = [...new Set(
                     schoolsList
                         .map(s => s.manager)
                         .filter(m => m)
-                )].sort();
+                )];
             }}
+            
+            // 担当者表示順（managerDisplayOrder）に基づいてソート
+            // リストにない担当者は末尾に配置
+            filteredManagers.sort((a, b) => {{
+                const indexA = managerDisplayOrder.indexOf(a);
+                const indexB = managerDisplayOrder.indexOf(b);
+                
+                // 両方リストにある場合
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                
+                // aのみリストにある場合 (aを先に)
+                if (indexA !== -1) return -1;
+                
+                // bのみリストにある場合 (bを先に)
+                if (indexB !== -1) return 1;
+                
+                // 両方リストにない場合 (文字コード順)
+                return a.localeCompare(b);
+            }});
             
             const managerSelect = document.getElementById('salesManagerFilter');
             const currentValue = managerSelect.value;
