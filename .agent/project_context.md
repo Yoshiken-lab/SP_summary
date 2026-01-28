@@ -121,10 +121,8 @@ SP_summary/
 | `show_info()` | 情報表示 | ℹ️ 青 |
 | `show_success()` | 成功表示 | ✅ 緑 |
 | `show_error()` | エラー表示 | ❌ 赤 |
-| `ask_yes_no()` | Yes/No確認 | ❓ 青 |
-| `show_warning()` | ⚠️ **未実装** | - |
-
-> **注意**: `show_warning()` は現在未実装。使用するとAttributeErrorが発生する。
+| `show_warning()` | 警告表示 | ⚠️ オレンジ |
+| `ask_yes_no()` | Yes/No確認 | ❓ オレンジ |
 
 ---
 
@@ -265,15 +263,15 @@ html = f'''if (condition) { doSomething(); }'''
 
 | ID | 問題 | ステータス |
 |----|------|------------|
-| [TSH-001](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/troubleshooting.md#tsh-001-moderndialogshow_warning-未実装エラー) | ModernDialog.show_warning() 未実装 | 🔴 未解決 |
+| [TSH-001](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/troubleshooting.md#tsh-001-moderndialogshow_warning-未実装エラー) | ModernDialog.show_warning() 未実装 | 🟢 解決済み |
 
 ---
 
 ## 📞 次回作業への申し送り
 
-1. **緊急**: `ModernDialog.show_warning()` の追加が必要
-2. 作業時は必ずこのガイドラインを確認すること
-3. 大きな変更がある場合はこのファイルを更新すること
+1. 作業時は必ずこのガイドラインを確認すること
+2. 大きな変更がある場合はこのファイルを更新すること
+3. バグ修正した場合は `troubleshooting.md` に追記すること
 
 ---
 

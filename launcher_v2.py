@@ -438,6 +438,9 @@ class ModernDialog(tk.Toplevel):
         elif type == 'confirm':
             icon_char = "?"
             icon_color = '#f59e0b' # Orange
+        elif type == 'warning':
+            icon_char = "⚠"
+            icon_color = COLORS['warning']  # Orange/Yellow
             
         icon_frame = tk.Frame(content, bg=COLORS['bg_card'])
         icon_frame.pack(side=tk.LEFT, anchor='n', padx=(0, 20))
@@ -525,6 +528,13 @@ class ModernDialog(tk.Toplevel):
     @classmethod
     def show_success(cls, parent, title, message, detail=None):
         dialog = cls(parent, title, message, 'success', detail)
+        parent.wait_window(dialog)
+        return True
+
+    @classmethod
+    def show_warning(cls, parent, title, message, detail=None):
+        """警告ダイアログを表示"""
+        dialog = cls(parent, title, message, 'warning', detail)
         parent.wait_window(dialog)
         return True
 
