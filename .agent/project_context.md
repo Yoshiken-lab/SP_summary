@@ -207,7 +207,9 @@ MANAGER_DISPLAY_ORDER = [
 
 **新規担当者追加時**: このリストに追加する。リストにない担当者は末尾に配置される。
 
-**実装箇所**: `app/backend/aggregator/excel_output.py` の `_write_summary_sheet()`
+**実装箇所**: 
+- `app/backend/aggregator/excel_output.py` の `_write_summary_sheet()`
+- `dashboard_v2.py` の `updateSalesManagerList` および `updateManagerSelectors`（ソートロジック）
 
 ---
 
@@ -237,6 +239,15 @@ html = f'''if (condition) {{ doSomething(); }}'''
 # ❌ 間違い（SyntaxError）
 html = f'''if (condition) { doSomething(); }'''
 ```
+
+### 3. ダッシュボード上の担当者リストの不一致
+
+「担当者ごとグラフ」と「学校別分析の担当者フィルター」で表示される担当者リストが異なる場合がある。
+
+- **担当者ごとグラフ**: 売上実績テーブル (`manager_monthly_sales`) を参照。その年度に実績がある担当者のみ表示される。
+- **学校別分析**: マスタテーブル (`schools_master`) を参照。実績の有無に関わらず全担当者が表示される。
+
+**対策**: 仕様通りの挙動であるため修正不要。ユーザーからの問い合わせ時はこの違いを説明する。
 
 ---
 
