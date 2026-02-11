@@ -1,5 +1,32 @@
 # スクールフォト売上集計システム V2 - 完成記録
 
+## 📅 追加作業期間: 2026-02-10 〜 2026-02-11
+
+### ✅ 追加で完了した改修
+
+1. 集計不整合修正（総売上と内訳合計の差異対応）
+   - `app/backend/services/file_handler.py` にCSV文字コードフォールバックを実装。
+   - `app/backend/aggregator/sales.py` で学校マッチングをID優先に統一。
+   - 未登録学校の厳密バリデーション（停止）を導入。
+
+2. 条件別集計CSV出力の列不一致修正
+   - `dashboard_v2.py` の `downloadAlertCSV()` をタブ別実装へ変更。
+   - `event_sales_by_date` を含む全条件別タブで、画面表示列とCSV列を一致させた。
+
+3. ドキュメント整備
+   - `project_context.md` / `aggregation_logic.md` / `troubleshooting.md` / `implementation_plan_v2.md` を更新。
+   - トラブルシュートに TSH-002 / TSH-003 を反映。
+
+### ✅ 検証サマリー
+
+1. 月次集計ロジック
+   - 真の未登録学校を検出して停止する動作を確認。
+   - マッチ済みデータでの総和一致（総売上=内訳合計）を確認。
+
+2. ダッシュボードCSV
+   - `downloadAlertCSV()` の分岐改修後、タブごとの列一致を確認。
+   - 生成HTMLに新ロジックが反映されていることを確認。
+
 ## 📅 作業期間: 2025-12-27 〜 2025-12-29
 
 ---

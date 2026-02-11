@@ -4,7 +4,7 @@ SP_sales_ver1.1 の sales.py から移植・リファクタリング
 """
 import pandas as pd
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Callable
+from typing import List, Dict, Optional, Callable
 import logging
 
 from .summary import SalesSummary, SalesSummaryResult
@@ -78,6 +78,17 @@ class SalesAggregator:
     EXCLUDE_STATUS = ["キャンセル済み", "自動キャンセル"]
     # 除外する商品名
     EXCLUDE_PRODUCT = "卒業・卒園アルバム アルバム（学校納品）"
+    # カラム名定数
+    COL_SCHOOL_NAME = "学校名"
+    COL_SCHOOL_ID = "学校ID"
+    COL_MASTER_ID = "ID"
+    COL_BRANCH = "事業所"
+    COL_SALESMAN = "担当"
+    COL_STUDIO = "写真館"
+    COL_SUBTOTAL = "小計"
+    COL_TAX = "うち消費税"
+    COL_EVENT_NAME = "イベント名"
+    COL_EVENT_START = "キャンペーン期間(開始)"
 
     def __init__(
         self,
@@ -91,22 +102,167 @@ class SalesAggregator:
             master_df: 担当者マスタデータ（XLSX読み込み）
             progress_callback: 進捗通知用コールバック (message, percentage)
         """
-        self.sales_df = sales_df.copy()
-        self.master_df = master_df.copy()
+        self.sales_df = self._normalize_text_columns(sales_df.copy())
+        self.master_df = self._normalize_text_columns(master_df.copy())
         self.progress_callback = progress_callback
 
         # フィルタリング済みデータ
         self.filtered_df: Optional[pd.DataFrame] = None
+        # マスタ紐付け済みデータ
+        self.matched_df: Optional[pd.DataFrame] = None
         # 学校数
         self.school_count: int = 0
         # 集計結果
         self.result = AggregationResult()
+
+        # 集計用マップ
+        self.master_id_to_index: Dict[int, int] = {}
+        self.master_name_to_index: Dict[str, int] = {}
 
     def _notify_progress(self, message: str, percentage: int):
         """進捗を通知"""
         logger.info(f"[{percentage}%] {message}")
         if self.progress_callback:
             self.progress_callback(message, percentage)
+
+    def _normalize_text_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """全文字列カラムの前後空白のみを除去（中間空白は維持）"""
+        normalized = df.copy()
+        for col in normalized.columns:
+            if pd.api.types.is_object_dtype(normalized[col]) or pd.api.types.is_string_dtype(normalized[col]):
+                normalized[col] = normalized[col].apply(
+                    lambda x: x.strip() if isinstance(x, str) else x
+                )
+        return normalized
+
+    def _normalize_id_series(self, series: pd.Series) -> pd.Series:
+        """学校IDを比較しやすい型へ正規化"""
+        return pd.to_numeric(series, errors="coerce").astype("Int64")
+
+    def _prepare_lookup_maps(self) -> None:
+        """マスタの学校ID/学校名検索用マップを作成"""
+        if self.COL_MASTER_ID in self.master_df.columns:
+            self.master_df["_master_school_id_norm"] = self._normalize_id_series(
+                self.master_df[self.COL_MASTER_ID]
+            )
+        else:
+            self.master_df["_master_school_id_norm"] = pd.Series(
+                pd.array([pd.NA] * len(self.master_df), dtype="Int64"),
+                index=self.master_df.index
+            )
+
+        if self.COL_SCHOOL_NAME in self.master_df.columns:
+            self.master_df["_master_school_name_norm"] = self.master_df[
+                self.COL_SCHOOL_NAME
+            ].apply(lambda x: x.strip() if isinstance(x, str) else x)
+        else:
+            self.master_df["_master_school_name_norm"] = ""
+
+        self.master_id_to_index = {}
+        self.master_name_to_index = {}
+
+        id_series = self.master_df["_master_school_id_norm"]
+        duplicated_ids = id_series[id_series.notna() & id_series.duplicated()].drop_duplicates()
+        if not duplicated_ids.empty:
+            logger.warning(
+                f"担当者マスタで学校ID重複を検出: {duplicated_ids.astype(int).tolist()} (先頭行を採用)"
+            )
+
+        name_series = self.master_df["_master_school_name_norm"]
+        duplicated_names = name_series[
+            name_series.notna() & (name_series != "") & name_series.duplicated()
+        ].drop_duplicates()
+        if not duplicated_names.empty:
+            logger.warning(
+                f"担当者マスタで学校名重複を検出: {duplicated_names.tolist()} (先頭行を採用)"
+            )
+
+        for idx, row in self.master_df.iterrows():
+            school_id = row["_master_school_id_norm"]
+            school_name = row["_master_school_name_norm"]
+
+            if pd.notna(school_id):
+                self.master_id_to_index.setdefault(int(school_id), int(idx))
+
+            if isinstance(school_name, str) and school_name:
+                self.master_name_to_index.setdefault(school_name, int(idx))
+
+    def _attach_master_matches(self) -> None:
+        """
+        フィルタ済み売上へ、ID優先・名称フォールバックでマスタ行を割当
+
+        1売上行に対してマスタ行は1つのみ割当する（重複集計防止）
+        """
+        if self.filtered_df is None:
+            return
+
+        df = self.filtered_df.copy()
+
+        if self.COL_SCHOOL_ID in df.columns:
+            df["_sales_school_id_norm"] = self._normalize_id_series(df[self.COL_SCHOOL_ID])
+        else:
+            df["_sales_school_id_norm"] = pd.Series(
+                pd.array([pd.NA] * len(df), dtype="Int64"),
+                index=df.index
+            )
+
+        if self.COL_SCHOOL_NAME in df.columns:
+            df["_sales_school_name_norm"] = df[self.COL_SCHOOL_NAME].apply(
+                lambda x: x.strip() if isinstance(x, str) else x
+            )
+        else:
+            df["_sales_school_name_norm"] = ""
+
+        df["_net_sales"] = df[self.COL_SUBTOTAL] - df[self.COL_TAX]
+
+        id_match_index = df["_sales_school_id_norm"].map(self.master_id_to_index)
+        name_match_index = df["_sales_school_name_norm"].map(self.master_name_to_index)
+
+        matched_index = id_match_index.where(id_match_index.notna(), name_match_index)
+        df["_matched_master_index"] = pd.to_numeric(matched_index, errors="coerce").astype("Int64")
+
+        df["_match_type"] = "unmatched"
+        df.loc[id_match_index.notna(), "_match_type"] = "id"
+        df.loc[id_match_index.isna() & name_match_index.notna(), "_match_type"] = "name"
+
+        # ID一致で学校名がズレる場合は警告のみ（ID優先）
+        id_hit_mask = id_match_index.notna()
+        if id_hit_mask.any():
+            master_name_by_id = pd.to_numeric(
+                id_match_index[id_hit_mask], errors="coerce"
+            ).astype("Int64").map(self.master_df["_master_school_name_norm"])
+            name_mismatch_mask = id_hit_mask.copy()
+            name_mismatch_mask.loc[id_hit_mask] = (
+                df.loc[id_hit_mask, "_sales_school_name_norm"] != master_name_by_id
+            )
+            mismatch_count = int(name_mismatch_mask.sum())
+            if mismatch_count > 0:
+                logger.warning(
+                    f"学校ID一致だが学校名不一致の売上行を検出: {mismatch_count}件（ID優先で集計）"
+                )
+
+        self.filtered_df = df
+
+        matched_df = df[df["_matched_master_index"].notna()].copy()
+        if matched_df.empty:
+            self.matched_df = matched_df
+            return
+
+        matched_df["_matched_master_index"] = matched_df["_matched_master_index"].astype(int)
+        matched_df["_master_branch"] = matched_df["_matched_master_index"].map(
+            self.master_df.get(self.COL_BRANCH, pd.Series("", index=self.master_df.index))
+        ).fillna("")
+        matched_df["_master_salesman"] = matched_df["_matched_master_index"].map(
+            self.master_df.get(self.COL_SALESMAN, pd.Series("", index=self.master_df.index))
+        ).fillna("")
+        matched_df["_master_studio"] = matched_df["_matched_master_index"].map(
+            self.master_df.get(self.COL_STUDIO, pd.Series("", index=self.master_df.index))
+        ).fillna("")
+        matched_df["_master_school_name"] = matched_df["_matched_master_index"].map(
+            self.master_df.get(self.COL_SCHOOL_NAME, pd.Series("", index=self.master_df.index))
+        ).fillna("")
+
+        self.matched_df = matched_df
 
     def aggregate_all(self) -> AggregationResult:
         """
@@ -120,6 +276,11 @@ class SalesAggregator:
         # Step 1: データフィルタリング
         self._filter_data()
         self._notify_progress("データフィルタリング完了", 10)
+
+        # Step 1.2: マスタ照合マップ作成（ID優先・名称フォールバック）
+        self._prepare_lookup_maps()
+        self._attach_master_matches()
+        self._notify_progress("売上データのマスタ紐づけ完了", 11)
 
         # Step 1.5: schools_master更新（V2 DBに保存）
         self._update_schools_master()
@@ -151,7 +312,7 @@ class SalesAggregator:
     def _filter_data(self) -> None:
         """売上データをフィルタリング"""
         # 学校数をカウント（重複除去）
-        school_names = self.sales_df["学校名"].drop_duplicates()
+        school_names = self.sales_df[self.COL_SCHOOL_NAME].drop_duplicates()
         self.school_count = len(school_names)
         logger.info(f"実施学校数: {self.school_count}")
 
@@ -160,7 +321,7 @@ class SalesAggregator:
         if status_col in self.sales_df.columns:
             self.filtered_df = self.sales_df[
                 ~self.sales_df[status_col].isin(self.EXCLUDE_STATUS)
-            ]
+            ].copy()
         else:
             self.filtered_df = self.sales_df.copy()
 
@@ -168,7 +329,7 @@ class SalesAggregator:
         if "商品名" in self.filtered_df.columns:
             self.filtered_df = self.filtered_df[
                 self.filtered_df["商品名"] != self.EXCLUDE_PRODUCT
-            ]
+            ].copy()
 
         logger.info(f"フィルタリング後データ: {len(self.filtered_df)}件")
 
@@ -208,7 +369,11 @@ class SalesAggregator:
             for _, row in self.master_df.iterrows():
                 try:
                     school_id = row.get('ID')  # マスタファイルのカラム名は'ID'
-                    school_name = str(row.get('学校名', '')).strip()  # 先頭・末尾スペース削除
+                    school_name_raw = row.get('学校名', '')
+                    school_name = (
+                        str(school_name_raw).strip()
+                        if pd.notna(school_name_raw) else ''
+                    )
                     region = str(row.get('事業所', '')).strip() if pd.notna(row.get('事業所')) else ''
                     manager = str(row.get('担当', '')).strip() if pd.notna(row.get('担当')) else ''
                     studio = str(row.get('写真館', '')).strip() if pd.notna(row.get('写真館')) else ''
@@ -274,67 +439,51 @@ class SalesAggregator:
 
     def _check_school_master(self) -> None:
         """
-        売上データの学校がマスタに存在するかチェック（DB版）
-
-        schools_masterテーブルを参照して学校名の存在をチェックする。
-        これにより、Excelマスタとの表記揺れによる誤判定を防ぐ。
+        売上データの学校が今回のExcelマスタに存在するかチェック
 
         Raises:
             SchoolMasterMismatchError: マスタに存在しない学校がある場合
         """
-        try:
-            import sys
-            from pathlib import Path
-            sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-            from database_v2 import get_connection
-            
-            conn = get_connection()
-            cursor = conn.cursor()
-            
-            # DBから全学校名を取得（基本学校名とフル学校名の両方）
-            cursor.execute('SELECT DISTINCT school_name FROM schools_master')
-            db_schools = {row[0].strip() for row in cursor.fetchall()}
-            
-            cursor.execute('SELECT DISTINCT base_school_name FROM schools_master WHERE base_school_name IS NOT NULL')
-            db_base_schools = {row[0].strip() for row in cursor.fetchall()}
-            
-            conn.close()
-            
-            # 全学校名を統合
-            master_schools = db_schools | db_base_schools
-            
-            # 売上データの学校名（strip済み）
-            sales_schools = {str(name).strip() for name in self.sales_df["学校名"].unique()}
-            
-            # 不一致をチェック
-            unmatched = sales_schools - master_schools
-            self.result.unmatched_schools = list(unmatched)
-            
-            if unmatched:
-                logger.warning(f"マスタにない学校: {len(unmatched)}件")
-                for school in unmatched:
-                    logger.warning(f"  - {school}")
-                # マスタ不一致エラーをスロー（担当者別以降の集計を中断）
-                raise SchoolMasterMismatchError(list(unmatched))
-                
-        except SchoolMasterMismatchError:
-            # 想定通りのエラーは再スロー
-            raise
-        except Exception as e:
-            logger.error(f"学校マスタチェックエラー: {e}")
-            # フォールバック: Excelマスタと比較
-            logger.warning("DBチェック失敗、Excelマスタとの比較にフォールバックします")
-            sales_schools = set(self.sales_df["学校名"].unique())
-            master_schools = set(self.master_df["学校名"].unique())
-            
-            unmatched = sales_schools - master_schools
-            self.result.unmatched_schools = list(unmatched)
-            
-            if unmatched:
-                logger.warning(f"マスタにない学校: {len(unmatched)}件")
-                for school in unmatched:
-                    logger.warning(f"  - {school}")
-                raise SchoolMasterMismatchError(list(unmatched))
+        if self.filtered_df is None:
+            self.result.unmatched_schools = []
+            return
+
+        unmatched_df = self.filtered_df[self.filtered_df["_match_type"] == "unmatched"]
+        if unmatched_df.empty:
+            self.result.unmatched_schools = []
+            return
+
+        unmatched_names = sorted(
+            {
+                str(name)
+                for name in unmatched_df["_sales_school_name_norm"].dropna().unique()
+                if str(name)
+            }
+        )
+        if not unmatched_names:
+            id_names = []
+            for school_id in unmatched_df["_sales_school_id_norm"].dropna().unique():
+                id_names.append(f"学校ID:{int(school_id)}")
+            unmatched_names = sorted(id_names) if id_names else ["学校名不明"]
+        self.result.unmatched_schools = unmatched_names
+
+        unmatched_details = (
+            unmatched_df
+            .groupby(["_sales_school_id_norm", "_sales_school_name_norm"], dropna=False)
+            .size()
+            .reset_index(name="rows")
+            .sort_values("rows", ascending=False)
+        )
+        logger.warning(f"マスタ未登録データを検出: {len(unmatched_df)}件")
+        for _, row in unmatched_details.head(20).iterrows():
+            school_id = row["_sales_school_id_norm"]
+            school_name = row["_sales_school_name_norm"]
+            school_id_text = "" if pd.isna(school_id) else int(school_id)
+            logger.warning(
+                f"  - 学校ID={school_id_text}, 学校名={school_name}, 件数={int(row['rows'])}"
+            )
+
+        raise SchoolMasterMismatchError(unmatched_names)
 
     def _aggregate_total_sales(self) -> None:
         """全体売上を集計"""
@@ -343,61 +492,61 @@ class SalesAggregator:
 
     def _aggregate_by_branch(self) -> None:
         """事業所別の売上を集計"""
-        # 事業所一覧を取得
-        branches = self.master_df["事業所"].drop_duplicates().reset_index(drop=True)
+        if self.matched_df is None:
+            self.result.branch_sales = []
+            return
+
+        master_sales = self.matched_df.groupby("_matched_master_index")["_net_sales"].sum()
+        branch_series = (
+            self.master_df[self.COL_BRANCH].fillna("").astype(str)
+            if self.COL_BRANCH in self.master_df.columns
+            else pd.Series("", index=self.master_df.index)
+        )
+        branches = branch_series.drop_duplicates().tolist()
 
         for branch_name in branches:
-            # 事業所に属する学校を取得
-            branch_schools = self.master_df[
-                self.master_df["事業所"] == branch_name
-            ]["学校名"].tolist()
-
-            # 売上を集計
-            branch_sales = 0
-            for school in branch_schools:
-                school_df = self.filtered_df[self.filtered_df["学校名"] == school]
-                subtotal = school_df["小計"].sum()
-                tax = school_df["うち消費税"].sum()
-                branch_sales += subtotal - tax
-
+            branch_indices = branch_series[branch_series == branch_name].index
+            branch_total = float(master_sales.reindex(branch_indices, fill_value=0).sum())
             self.result.branch_sales.append(
-                BranchSalesRecord(branch_name=branch_name, sales=branch_sales)
+                BranchSalesRecord(branch_name=branch_name, sales=branch_total)
             )
-            logger.info(f"事業所 {branch_name}: {branch_sales:,.0f}円")
+            logger.info(f"事業所 {branch_name}: {branch_total:,.0f}円")
 
     def _aggregate_by_salesman(self) -> None:
         """担当者別の売上を集計"""
-        # 担当者一覧を取得
-        salesmen = self.master_df["担当"].drop_duplicates().reset_index(drop=True)
+        self.result.salesman_sales = []
+        self.result.school_sales = []
+
+        if self.matched_df is None:
+            return
+
+        master_sales = self.matched_df.groupby("_matched_master_index")["_net_sales"].sum()
+        salesman_series = (
+            self.master_df[self.COL_SALESMAN].fillna("").astype(str)
+            if self.COL_SALESMAN in self.master_df.columns
+            else pd.Series("", index=self.master_df.index)
+        )
+        salesmen = salesman_series.drop_duplicates().tolist()
 
         for salesman in salesmen:
-            # 担当者の学校を取得
-            salesman_schools = self.master_df[
-                self.master_df["担当"] == salesman
-            ]
+            salesman_rows = self.master_df[salesman_series == salesman]
 
-            salesman_total = 0
-            school_records = []
+            salesman_total = 0.0
+            school_records: List[SchoolSalesRecord] = []
 
-            for _, row in salesman_schools.iterrows():
-                school_name = row["学校名"]
-                photostudio = row.get("写真館", "")
+            for master_idx, row in salesman_rows.iterrows():
+                school_sales = float(master_sales.get(master_idx, 0))
+                salesman_total += school_sales
 
-                # 学校の売上を集計
-                school_df = self.filtered_df[self.filtered_df["学校名"] == school_name]
+                if abs(school_sales) < 1e-9:
+                    continue
 
-                if not school_df.empty:
-                    subtotal = school_df["小計"].sum()
-                    tax = school_df["うち消費税"].sum()
-                    school_sales = subtotal - tax
-
-                    school_records.append(SchoolSalesRecord(
-                        salesman=salesman,
-                        photostudio=photostudio,
-                        school_name=school_name,
-                        sales=school_sales
-                    ))
-                    salesman_total += school_sales
+                school_records.append(SchoolSalesRecord(
+                    salesman=salesman,
+                    photostudio=row.get(self.COL_STUDIO, ""),
+                    school_name=row.get(self.COL_SCHOOL_NAME, ""),
+                    sales=school_sales
+                ))
 
             self.result.salesman_sales.append(
                 SalesmanSalesRecord(
@@ -406,55 +555,44 @@ class SalesAggregator:
                     schools=school_records
                 )
             )
-            # 学校別売上も全体リストに追加
             self.result.school_sales.extend(school_records)
-
             logger.info(f"担当者 {salesman}: {salesman_total:,.0f}円")
 
     def _aggregate_by_event(self) -> None:
         """イベント別の売上を集計"""
-        # 事業所一覧を取得
-        branches = self.master_df["事業所"].drop_duplicates().reset_index(drop=True)
+        self.result.event_sales = []
+        if self.matched_df is None or self.matched_df.empty:
+            logger.info("イベント別集計完了: 0件")
+            return
 
-        for branch_name in branches:
-            # 事業所に属する学校を取得
-            branch_schools = self.master_df[
-                self.master_df["事業所"] == branch_name
-            ]["学校名"].tolist()
+        if self.COL_EVENT_NAME not in self.matched_df.columns:
+            logger.warning("イベント名カラムが存在しないため、イベント別集計をスキップします")
+            return
 
-            for school_name in branch_schools:
-                # 学校のイベント一覧を取得
-                school_df = self.filtered_df[self.filtered_df["学校名"] == school_name]
+        event_df = self.matched_df.copy()
+        event_df["_event_name"] = event_df[self.COL_EVENT_NAME].fillna("").astype(str)
+        if self.COL_EVENT_START in event_df.columns:
+            event_df["_event_start"] = event_df[self.COL_EVENT_START].fillna("").astype(str)
+        else:
+            event_df["_event_start"] = ""
 
-                if school_df.empty:
-                    continue
+        grouped = (
+            event_df
+            .groupby(
+                ["_master_branch", "_master_school_name", "_event_name", "_event_start"],
+                dropna=False
+            )["_net_sales"]
+            .sum()
+            .reset_index()
+        )
 
-                events = school_df["イベント名"].drop_duplicates().reset_index(drop=True)
-
-                for event_name in events:
-                    # イベントの売上を集計
-                    event_df = school_df[school_df["イベント名"] == event_name]
-                    subtotal = event_df["小計"].sum()
-                    tax = event_df["うち消費税"].sum()
-                    event_sales = subtotal - tax
-
-                    # イベント開始日を取得
-                    start_date_col = "キャンペーン期間(開始)"
-                    if start_date_col in event_df.columns:
-                        start_date = event_df[start_date_col].iloc[0]
-                        if pd.isna(start_date):
-                            start_date = ""
-                        else:
-                            start_date = str(start_date)
-                    else:
-                        start_date = ""
-
-                    self.result.event_sales.append(EventSalesRecord(
-                        branch_name=branch_name,
-                        school_name=school_name,
-                        event_name=event_name,
-                        event_start_date=start_date,
-                        sales=event_sales
-                    ))
+        for _, row in grouped.iterrows():
+            self.result.event_sales.append(EventSalesRecord(
+                branch_name=row["_master_branch"],
+                school_name=row["_master_school_name"],
+                event_name=row["_event_name"],
+                event_start_date=row["_event_start"],
+                sales=float(row["_net_sales"])
+            ))
 
         logger.info(f"イベント別集計完了: {len(self.result.event_sales)}件")

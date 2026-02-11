@@ -3119,55 +3119,121 @@ def generate_dashboard(db_path=None, output_dir=None):
             paginationEl.innerHTML = html;
         }}
         
-        // CSV出力
+        // CSV出力（表示中テーブルと同じ列構成で出力）
         function downloadAlertCSV(alertType) {{
             const data = alertsData[alertType] || [];
             if (data.length === 0) {{
                 alert('データがありません');
                 return;
             }}
-            
-            // CSVヘッダーとデータ生成
-            let csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,成長率';
-            if (alertType === 'decline') csv = '学校名,属性,写真館,担当者,地区,今年度売上,前年度売上,成長率,会員率';
-            if (alertType === 'improved') csv = '学校名,属性,写真館,事業所,今年度会員率,前年度会員率,改善幅';
-            if (alertType === 'unit_price') csv = '学校名,属性,写真館,会員率,売上,会員数,単価,属性平均,平均比';
-            csv += '\\n';
-            
+
+            const safe = (v) => {{
+                const s = v === null || v === undefined ? '' : String(v);
+                return `"${{s.replace(/"/g, '""')}}"`;
+            }};
+            const toNum = (v) => {{
+                const n = Number(v);
+                return Number.isFinite(n) ? n : 0;
+            }};
+
+            let headers = [];
+            const rows = [];
+
             data.forEach(row => {{
-                csv += `\"${{row.school_name}}\",`;
-                csv += `\"${{row.attribute || ''}}\",`;
-                csv += `\"${{row.studio || ''}}\",`;
-                if (alertType !== 'unit_price') {{
-                   if (alertType === 'improved') {{
-                       csv += `\"${{row.region || ''}}\",`;
-                   }} else {{
-                       csv += `\"${{row.manager || ''}}\",`;
-                       csv += `\"${{row.region || ''}}\",`;
-                   }}
-                }}
-                if (alertType === 'unit_price') {{
-                    csv += `${{row.member_rate.toFixed(1)}},`;
-                    csv += `${{row.total_sales}},`;
-                    csv += `${{row.member_count}},`;
-                    csv += `${{Math.round(row.avg_price)}},`;
-                    csv += `${{Math.round(row.attr_avg_price)}},`;
-                    csv += `${{row.price_ratio.toFixed(1)}}\\n`;
+                if (alertType === 'new_schools') {{
+                    headers = ['学校名', '属性', '事業所', '写真館', '初回開始日', '売上'];
+                    rows.push([
+                        row.school_name || '',
+                        row.attribute || '',
+                        row.region || '',
+                        row.studio || '',
+                        row.first_event_date || '',
+                        toNum(row.current_sales)
+                    ]);
+                }} else if (alertType === 'no_events') {{
+                    headers = ['学校名', '属性', '事業所', '写真館', '前年度イベント数', '前年度売上'];
+                    rows.push([
+                        row.school_name || '',
+                        row.attribute || '',
+                        row.region || '',
+                        row.studio || '',
+                        `${{toNum(row.prev_event_count)}}件`,
+                        toNum(row.prev_sales)
+                    ]);
+                }} else if (alertType === 'decline') {{
+                    headers = ['学校名', '属性', '事業所', '写真館', '会員率', '売上変化率', '今年度売上', '前年度売上'];
+                    rows.push([
+                        row.school_name || '',
+                        row.attribute || '',
+                        row.region || '',
+                        row.studio || '',
+                        `${{toNum(row.member_rate).toFixed(1)}}%`,
+                        `${{(toNum(row.growth_rate) * 100).toFixed(1)}}%`,
+                        toNum(row.current_sales),
+                        toNum(row.prev_sales)
+                    ]);
+                }} else if (alertType === 'improved') {{
+                    headers = ['学校名', '属性', '写真館', '事業所', '今年度会員率', '前年度会員率', '改善幅'];
+                    rows.push([
+                        row.school_name || '',
+                        row.attribute || '',
+                        row.studio || '',
+                        row.region || '',
+                        `${{toNum(row.current_rate).toFixed(1)}}%`,
+                        `${{toNum(row.prev_rate).toFixed(1)}}%`,
+                        `${{toNum(row.improvement_point).toFixed(1)}}%`
+                    ]);
+                }} else if (alertType === 'unit_price') {{
+                    headers = ['学校名', '属性', '写真館', '会員率', '売上', '会員数', '単価', '属性平均', '平均比'];
+                    rows.push([
+                        row.school_name || '',
+                        row.attribute || '',
+                        row.studio || '',
+                        `${{toNum(row.member_rate).toFixed(1)}}%`,
+                        toNum(row.total_sales),
+                        toNum(row.member_count),
+                        Math.round(toNum(row.avg_price)),
+                        Math.round(toNum(row.attr_avg_price)),
+                        `${{toNum(row.price_ratio).toFixed(1)}}%`
+                    ]);
+                }} else if (alertType === 'studio_decline') {{
+                    headers = ['写真館名', '事業所', '今年度売上', '前年度売上', '変化率', '担当校数'];
+                    rows.push([
+                        row.studio || '',
+                        row.region || '',
+                        toNum(row.current_sales),
+                        toNum(row.prev_sales),
+                        `${{(toNum(row.change_rate) * 100).toFixed(1)}}%`,
+                        `${{toNum(row.school_count)}}校`
+                    ]);
+                }} else if (alertType === 'event_sales_by_date') {{
+                    headers = ['学校名', '属性', '事業所', '写真館', 'イベント名', '開始日', '会員率', '売上'];
+                    rows.push([
+                        row.school_name || '',
+                        row.attribute || '',
+                        row.region || '',
+                        row.studio || '',
+                        row.event_name || '',
+                        row.event_date || '',
+                        toNum(row.member_rate) > 0 ? `${{toNum(row.member_rate).toFixed(1)}}%` : '-',
+                        toNum(row.sales)
+                    ]);
                 }} else {{
-                    if (alertType === 'improved') {{
-                        csv += `${{row.current_rate.toFixed(1)}},`;
-                        csv += `${{row.prev_rate.toFixed(1)}},`;
-                        csv += `${{row.improvement_point.toFixed(1)}}\\n`;
-                    }} else {{
-                        csv += `${{row.current_sales || 0}},`;
-                        csv += `${{row.prev_sales || 0}},`;
-                        csv += `${{(row.growth_rate * 100).toFixed(1)}}%`;
-                        if (alertType === 'decline') csv += `,${{row.member_rate.toFixed(1)}}`;
-                        csv += '\\n';
-                    }}
+                    // rapid_growth
+                    headers = ['学校名', '属性', '事業所', '写真館', '今年度売上', '前年度売上', '成長率'];
+                    rows.push([
+                        row.school_name || '',
+                        row.attribute || '',
+                        row.region || '',
+                        row.studio || '',
+                        toNum(row.current_sales),
+                        toNum(row.prev_sales),
+                        `${{(toNum(row.growth_rate) * 100).toFixed(1)}}%`
+                    ]);
                 }}
             }});
-            
+
+            const csv = headers.map(safe).join(',') + '\\n' + rows.map(r => r.map(safe).join(',')).join('\\n');
             const bom = '\\uFEFF';
             const blob = new Blob([bom + csv], {{ type: 'text/csv;charset=utf-8;' }});
             const link = document.createElement('a');
@@ -3177,6 +3243,7 @@ def generate_dashboard(db_path=None, output_dir=None):
             else if (alertType === 'decline') link.download = '会員率・売上低下校.csv';
             else if (alertType === 'improved') link.download = '会員率改善校.csv';
             else if (alertType === 'unit_price') link.download = '販売単価分析.csv';
+            else if (alertType === 'studio_decline') link.download = '写真館別売上低下.csv';
             else if (alertType === 'event_sales_by_date') link.download = 'イベント開始日別売上.csv';
             else link.download = '売上好調校.csv';
             link.click();

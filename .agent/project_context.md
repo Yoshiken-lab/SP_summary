@@ -1,6 +1,6 @@
 # スクールフォト売上管理システム - 開発ガイドライン
 
-**最終更新**: 2026-01-28  
+**最終更新**: 2026-02-11 (集計不整合修正 + CSV列不一致修正 + ドキュメント更新を反映)  
 **プロジェクト**: SP_summary  
 **開発者**: Antigravity AI + はるきち
 
@@ -249,6 +249,28 @@ html = f'''if (condition) { doSomething(); }'''
 
 **対策**: 仕様通りの挙動であるため修正不要。ユーザーからの問い合わせ時はこの違いを説明する。
 
+### 4. 学校マッチング・バリデーション基準 (V3: 2026-02-10改定)
+
+集計精度の完全化のため、以下の厳格なルールが適用されている（詳細は `aggregation_logic.md` 参照）。
+
+1.  **データクリーニング**: 全文字列カラムの前後空白 (`.strip()`) を除去。中間空白は維持。
+2.  **ID優先マッチング**: 売上の「学校ID」とマスタの「ID」の一致を最優先。ID不一致時のみ名前一致を試行。
+3.  **厳密バリデーション**: IDも名前もマスタに存在しない学校が1件でもある場合、**集計を即時停止（エラー）** する。
+
+### 5. 条件別集計CSVの列定義ルール (2026-02-11改定)
+
+条件別集計のCSV出力は、**画面表示中テーブルの列構成と完全一致**させる。
+
+対象:
+1. 売上好調校 (`rapid_growth`)
+2. 新規開始校 (`new_schools`)
+3. 今年度未実施校 (`no_events`)
+4. 会員率・売上低下 (`decline`)
+5. 会員率改善 (`improved`)
+6. 販売単価分析 (`unit_price`)
+7. 写真館別低下 (`studio_decline`)
+8. イベント開始日別売上 (`event_sales_by_date`)
+
 ---
 
 ## 🔄 開発ワークフロー
@@ -280,6 +302,8 @@ html = f'''if (condition) { doSomething(); }'''
 | ID | 問題 | ステータス |
 |----|------|------------|
 | [TSH-001](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/troubleshooting.md#tsh-001-moderndialogshow_warning-未実装エラー) | ModernDialog.show_warning() 未実装 | 🟢 解決済み |
+| [TSH-002](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/troubleshooting.md#tsh-002-条件別集計csvの列不一致) | 条件別集計CSVの列不一致 | 🟢 解決済み |
+| [TSH-003](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/troubleshooting.md#tsh-003-月次集計の総売上と内訳合計の不一致) | 月次集計の総売上と内訳合計の不一致 | 🟢 解決済み |
 
 ---
 
@@ -299,6 +323,7 @@ html = f'''if (condition) { doSomething(); }'''
 |---------|------|
 | [troubleshooting.md](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/troubleshooting.md) | 🔥 **トラブルシューティング履歴（必読）** |
 | [handover.md](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/handover.md) | ダッシュボード開発の詳細引き継ぎ |
+| [implementation_plan_v2.md](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/implementation_plan_v2.md) | **集計誤差修正・実装計画書V3** |
 | [IMPLEMENTATION_PLAN.md](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/IMPLEMENTATION_PLAN.md) | 初期設計・システム構成 |
 | [aggregation_logic.md](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/aggregation_logic.md) | 集計ロジック詳細仕様 |
 | [school_name_variant_guide.md](file:///c:/Users/admin/Documents/06-Python/SP_summary/.agent/school_name_variant_guide.md) | 学校名表記揺れ対応フロー |
