@@ -1,6 +1,6 @@
 # スクールフォト売上管理システム - 開発ガイドライン
 
-**最終更新**: 2026-02-11 (集計不整合修正 + CSV列不一致修正 + ドキュメント更新を反映)  
+**最終更新**: 2026-03-13 (ランチャーの起動判定・プロセス死活監視の改善を反映)  
 **プロジェクト**: SP_summary  
 **開発者**: Antigravity AI + はるきち
 
@@ -312,6 +312,11 @@ html = f'''if (condition) { doSomething(); }'''
 1. 作業時は必ずこのガイドラインを確認すること
 2. 大きな変更がある場合はこのファイルを更新すること
 3. バグ修正した場合は `troubleshooting.md` に追記すること
+4. `launcher_v2.py` の「サーバー管理」画面で公開ダッシュボードの `バインドホスト` と `ポート番号` をGUI変更可能にした。設定は `launcher_config.json` に保存され、`simple_server.py --host --port` 起動に反映される。
+5. サーバー起動時は `launcher_v2.py` 側で待ち受け確認（TCP接続チェック）を行い、実際に起動できた場合のみ「起動中」表示にする。即落ち・起動失敗時の誤表示を防止。
+6. `ServerManager` のプロセス管理を改善し、死亡済みプロセスの参照を残さないようにした。`is_dashboard_running` / `is_any_running` は `poll()` で実生存判定し、終了時はログ出力してUIへ停止通知する。
+7. 同一PCでLAN向けURLに到達できない環境向けに、公開サーバー起動時ログへ `ローカルアクセスURL (127.0.0.1)` を追加。ランチャーの「開く」は常にローカルURLを開き、URLコピーは共有用URLを保持する。
+8. `app/simple_server.py` のアクセスログを簡略化し、`[ACCESS] YYYY-MM-DD HH:MM:SS <IP>` のみ出力するよう変更。クライアント切断時の `ConnectionAbortedError` / `BrokenPipeError` / `ConnectionResetError` スタックトレースは抑制。
 
 ---
 

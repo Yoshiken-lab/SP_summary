@@ -12,6 +12,8 @@ import os
 import subprocess
 import threading
 import json
+import socket
+import time
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, filedialog
 import webbrowser
@@ -68,7 +70,9 @@ COLORS = {
 
 # デフォルト設定
 DEFAULT_CONFIG = {
+    'api_host': '127.0.0.1',
     'api_port': 8080,
+    'dashboard_host': '0.0.0.0',
     'dashboard_port': 8000,
 }
 
@@ -714,17 +718,78 @@ class ServerManager:
         self.log_callback = None # ログ出力先 (Page側でセット)
 
     def _load_config(self):
+        config = DEFAULT_CONFIG.copy()
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    loaded = json.load(f)
+                    if isinstance(loaded, dict):
+                        config.update(loaded)
             except Exception:
                 pass
-        return DEFAULT_CONFIG.copy()
+        config['api_host'] = self._normalize_host(
+            config.get('api_host'),
+            DEFAULT_CONFIG['api_host']
+        )
+        config['dashboard_host'] = self._normalize_host(
+            config.get('dashboard_host'),
+            DEFAULT_CONFIG['dashboard_host']
+        )
+        return config
 
-    def save_config(self, api_port, dashboard_port):
-        self.config['api_port'] = api_port
-        self.config['dashboard_port'] = dashboard_port
+    def _normalize_host(self, value, fallback):
+        host = str(value).strip() if value is not None else ''
+        return host if host else fallback
+
+    def _resolve_access_host(self, bind_host):
+        host = self._normalize_host(bind_host, DEFAULT_CONFIG['dashboard_host'])
+        if host in ('0.0.0.0', '::', ''):
+            return self.get_local_ip()
+        if host == 'localhost':
+            return '127.0.0.1'
+        return host
+
+    def get_dashboard_access_url(self):
+        bind_host = self.config.get('dashboard_host', DEFAULT_CONFIG['dashboard_host'])
+        access_host = self._resolve_access_host(bind_host)
+        port = self.config.get('dashboard_port', DEFAULT_CONFIG['dashboard_port'])
+        return f'http://{access_host}:{port}'
+
+    def get_dashboard_local_url(self):
+        port = self.config.get('dashboard_port', DEFAULT_CONFIG['dashboard_port'])
+        return f'http://127.0.0.1:{port}'
+
+    def _resolve_probe_host(self, bind_host):
+        host = self._normalize_host(bind_host, DEFAULT_CONFIG['dashboard_host'])
+        if host in ('', '0.0.0.0', '::', 'localhost'):
+            return '127.0.0.1'
+        return host
+
+    def _wait_for_server_ready(self, process, bind_host, port, timeout_sec=6.0):
+        probe_host = self._resolve_probe_host(bind_host)
+        deadline = time.time() + timeout_sec
+        while time.time() < deadline:
+            if process.poll() is not None:
+                return False
+            try:
+                with socket.create_connection((probe_host, int(port)), timeout=0.5):
+                    return True
+            except OSError:
+                time.sleep(0.1)
+        return False
+
+    def save_config(self, api_port=None, dashboard_port=None, api_host=None, dashboard_host=None):
+        if api_port is not None:
+            self.config['api_port'] = int(api_port)
+        if dashboard_port is not None:
+            self.config['dashboard_port'] = int(dashboard_port)
+        if api_host is not None:
+            self.config['api_host'] = self._normalize_host(api_host, DEFAULT_CONFIG['api_host'])
+        if dashboard_host is not None:
+            self.config['dashboard_host'] = self._normalize_host(
+                dashboard_host,
+                DEFAULT_CONFIG['dashboard_host']
+            )
         try:
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=2, ensure_ascii=False)
@@ -737,17 +802,27 @@ class ServerManager:
         else:
             print(message)
 
-    def is_any_running(self):
-        return (self.api_process is not None) or (self.dashboard_process is not None)
+    def _is_process_running(self, process):
+        return (process is not None) and (process.poll() is None)
 
-    def start_api(self, port, on_start, on_stop):
-        if self.api_process: return
+    def is_any_running(self):
+        return self._is_process_running(self.api_process) or self._is_process_running(self.dashboard_process)
+
+    def start_api(self, port, on_start, on_stop, host=None):
+        if self._is_process_running(self.api_process):
+            self.log('APIサーバーは既に起動中です')
+            return
+        self.api_process = None
         
         def run():
             try:
+                bind_host = self._normalize_host(
+                    host if host is not None else self.config.get('api_host'),
+                    DEFAULT_CONFIG['api_host']
+                )
                 script_path = APP_DIR / 'run.py'
-                self.api_process = subprocess.Popen(
-                    [sys.executable, str(script_path), '--port', str(port)],
+                process = subprocess.Popen(
+                    [sys.executable, str(script_path), '--host', bind_host, '--port', str(port)],
                     cwd=str(APP_DIR),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -755,11 +830,25 @@ class ServerManager:
                     bufsize=1,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                 )
+                self.api_process = process
+                if not self._wait_for_server_ready(process, bind_host, port):
+                    self.log(f'API起動失敗: {bind_host}:{port} で待ち受けできませんでした')
+                    if process.poll() is None:
+                        process.terminate()
+                    self.api_process = None
+                    self.app.root.after(0, on_stop)
+                    return
                 self.app.root.after(0, on_start)
-                self.log(f'管理APIサーバー起動完了: http://127.0.0.1:{port}')
+                access_host = self._resolve_access_host(bind_host)
+                self.log(f'管理APIサーバー起動完了: http://{access_host}:{port}')
                 
-                for line in self.api_process.stdout:
+                for line in process.stdout:
                     self.app.root.after(0, lambda l=line: self.log(f'[API] {l.strip()}'))
+                exit_code = process.poll()
+                if self.api_process is process:
+                    self.api_process = None
+                self.app.root.after(0, lambda c=exit_code: self.log(f'APIサーバープロセス終了 (code={c})'))
+                self.app.root.after(0, on_stop)
             except Exception as e:
                 self.app.root.after(0, lambda: self.log(f'API起動エラー: {e}'))
                 self.app.root.after(0, on_stop)
@@ -768,18 +857,26 @@ class ServerManager:
 
     def stop_api(self):
         if self.api_process:
-            self.api_process.terminate()
+            if self.api_process.poll() is None:
+                self.api_process.terminate()
             self.api_process = None
             self.log('APIサーバー停止')
 
-    def start_dashboard(self, port, on_start, on_stop):
-        if self.dashboard_process: return
+    def start_dashboard(self, port, on_start, on_stop, host=None):
+        if self._is_process_running(self.dashboard_process):
+            self.log('Dashboardサーバーは既に起動中です')
+            return
+        self.dashboard_process = None
         
         def run():
             try:
+                bind_host = self._normalize_host(
+                    host if host is not None else self.config.get('dashboard_host'),
+                    DEFAULT_CONFIG['dashboard_host']
+                )
                 script_path = APP_DIR / 'simple_server.py'
-                self.dashboard_process = subprocess.Popen(
-                    [sys.executable, str(script_path), '--port', str(port)],
+                process = subprocess.Popen(
+                    [sys.executable, str(script_path), '--host', bind_host, '--port', str(port)],
                     cwd=str(APP_DIR),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -787,11 +884,27 @@ class ServerManager:
                     bufsize=1,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                 )
+                self.dashboard_process = process
+                if not self._wait_for_server_ready(process, bind_host, port):
+                    self.log(f'Dashboard起動失敗: {bind_host}:{port} で待ち受けできませんでした')
+                    if process.poll() is None:
+                        process.terminate()
+                    self.dashboard_process = None
+                    self.app.root.after(0, on_stop)
+                    return
                 self.app.root.after(0, on_start)
-                self.log(f'公開ダッシュボード起動完了: http://localhost:{port}')
+                access_host = self._resolve_access_host(bind_host)
+                self.log(f'公開ダッシュボード起動完了: http://{access_host}:{port}')
+                if access_host != '127.0.0.1':
+                    self.log(f'ローカルアクセスURL: http://127.0.0.1:{port}')
                 
-                for line in self.dashboard_process.stdout:
+                for line in process.stdout:
                     self.app.root.after(0, lambda l=line: self.log(f'[Web] {l.strip()}'))
+                exit_code = process.poll()
+                if self.dashboard_process is process:
+                    self.dashboard_process = None
+                self.app.root.after(0, lambda c=exit_code: self.log(f'Dashboardサーバープロセス終了 (code={c})'))
+                self.app.root.after(0, on_stop)
             except Exception as e:
                 self.app.root.after(0, lambda: self.log(f'Dashboard起動エラー: {e}'))
                 self.app.root.after(0, on_stop)
@@ -800,7 +913,8 @@ class ServerManager:
 
     def stop_dashboard(self):
         if self.dashboard_process:
-            self.dashboard_process.terminate()
+            if self.dashboard_process.poll() is None:
+                self.dashboard_process.terminate()
             self.dashboard_process = None
             self.log('Dashboardサーバー停止')
 
@@ -809,7 +923,7 @@ class ServerManager:
         self.stop_dashboard()
 
     def is_dashboard_running(self):
-        return self.dashboard_process is not None
+        return self._is_process_running(self.dashboard_process)
 
     def get_local_ip(self):
         try:
@@ -899,6 +1013,23 @@ class ServerControlPage(tk.Frame):
         control_row = tk.Frame(self.dashboard_card, bg=COLORS['bg_card'])
         control_row.pack(fill=tk.X)
         
+        # ホスト設定
+        host_frame = tk.Frame(control_row, bg=COLORS['bg_card'])
+        host_frame.pack(side=tk.LEFT, padx=(0, 12))
+
+        tk.Label(host_frame, text="バインドホスト", font=('Meiryo', 9),
+                 fg=COLORS['text_secondary'], bg=COLORS['bg_card']).pack(anchor='w', pady=(0, 2))
+
+        self.host_var = tk.StringVar(
+            value=self.manager.config.get('dashboard_host', DEFAULT_CONFIG['dashboard_host'])
+        )
+        self.host_entry = tk.Entry(
+            host_frame, textvariable=self.host_var, width=16,
+            font=('Consolas', 11), bg=COLORS['bg_main'], fg='white',
+            relief='flat', insertbackground='white', justify='left'
+        )
+        self.host_entry.pack(ipady=3)
+
         # ポート設定
         port_frame = tk.Frame(control_row, bg=COLORS['bg_card'])
         port_frame.pack(side=tk.LEFT)
@@ -964,15 +1095,19 @@ class ServerControlPage(tk.Frame):
 
     def _on_start_click(self):
         try:
+            host = self.host_var.get().strip()
             port = int(self.port_var.get())
-            self.manager.save_config(self.manager.config['api_port'], port)
+            if not host:
+                raise ValueError("host")
+            self.manager.save_config(dashboard_port=port, dashboard_host=host)
             self.manager.start_dashboard(
                 port, 
                 lambda: self._update_ui(True), 
-                lambda: self._update_ui(False)
+                lambda: self._update_ui(False),
+                host=host
             )
         except ValueError:
-            ModernDialog.show_error(self, "エラー", "ポート番号を正しく入力してください")
+            ModernDialog.show_error(self, "エラー", "ホストとポート番号を正しく入力してください")
 
     def _on_stop_click(self):
         self.manager.stop_dashboard()
@@ -984,14 +1119,13 @@ class ServerControlPage(tk.Frame):
             self.status_badge.config(text="● 起動中", fg=COLORS['success'], bg='#064E3B') # Dark Green BG
             self.dashboard_card.config(highlightbackground=COLORS['success'])
             
-            ip = self.manager.get_local_ip()
-            port = self.manager.config.get('dashboard_port', 8000)
-            url = f"http://{ip}:{port}"
+            url = self.manager.get_dashboard_access_url()
             self.url_link.config(text=url, state='normal')
             self.url_frame.pack(side=tk.LEFT, padx=(30, 0), fill=tk.Y) # 表示
             
             self.start_btn.config(state="disabled")
             self.stop_btn.config(state="normal")
+            self.host_entry.config(state="disabled")
             self.port_entry.config(state="disabled")  # ポート入力を無効化
         else:
             # 停止中スタイル
@@ -1002,6 +1136,7 @@ class ServerControlPage(tk.Frame):
             
             self.start_btn.config(state="normal")
             self.stop_btn.config(state="disabled")
+            self.host_entry.config(state="normal")
             self.port_entry.config(state="normal")  # ポート入力を有効化
 
 
@@ -1929,9 +2064,7 @@ class PerformanceReflectionPage(tk.Frame):
             
         if self.server_manager:
             is_running = self.server_manager.is_dashboard_running()
-            port = self.server_manager.config.get('dashboard_port', 8000)
-            ip = self.server_manager.get_local_ip()
-            url = f"http://{ip}:{port}"
+            url = self.server_manager.get_dashboard_access_url()
             
             # 最終更新日時の取得とデータ有無判定
             last_updated = "未作成"
@@ -1984,6 +2117,7 @@ class PerformanceReflectionPage(tk.Frame):
             
         is_running = self.server_manager.is_dashboard_running()
         port = self.server_manager.config.get('dashboard_port', 8000)
+        host = self.server_manager.config.get('dashboard_host', DEFAULT_CONFIG['dashboard_host'])
         
         if is_running:
             self.server_manager.stop_dashboard()
@@ -1991,7 +2125,8 @@ class PerformanceReflectionPage(tk.Frame):
             self.server_manager.start_dashboard(
                 port,
                 lambda: self._update_status(), # on_start
-                lambda: self._update_status()  # on_stop
+                lambda: self._update_status(),  # on_stop
+                host=host
             )
         # 即時更新
         self.after(100, self._update_status)
@@ -1999,20 +2134,15 @@ class PerformanceReflectionPage(tk.Frame):
     def _open_dashboard(self):
         """ブラウザで開く"""
         if self.server_manager:
-            port = self.server_manager.config.get('dashboard_port', 8000)
-            ip = self.server_manager.get_local_ip()
-            url = f"http://{ip}:{port}"
-            webbrowser.open(url)
+            webbrowser.open(self.server_manager.get_dashboard_local_url())
 
     def _copy_url(self):
         """URLをクリップボードにコピー"""
         if self.server_manager:
-            port = self.server_manager.config.get('dashboard_port', 8000)
-            ip = self.server_manager.get_local_ip()
-            url = f"http://{ip}:{port}"
+            url = self.server_manager.get_dashboard_access_url()
             self.clipboard_clear()
             self.clipboard_append(url)
-            ModernDialog.show_info(self, "コピー完了", "URLをクリップボードにコピーしました。")
+            ModernDialog.show_info(self, "コピー完了", "共有用URLをクリップボードにコピーしました。")
 
     def _on_drop(self, event):
         """ファイルドロップ時の処理"""
